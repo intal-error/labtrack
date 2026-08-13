@@ -1,17 +1,17 @@
 .scanner-page{padding:6px 0 28px}
-.scanner-page h1{color:#004d26;font-size:28px;margin:14px 0 18px;text-align:center}
-.scanner-shell{width:min(100%,680px);margin:0 auto;padding:22px;background:#fff;border:1px solid #d8e3d9;border-radius:16px;box-shadow:0 4px 16px rgba(0,0,0,.08)}
+.scanner-page h1{color:var(--dark-green);font-size:28px;margin:14px 0 18px;text-align:center}
+.scanner-shell{width:min(100%,680px);margin:0 auto;padding:22px;background:var(--bg-card);border:1px solid #d8e3d9;border-radius:16px;box-shadow:0 4px 16px rgba(0,0,0,.08)}
 .scanner-help{color:#4a4a4a;line-height:1.55;margin-bottom:18px}
 .scanner-mode{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:18px}
 .scanner-mode .btn,.scanner-inline .btn,.scanner-stop,.scanner-submit{min-height:46px;touch-action:manipulation}
 .scanner-mode-active{box-shadow:inset 0 0 0 3px rgba(255,255,255,.45),0 2px 5px rgba(0,0,0,.16)}
 .scanner-step{padding:17px 0;border-top:1px solid #e1e8e2}
 .scanner-step-heading{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px}
-.scanner-step-heading>span{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:#004d26;color:#fff;font-size:14px;font-weight:700}
-.scanner-step-heading h2{color:#1b5e20;font-size:17px;margin:2px 0 3px}
+.scanner-step-heading>span{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--dark-green);color:#fff;font-size:14px;font-weight:700}
+.scanner-step-heading h2{color:var(--green-dark);font-size:17px;margin:2px 0 3px}
 .scanner-step-heading p{color:#666;font-size:14px;line-height:1.4}
 .scanner-inline{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px}
-.scanner-inline input,.scanner-borrower-fields input,.scanner-borrower-fields select,.scanner-transaction-fields input{width:100%;min-width:0;min-height:46px;padding:10px 12px;border:1px solid #bdcbbf;border-radius:8px;font-size:16px;background:#fff}
+.scanner-inline input,.scanner-borrower-fields input,.scanner-borrower-fields select,.scanner-transaction-fields input{width:100%;min-width:0;min-height:46px;padding:10px 12px;border:1px solid #bdcbbf;border-radius:8px;font-size:16px;background:var(--bg-card)}
 .scanner-borrower-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}
 .scanner-borrower-fields .full-width{grid-column:span 2}
 .scanner-selection{margin-top:10px;padding:11px 13px;border:1px solid #b7d4ba;border-radius:9px;background:#f1f8f1;color:#184c22;font-size:14px;line-height:1.5}

@@ -1,11 +1,11 @@
-.admin-page h1{color:#004d26;font-size:28px;margin:14px 0 18px}
-.admin-box{max-width:700px;margin:20px auto;padding:20px;border:1px solid #ccc;border-radius:12px;background:#fff}
+.admin-page h1{color:var(--dark-green);font-size:28px;margin:14px 0 18px}
+.admin-box{max-width:700px;margin:20px auto;padding:20px;border:1px solid var(--border);border-radius:12px;background:var(--bg-card)}
 .admin-logo{width:100px;margin:10px auto;display:block}
 .admin-actions{display:flex;justify-content:center;gap:15px;margin-top:15px;flex-wrap:wrap}
 .admin-box form{display:flex;flex-direction:column;gap:12px;margin-top:15px}
-.admin-box form input{padding:12px;font-size:16px;border:1px solid #ccc;border-radius:6px;width:100%}
+.admin-box form input{padding:12px;font-size:16px;border:1px solid var(--border);border-radius:6px;width:100%}
 .admin-box table{width:100%;border-collapse:collapse;margin-top:15px;font-size:14px}
-.admin-box table th,.admin-box table td{border-bottom:1px solid #ccc;padding:10px;text-align:left}
+.admin-box table th,.admin-box table td{border-bottom:1px solid var(--border);padding:10px;text-align:left}
 .admin-box table th{font-weight:bold;text-transform:uppercase;font-size:13px}
 body.dark .admin-page h1{color:#e6f2de}
 body.dark .admin-box{background:#111b14;border-color:#23382c}

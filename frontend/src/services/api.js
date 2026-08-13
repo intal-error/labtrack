@@ -1,10 +1,15 @@
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 async function request(path, options = {}) {
-  const res = await fetch(`${API_URL}${path}`, {
-    headers: { "Content-Type": "application/json", ...options.headers },
-    ...options,
-  });
+  let res;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      headers: { "Content-Type": "application/json", ...options.headers },
+      ...options,
+    });
+  } catch {
+    throw new Error("Cannot reach the server. Run 'npm run dev:backend'.");
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "Request failed" }));
     throw new Error(err.error || `HTTP ${res.status}`);
@@ -33,7 +38,12 @@ export const api = {
   deleteAdmin: (id) => request(`/admin/${id}`, { method: "DELETE" }),
 
   downloadReport: async (type) => {
-    const res = await fetch(`${API_URL}/reports/${type}`);
+    let res;
+    try {
+      res = await fetch(`${API_URL}/reports/${type}`);
+    } catch {
+      throw new Error("Cannot reach the server. Run 'npm run dev:backend'.");
+    }
     if (!res.ok) throw new Error("Download failed");
     const blob = await res.blob();
     const url = window.URL.createObjectURL(blob);
@@ -47,7 +57,12 @@ export const api = {
   uploadImage: async (file) => {
     const formData = new FormData();
     formData.append("file", file);
-    const res = await fetch(`${API_URL}/upload/image`, { method: "POST", body: formData });
+    let res;
+    try {
+      res = await fetch(`${API_URL}/upload/image`, { method: "POST", body: formData });
+    } catch {
+      throw new Error("Cannot reach the server. Run 'npm run dev:backend'.");
+    }
     if (!res.ok) throw new Error("Upload failed");
     return res.json();
   },

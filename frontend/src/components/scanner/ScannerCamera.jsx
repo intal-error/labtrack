@@ -1,10 +1,10 @@
-import { useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 
 export default function ScannerCamera({ target, onScan, onStop }) {
   const scannerRef = useRef(null);
   const runningRef = useRef(false);
-  const [status, setStatus] = React.useState("");
+  const [status, setStatus] = useState("");
 
   const stopScanner = useCallback(async () => {
     const s = scannerRef.current;

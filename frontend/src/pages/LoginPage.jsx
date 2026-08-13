@@ -2,16 +2,17 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../services/firebase";
-import { useTheme } from "../context/ThemeContext";
+import { MdVisibility, MdVisibilityOff } from "react-icons/md";
 import toast from "react-hot-toast";
 import "../styles/pages/login.css";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { dark, toggleTheme } = useTheme();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -30,47 +31,76 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="login-container">
-      <div className="login-left">
-        <div className="login-overlay">
-          <img src="/slsulucena.jpg" alt="SLSU Background" className="login-bg-img" />
-        </div>
-        <div className="login-left-content">
-          <img src="/logo.png" alt="SLSU Logo" className="login-logo" />
-          <h1 className="login-system-title">SLSU LABTRACK</h1>
-        </div>
-      </div>
+    <div className="login-page">
+      <img src="/slsulucena.jpg" alt="" className="login-bg" />
+      <div className="login-overlay" />
 
-      <div className="login-right">
-        <button className="theme-toggle" onClick={toggleTheme}>
-          {dark ? "☀️ Light" : "🌙 Dark"}
-        </button>
-        <div className="login-box">
-          <h2>Admin Login</h2>
+      <div className="login-content">
+        <div className="login-left">
+          <div className="login-brand">
+            <img src="/logo.png" alt="SLSU Logo" className="login-logo" />
+            <span className="login-brand-name">SLSU</span>
+          </div>
+          <h1 className="login-title">LAB<span className="login-title-bold">TRACK</span></h1>
+          <p className="login-subtitle">Digital Tracking System for Tool and Equipment Borrowing</p>
+          <p className="login-desc">
+            A capstone project of Southern Luzon State University - Lucena Campus,
+            digitalizing the manual borrowing process for efficiency and accountability.
+          </p>
+        </div>
+
+        <div className="login-card">
+          <h2 className="login-card-title">Welcome Back</h2>
+          <p className="login-card-subtitle">Sign in to your admin account</p>
+
           <form onSubmit={handleSubmit}>
-            <div className="input-group">
+            <div className="login-field">
               <label htmlFor="email">Email</label>
               <input
                 id="email"
                 type="email"
-                placeholder="Enter admin email"
+                placeholder="Enter your email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
             </div>
-            <div className="input-group">
+
+            <div className="login-field">
               <label htmlFor="password">Password</label>
-              <input
-                id="password"
-                type="password"
-                placeholder="Enter password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+              <div className="login-password-wrap">
+                <input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  className="login-password-toggle"
+                  onClick={() => setShowPassword(!showPassword)}
+                  tabIndex={-1}
+                >
+                  {showPassword ? <MdVisibilityOff size={20} /> : <MdVisibility size={20} />}
+                </button>
+              </div>
             </div>
-            <button type="submit" className="login-btn" disabled={loading}>
+
+            <div className="login-extras">
+              <label className="login-remember">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                />
+                <span>Remember Me</span>
+              </label>
+              <a href="#" className="login-forgot" onClick={(e) => e.preventDefault()}>Forgot Password?</a>
+            </div>
+
+            <button type="submit" className="login-submit" disabled={loading}>
               {loading ? "Logging in..." : "Login"}
             </button>
           </form>

@@ -38,3 +38,12 @@ export function formatDate(date) {
   if (!date) return "-";
   return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
 }
+
+export function readScanPayload(raw, pattern) {
+  const match = String(raw || "").trim().match(new RegExp(`^SLSU-(?:${pattern})\\s*:(.+)$`, "i"));
+  return { raw: String(raw || "").trim(), payload: match?.[1]?.trim() || String(raw || "").trim() };
+}
+
+export function canUseAsDocId(v) {
+  return Boolean(v && !String(v).includes("/"));
+}

@@ -3,8 +3,9 @@ import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { FiMenu, FiX } from "react-icons/fi";
-import { MdDashboard, MdQrCodeScanner, MdInventory, MdPerson, MdAdminPanelSettings, MdInfo, MdLogout } from "react-icons/md";
+import { MdDashboard, MdQrCodeScanner, MdInventory, MdPerson, MdAdminPanelSettings, MdInfo, MdLogout, MdDarkMode, MdLightMode } from "react-icons/md";
 import { FaHandHolding, FaUndoAlt } from "react-icons/fa";
+import "../../styles/pages/layout.css";
 
 const navItems = [
   { path: "/", label: "Dashboard", icon: MdDashboard },
@@ -35,8 +36,14 @@ export default function DashboardLayout() {
       </button>
 
       <aside className={`sidebar ${sidebarOpen ? "active" : ""}`}>
-        <img src="/logo.png" alt="SLSU Logo" className="sidebar-logo" />
-        <h2 className="sidebar-title">ADMIN</h2>
+        <div className="sidebar-logo-wrap">
+          <img src="/logo.png" alt="SLSU Logo" className="sidebar-logo" />
+          <div className="sidebar-brand">
+            <div className="sidebar-brand-title">SLSU LabTrack</div>
+            <div className="sidebar-brand-sub">Lab Equipment Tracker</div>
+          </div>
+        </div>
+
         <nav>
           <ul>
             {navItems.map(({ path, label, icon: Icon }) => (
@@ -47,25 +54,29 @@ export default function DashboardLayout() {
                   className={({ isActive }) => isActive ? "active" : ""}
                   onClick={() => setSidebarOpen(false)}
                 >
-                  <Icon size={18} /> {label}
+                  <span className="nav-icon"><Icon size={18} /></span>
+                  <span className="nav-label">{label}</span>
                 </NavLink>
               </li>
             ))}
           </ul>
         </nav>
+
         <div className="sidebar-bottom">
-          <button className="sidebar-logout" onClick={handleLogout}>
-            <MdLogout size={18} /> Logout
+          <button className="sidebar-bottom-item" onClick={toggleTheme}>
+            <span className="nav-icon">{dark ? <MdLightMode size={18} /> : <MdDarkMode size={18} />}</span>
+            <span className="nav-label">{dark ? "Light Mode" : "Dark Mode"}</span>
+          </button>
+          <button className="sidebar-bottom-item" onClick={handleLogout}>
+            <span className="nav-icon"><MdLogout size={18} /></span>
+            <span className="nav-label">Logout</span>
           </button>
         </div>
       </aside>
 
-      {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
+      <div className={`sidebar-overlay ${sidebarOpen ? "active" : ""}`} onClick={() => setSidebarOpen(false)} />
 
       <main className="main-content">
-        <button className="theme-toggle" onClick={toggleTheme}>
-          {dark ? "☀️ Light" : "🌙 Dark"}
-        </button>
         <Outlet />
       </main>
     </div>

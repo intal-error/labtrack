@@ -1,0 +1,99 @@
+/* ── Layout ─────────────────────────────────────────── */
+.app-layout{display:flex;height:100vh;padding:12px;background:var(--bg)}
+.main-content{flex:1;padding:24px 28px;background:var(--bg-card);border-radius:16px;overflow-y:auto;position:relative;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+
+/* ── Sidebar ────────────────────────────────────────── */
+.sidebar{
+  width:64px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;
+  background:var(--bg-card);border-radius:16px;
+  box-shadow:0 1px 3px rgba(0,0,0,.08);
+  padding:20px 0;overflow:hidden;white-space:nowrap;
+  transition:width .25s ease;
+  z-index:100;
+}
+.sidebar:hover{width:240px}
+
+/* Logo */
+.sidebar-logo-wrap{
+  display:flex;align-items:center;gap:12px;width:100%;padding:0 20px;margin-bottom:28px;
+}
+.sidebar-logo{width:36px;height:36px;border-radius:10px;object-fit:contain;flex-shrink:0}
+.sidebar-brand{opacity:0;transition:opacity .2s ease}
+.sidebar:hover .sidebar-brand{opacity:1}
+.sidebar-brand-title{font-size:14px;font-weight:700;color:var(--text)}
+.sidebar-brand-sub{font-size:11px;color:var(--text-muted)}
+
+/* Nav */
+.sidebar nav{width:100%;flex:1;overflow-y:auto;overflow-x:hidden}
+.sidebar nav::-webkit-scrollbar{width:0}
+.sidebar ul{width:100%;padding:0 10px}
+.sidebar li{width:100%}
+.sidebar a{
+  display:flex;align-items:center;gap:12px;width:100%;padding:10px 12px;
+  font-size:14px;font-weight:500;color:var(--text-muted);
+  border-radius:10px;transition:all .15s ease;cursor:pointer;
+}
+.sidebar a:hover{background:rgba(0,0,0,.05);color:var(--text)}
+.sidebar a.active{background:rgba(0,0,0,.06);color:var(--text);font-weight:600}
+.sidebar a .nav-icon{
+  width:20px;height:20px;display:grid;place-items:center;flex-shrink:0;
+}
+.sidebar a .nav-label{opacity:0;transition:opacity .2s ease;white-space:nowrap}
+.sidebar:hover a .nav-label{opacity:1}
+
+/* Bottom */
+.sidebar-bottom{
+  width:100%;padding:12px 10px;margin-top:auto;
+  border-top:1px solid var(--border);
+}
+.sidebar-bottom-item{
+  display:flex;align-items:center;gap:12px;width:100%;padding:10px 12px;
+  font-size:14px;font-weight:500;color:var(--text-muted);
+  border-radius:10px;cursor:pointer;border:none;background:none;
+  transition:all .15s ease;text-align:left;
+}
+.sidebar-bottom-item:hover{background:rgba(0,0,0,.05);color:var(--text)}
+.sidebar-bottom-item .nav-icon{
+  width:20px;height:20px;display:grid;place-items:center;flex-shrink:0;
+}
+.sidebar-bottom-item .nav-label{opacity:0;transition:opacity .2s ease;white-space:nowrap}
+.sidebar:hover .sidebar-bottom-item .nav-label{opacity:1}
+
+/* ── Burger (mobile) ────────────────────────────────── */
+.burger-btn{display:none;position:fixed;top:20px;left:20px;background:var(--bg-card);color:var(--text);border:none;border-radius:10px;padding:10px 12px;font-size:20px;cursor:pointer;z-index:1001;box-shadow:0 1px 4px rgba(0,0,0,.1);transition:background .2s}
+.burger-btn:hover{background:rgba(0,0,0,.05)}
+
+/* ── Overlay ────────────────────────────────────────── */
+.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:99}
+
+/* ── Responsive ─────────────────────────────────────── */
+@media(max-width:1024px){
+  .app-layout{padding:0}
+  .sidebar{
+    position:fixed;top:12px;left:12px;bottom:12px;width:240px;
+    transform:translateX(-280px);transition:transform .25s ease;z-index:1000;
+    padding:20px 0;
+  }
+  .sidebar:hover{width:240px}
+  .sidebar.active{transform:translateX(0)}
+  .sidebar:hover .sidebar-brand,
+  .sidebar:hover a .nav-label,
+  .sidebar:hover .sidebar-bottom-item .nav-label{opacity:1}
+  .sidebar-overlay.active{display:block}
+  .burger-btn{display:block}
+  .main-content{margin:0;border-radius:0;padding:70px 16px 16px}
+}
+
+/* ── Dark mode ──────────────────────────────────────── */
+body.dark .sidebar{background:#1a1a2e;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+body.dark .sidebar a{color:#8a8a9a}
+body.dark .sidebar a:hover{background:rgba(255,255,255,.06);color:#e0e0e0}
+body.dark .sidebar a.active{background:rgba(255,255,255,.08);color:#fff}
+body.dark .sidebar-brand-title{color:#e0e0e0}
+body.dark .sidebar-brand-sub{color:#6a6a7a}
+body.dark .sidebar-bottom{border-top-color:rgba(255,255,255,.08)}
+body.dark .sidebar-bottom-item{color:#8a8a9a}
+body.dark .sidebar-bottom-item:hover{background:rgba(255,255,255,.06);color:#e0e0e0}
+body.dark .main-content{background:var(--bg-card)}
+body.dark .burger-btn{background:var(--bg-card);color:#e0e0e0}
+body.dark .burger-btn:hover{background:rgba(255,255,255,.08)}

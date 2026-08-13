@@ -1,37 +1,16 @@
-.app-layout{display:flex;height:100vh}
-.sidebar{width:250px;background:#004d26;color:#fff;display:flex;flex-direction:column;align-items:center;padding:20px 0;flex-shrink:0}
-.sidebar-logo{width:100px;margin-bottom:15px}
-.sidebar-title{margin-bottom:20px;font-size:1.2rem}
-.sidebar nav{width:100%}
-.sidebar ul{width:100%;padding:0}
-.sidebar li{width:100%}
-.sidebar a{display:flex;align-items:center;gap:10px;width:100%;padding:12px 20px;font-size:15px;transition:background .3s;color:#fff}
-.sidebar a:hover,.sidebar a.active{background:#fff;color:#004d26;border-radius:5px}
-.sidebar-bottom{margin-top:auto;padding:10px 20px;width:100%}
-.sidebar-logout{width:100%;display:flex;align-items:center;gap:10px;padding:12px 20px;background:none;border:none;color:#fff;font-size:15px;cursor:pointer;border-radius:5px;transition:background .3s;text-align:left}
-.sidebar-logout:hover{background:rgba(255,255,255,.15)}
-.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:998}
-.burger-btn{display:none;position:fixed;top:15px;left:15px;background:#004d26;color:#fff;border:none;border-radius:6px;padding:10px 14px;font-size:22px;cursor:pointer;z-index:1000}
-.burger-btn:hover{background:#006837}
-.main-content{flex:1;padding:20px;background:#fff;overflow-y:auto;position:relative}
 .dashboard-page{padding:20px 30px;text-align:center}
-.dashboard-page h1{color:#004d26;font-size:2.2rem;font-weight:700;letter-spacing:1px;margin-bottom:25px;position:relative}
-.dashboard-page h1::after{content:"";display:block;width:80px;height:4px;background:linear-gradient(90deg,#2e7d32,#ff6f00);margin:10px auto 0;border-radius:3px}
+.dashboard-page h1{color:var(--dark-green);font-size:2.2rem;font-weight:700;letter-spacing:1px;margin-bottom:25px;position:relative}
+.dashboard-page h1::after{content:"";display:block;width:80px;height:4px;background:linear-gradient(90deg,var(--green),var(--orange));margin:10px auto 0;border-radius:3px}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:25px;margin:30px auto;max-width:1000px}
 .card{padding:25px 20px;border-radius:12px;color:#fff;font-weight:700;text-align:center;font-size:18px;box-shadow:0 4px 12px rgba(0,0,0,.15);transition:all .25s}
 .card.orange{background:linear-gradient(135deg,#ff9800,#ef6c00)}
-.card.green{background:linear-gradient(135deg,#43a047,#2e7d32)}
+.card.green{background:linear-gradient(135deg,var(--green-light),var(--green))}
 .card span{display:block;margin-top:10px;font-size:30px}
 .card:hover{transform:translateY(-6px) scale(1.03);box-shadow:0 10px 20px rgba(0,0,0,.25)}
-.chart-box{background:#fff;border:1px solid #e0e0e0;border-radius:16px;width:85%;max-width:600px;margin:40px auto 60px;padding:30px 25px 50px;box-shadow:0 3px 10px rgba(0,0,0,.08);display:flex;flex-direction:column;align-items:center}
-.chart-box h2{color:#004d26;font-size:1.6rem;font-weight:700;margin-bottom:25px;text-align:center}
-@media(max-width:1024px){.app-layout{flex-direction:column}.sidebar{position:fixed;top:0;left:-260px;height:100vh;z-index:999;transition:left .3s;box-shadow:3px 0 8px rgba(0,0,0,.3)}.sidebar.active{left:0}.sidebar-overlay{display:block}.burger-btn{display:block}.main-content{padding:70px 15px 20px}}
+.chart-box{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;width:85%;max-width:600px;margin:40px auto 60px;padding:30px 25px 50px;box-shadow:0 3px 10px rgba(0,0,0,.08);display:flex;flex-direction:column;align-items:center}
+.chart-box h2{color:var(--dark-green);font-size:1.6rem;font-weight:700;margin-bottom:25px;text-align:center}
 @media(max-width:600px){.cards{grid-template-columns:1fr}.card{font-size:16px;padding:15px}.card span{font-size:20px}}
-body.dark .sidebar{background:#0d3e28}
-body.dark .sidebar a{color:#e7f3e9}
-body.dark .sidebar a:hover,body.dark .sidebar a.active{background:rgba(255,255,255,.08);color:#e6f2de}
-body.dark .main-content{background:#0f1410}
 body.dark .card{box-shadow:0 4px 18px rgba(0,0,0,.35)}
-body.dark .chart-box{background:#17291d;border-color:#264d35}
+body.dark .chart-box{border-color:#264d35}
 body.dark .dashboard-page h1{color:#e6f2de}
 body.dark .chart-box h2{color:#e6f2de}

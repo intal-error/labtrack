@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { api } from "../services/api";
 import { numOr, getAvailableQuantity } from "../utils/helpers";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import EmptyState from "../components/ui/EmptyState";
+import ErrorState from "../components/ui/ErrorState";
 import Modal from "../components/ui/Modal";
 import toast from "react-hot-toast";
 import "../styles/pages/catalog.css";
@@ -12,6 +13,7 @@ export default function CatalogPage() {
   const [filter, setFilter] = useState("All");
   const [sort, setSort] = useState("name");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [showQr, setShowQr] = useState(null);
   const [showUpdate, setShowUpdate] = useState(null);
@@ -19,7 +21,9 @@ export default function CatalogPage() {
   const [form, setForm] = useState({ itemName: "", category: "", quantity: "", condition: "", status: "Available", imageUrl: "", barcode: "" });
   const [uploading, setUploading] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
     try {
       const data = await api.getCatalog();
       let filtered = filter === "All" ? data : data.filter((i) => i.status === filter);
@@ -27,11 +31,11 @@ export default function CatalogPage() {
       else if (sort === "number") filtered.sort((a, b) => (parseFloat(a.itemName) || 0) - (parseFloat(b.itemName) || 0));
       else if (sort === "date") filtered.sort((a, b) => new Date(b.createdAt?.seconds * 1000 || 0) - new Date(a.createdAt?.seconds * 1000 || 0));
       setItems(filtered);
-    } catch (err) { console.error(err); }
+    } catch (err) { setError(err.message || "Failed to load catalog"); }
     finally { setLoading(false); }
-  };
+  }, [filter, sort]);
 
-  useEffect(() => { load(); }, [filter, sort]);
+  useEffect(() => { load(); }, [load]);
 
   const handleUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -130,7 +134,7 @@ export default function CatalogPage() {
                 </tr>
               );
             })}
-            {items.length === 0 && <tr><td colSpan={7} style={{textAlign:"center",color:"#888"}}>No items found</td></tr>}
+            {items.length === 0 && <EmptyState colSpan={7} message="No items found" />}
           </tbody>
         </table>
       </div>
@@ -141,85 +145,76 @@ export default function CatalogPage() {
       </div>
 
       {showCreate && (
-        <div className="modal-overlay" onClick={() => setShowCreate(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h2>Create Item</h2>
-            <form onSubmit={handleCreate}>
-              <input type="text" placeholder="Item Name" value={form.itemName} onChange={(e) => setForm({ ...form, itemName: e.target.value })} required />
-              <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} required>
-                <option value="" disabled>Select Category</option>
-                <option value="Tools">Tools</option>
-                <option value="Equipment">Equipment</option>
-              </select>
-              <input type="number" placeholder="Quantity" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} required />
-              <input type="text" placeholder="Barcode (optional)" value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} />
-              <select value={form.condition} onChange={(e) => setForm({ ...form, condition: e.target.value })} required>
-                <option value="" disabled>Select Condition</option>
-                {["Excellent", "Good", "Fair", "Damaged", "For Repair", "Missing"].map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                <option value="Available">Available</option>
-                <option value="Borrowed">Borrowed</option>
-              </select>
-              <div className="image-upload-row">
-                <input type="url" placeholder="Image URL" value={form.imageUrl} readOnly required />
-                <label className="text-btn">
-                  {uploading ? "Uploading..." : "Upload"}
-                  <input type="file" accept="image/*" onChange={handleUpload} hidden />
-                </label>
-              </div>
-              <div className="catalog-actions">
-                <button type="submit" className="btn btn-green">Create</button>
-                <button type="button" className="btn btn-orange" onClick={() => setShowCreate(false)}>Cancel</button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <Modal title="Create Item" onClose={() => setShowCreate(false)}>
+          <form onSubmit={handleCreate}>
+            <input type="text" placeholder="Item Name" value={form.itemName} onChange={(e) => setForm({ ...form, itemName: e.target.value })} required />
+            <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} required>
+              <option value="" disabled>Select Category</option>
+              <option value="Tools">Tools</option>
+              <option value="Equipment">Equipment</option>
+            </select>
+            <input type="number" placeholder="Quantity" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} required />
+            <input type="text" placeholder="Barcode (optional)" value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} />
+            <select value={form.condition} onChange={(e) => setForm({ ...form, condition: e.target.value })} required>
+              <option value="" disabled>Select Condition</option>
+              {["Excellent", "Good", "Fair", "Damaged", "For Repair", "Missing"].map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+              <option value="Available">Available</option>
+              <option value="Borrowed">Borrowed</option>
+            </select>
+            <div className="image-upload-row">
+              <input type="url" placeholder="Image URL" value={form.imageUrl} readOnly required />
+              <label className="text-btn">
+                {uploading ? "Uploading..." : "Upload"}
+                <input type="file" accept="image/*" onChange={handleUpload} hidden />
+              </label>
+            </div>
+            <div className="catalog-actions">
+              <button type="submit" className="btn btn-green">Create</button>
+              <button type="button" className="btn btn-orange" onClick={() => setShowCreate(false)}>Cancel</button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {showQr && (
-        <div className="modal-overlay" onClick={() => setShowQr(null)}>
-          <div className="modal-content qr-modal" onClick={(e) => e.stopPropagation()}>
-            <h2>{showQr.name || "Item QR Code"}</h2>
-            <p>Print this code and attach it to the item.</p>
-            <div className="qr-canvas"><img src={showQr.dataUrl} alt="QR Code" /></div>
-            <p className="qr-value">{showQr.value}</p>
-            <div className="catalog-actions">
-              <button className="btn btn-green" onClick={() => window.print()}>Print</button>
-              <button className="btn btn-orange" onClick={() => setShowQr(null)}>Close</button>
-            </div>
+        <Modal title={showQr.name || "Item QR Code"} onClose={() => setShowQr(null)} wide>
+          <p>Print this code and attach it to the item.</p>
+          <div className="qr-canvas"><img src={showQr.dataUrl} alt="QR Code" /></div>
+          <p className="qr-value">{showQr.value}</p>
+          <div className="catalog-actions">
+            <button className="btn btn-green" onClick={() => window.print()}>Print</button>
+            <button className="btn btn-orange" onClick={() => setShowQr(null)}>Close</button>
           </div>
-        </div>
+        </Modal>
       )}
 
       {showUpdate && (
-        <div className="modal-overlay" onClick={() => setShowUpdate(null)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h2>Update Item</h2>
-            <form onSubmit={handleUpdate}>
-              <input type="text" placeholder="Item Name" value={showUpdate.itemName || ""} onChange={(e) => setShowUpdate({ ...showUpdate, itemName: e.target.value })} required />
-              <select value={showUpdate.category || ""} onChange={(e) => setShowUpdate({ ...showUpdate, category: e.target.value })} required>
-                <option value="" disabled>Select Category</option>
-                <option value="Tools">Tools</option>
-                <option value="Equipment">Equipment</option>
-              </select>
-              <input type="number" placeholder="Quantity" value={showUpdate.quantity || ""} onChange={(e) => setShowUpdate({ ...showUpdate, quantity: e.target.value })} required />
-              <select value={showUpdate.condition || ""} onChange={(e) => setShowUpdate({ ...showUpdate, condition: e.target.value })} required>
-                <option value="" disabled>Select Condition</option>
-                {["Excellent", "Good", "Fair", "Damaged", "For Repair", "Missing"].map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <select value={showUpdate.status || "Available"} onChange={(e) => setShowUpdate({ ...showUpdate, status: e.target.value })}>
-                <option value="Available">Available</option>
-                <option value="Borrowed">Borrowed</option>
-              </select>
-              <input type="url" placeholder="Image URL" value={showUpdate.imageUrl || ""} readOnly required />
-              <div className="catalog-actions">
-                <button type="submit" className="btn btn-green">Update</button>
-                <button type="button" className="btn btn-orange" onClick={() => setShowUpdate(null)}>Cancel</button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <Modal title="Update Item" onClose={() => setShowUpdate(null)}>
+          <form onSubmit={handleUpdate}>
+            <input type="text" placeholder="Item Name" value={showUpdate.itemName || ""} onChange={(e) => setShowUpdate({ ...showUpdate, itemName: e.target.value })} required />
+            <select value={showUpdate.category || ""} onChange={(e) => setShowUpdate({ ...showUpdate, category: e.target.value })} required>
+              <option value="" disabled>Select Category</option>
+              <option value="Tools">Tools</option>
+              <option value="Equipment">Equipment</option>
+            </select>
+            <input type="number" placeholder="Quantity" value={showUpdate.quantity || ""} onChange={(e) => setShowUpdate({ ...showUpdate, quantity: e.target.value })} required />
+            <select value={showUpdate.condition || ""} onChange={(e) => setShowUpdate({ ...showUpdate, condition: e.target.value })} required>
+              <option value="" disabled>Select Condition</option>
+              {["Excellent", "Good", "Fair", "Damaged", "For Repair", "Missing"].map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <select value={showUpdate.status || "Available"} onChange={(e) => setShowUpdate({ ...showUpdate, status: e.target.value })}>
+              <option value="Available">Available</option>
+              <option value="Borrowed">Borrowed</option>
+            </select>
+            <input type="url" placeholder="Image URL" value={showUpdate.imageUrl || ""} readOnly required />
+            <div className="catalog-actions">
+              <button type="submit" className="btn btn-green">Update</button>
+              <button type="button" className="btn btn-orange" onClick={() => setShowUpdate(null)}>Cancel</button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {imageOverlay && (

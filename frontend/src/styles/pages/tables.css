@@ -1,13 +1,13 @@
-.tables-page h1{margin-top:25px;margin-bottom:15px;font-size:28px;font-weight:700;color:#004d26}
+.tables-page h1{margin-top:25px;margin-bottom:15px;font-size:28px;font-weight:700;color:var(--dark-green)}
 .tables-page .btn-report{display:inline-block;margin-bottom:20px}
-.table-wrapper{width:100%;max-width:1200px;background:#fff;border-radius:12px;margin:0 auto 30px;padding:0;overflow-y:auto;max-height:calc(100vh - 300px);box-sizing:border-box;scrollbar-width:thin;scrollbar-color:#2e7d32 #f0f0f0;box-shadow:0 2px 6px rgba(0,0,0,.1)}
+.table-wrapper{width:100%;max-width:1200px;background:var(--bg-card);border-radius:12px;margin:0 auto 30px;padding:0;overflow-y:auto;max-height:calc(100vh - 300px);box-sizing:border-box;scrollbar-width:thin;scrollbar-color:var(--green) #f0f0f0;box-shadow:0 2px 6px rgba(0,0,0,.1)}
 .table-wrapper::-webkit-scrollbar{width:8px}
-.table-wrapper::-webkit-scrollbar-thumb{background:#2e7d32;border-radius:10px}
-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:14px;background:#fff}
-table thead th{background:#004d26;color:#fff;text-transform:uppercase;font-weight:700;font-size:13px;text-align:center;padding:12px;border:none;position:sticky;top:0;z-index:2}
+.table-wrapper::-webkit-scrollbar-thumb{background:var(--green);border-radius:10px}
+table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:14px;background:var(--bg-card)}
+table thead th{background:var(--dark-green);color:#fff;text-transform:uppercase;font-weight:700;font-size:13px;text-align:center;padding:12px;border:none;position:sticky;top:0;z-index:2}
 table thead th:first-child{border-top-left-radius:12px}
 table thead th:last-child{border-top-right-radius:12px}
-table td{padding:12px 10px;text-align:center;border-bottom:1px solid #ddd;vertical-align:middle;color:#000}
+table td{padding:12px 10px;text-align:center;border-bottom:1px solid var(--border);vertical-align:middle;color:var(--text)}
 table tbody tr:nth-child(even){background:#fafafa}
 table tr:hover{background-color:#f9f9f9}
 @media(max-width:768px){.table-wrapper{overflow-x:auto;display:block}table{min-width:700px}}

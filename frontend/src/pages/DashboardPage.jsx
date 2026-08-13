@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 import { api } from "../services/api";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
+import toast from "react-hot-toast";
 import "../styles/pages/dashboard.css";
 
 const COLORS = ["#2e7d32", "#ff6f00", "#fbc02d", "#1976d2"];
@@ -25,8 +26,8 @@ export default function DashboardPage() {
           { name: "Available", value: chartDataRes.available },
           { name: "Inventory", value: chartDataRes.inventory },
         ]);
-      } catch (err) {
-        console.error("Dashboard load error:", err);
+      } catch {
+        toast.error("Failed to load dashboard");
       } finally {
         setLoading(false);
       }

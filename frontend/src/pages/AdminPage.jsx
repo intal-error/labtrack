@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
+import EmptyState from "../components/ui/EmptyState";
+import ErrorState from "../components/ui/ErrorState";
 import toast from "react-hot-toast";
 import "../styles/pages/admin.css";
 
@@ -10,12 +12,14 @@ export default function AdminPage() {
   const [admins, setAdmins] = useState([]);
   const [form, setForm] = useState({ firstName: "", lastName: "", password: "", contact: "", position: "", email: "" });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const { logout } = useAuth();
   const navigate = useNavigate();
 
   const loadAdmins = async () => {
+    setError("");
     try { setAdmins(await api.getAdmins()); }
-    catch (err) { console.error(err); }
+    catch (err) { setError(err.message || "Failed to load admins"); }
   };
 
   useEffect(() => { if (view === "list") loadAdmins(); }, [view]);
@@ -94,7 +98,8 @@ export default function AdminPage() {
           <table>
             <thead><tr><th>Position</th><th>Name</th><th>Email</th><th>Action</th></tr></thead>
             <tbody>
-              {admins.length === 0 ? <tr><td colSpan={4} style={{color:"#888"}}>No admin accounts found.</td></tr> :
+              {error ? <ErrorState colSpan={4} message={error} onRetry={loadAdmins} /> :
+                admins.length === 0 ? <EmptyState colSpan={4} message="No admin accounts found." /> :
                 admins.map((a) => (
                   <tr key={a.id}>
                     <td>{a.position || "-"}</td>
