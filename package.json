@@ -1,0 +1,15 @@
+{
+  "name": "labtrack",
+  "version": "1.0.0",
+  "description": "SLSU LabTrack v4 - React + Node.js",
+  "private": true,
+  "workspaces": ["frontend", "backend"],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w backend\" \"npm run dev -w frontend\"",
+    "build": "npm run build -w frontend",
+    "install:all": "npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
