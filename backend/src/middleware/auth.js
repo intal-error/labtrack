@@ -16,9 +16,18 @@ const verifyToken = async (req, res, next) => {
   }
 };
 
+const authorize = (...allowedRoles) => {
+  return (req, res, next) => {
+    if (!req.user?.role || !allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({ error: "Insufficient permissions" });
+    }
+    next();
+  };
+};
+
 const errorHandler = (err, req, res, _next) => {
   console.error("Server error:", err);
   res.status(err.status || 500).json({ error: err.message || "Internal server error" });
 };
 
-module.exports = { verifyToken, errorHandler };
+module.exports = { verifyToken, authorize, errorHandler };

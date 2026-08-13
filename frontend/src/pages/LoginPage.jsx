@@ -1,29 +1,52 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../services/firebase";
-import { MdVisibility, MdVisibilityOff } from "react-icons/md";
+import { useAuth } from "../context/AuthContext";
+import { MdSchool, MdPerson, MdAdminPanelSettings, MdVisibility, MdVisibilityOff } from "react-icons/md";
 import toast from "react-hot-toast";
 import "../styles/pages/login.css";
 
+const ROLES = [
+  { key: "student", label: "Student", icon: MdSchool, desc: "Access lab equipment" },
+  { key: "faculty", label: "Faculty", icon: MdPerson, desc: "Manage records & grades" },
+  { key: "admin", label: "Admin", icon: MdAdminPanelSettings, desc: "System administration" },
+];
+
 export default function LoginPage() {
+  const [selectedRole, setSelectedRole] = useState("student");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { role, loading: authLoading } = useAuth();
+  const [signedIn, setSignedIn] = useState(false);
+
+  useEffect(() => {
+    if (!signedIn || authLoading || !role) return;
+    if (role === "student") {
+      navigate("/scanner");
+    } else {
+      navigate("/overview");
+    }
+  }, [signedIn, authLoading, role, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email.trim(), password);
-      sessionStorage.setItem("slsu_admin_email", email.trim());
-      toast.success("Login successful!");
-      navigate("/");
+      sessionStorage.setItem("slsu_user_email", email.trim());
+      toast.success("Welcome back!");
+      setSignedIn(true);
     } catch (err) {
-      const msg = err.code === "auth/invalid-credential" ? "Invalid email or password" : "Login failed. Please try again.";
+      let msg = "Login failed. Please try again.";
+      if (err.code === "auth/invalid-credential") msg = "Invalid email or password";
+      else if (err.code === "auth/user-not-found") msg = "No account found with this email";
+      else if (err.code === "auth/wrong-password") msg = "Incorrect password";
+      else if (err.code === "auth/too-many-requests") msg = "Too many attempts. Please try again later.";
       toast.error(msg);
     } finally {
       setLoading(false);
@@ -51,7 +74,21 @@ export default function LoginPage() {
 
         <div className="login-card">
           <h2 className="login-card-title">Welcome Back</h2>
-          <p className="login-card-subtitle">Sign in to your admin account</p>
+          <p className="login-card-subtitle">Sign in to your account</p>
+
+          <div className="login-role-selector">
+            {ROLES.map(({ key, label, icon: Icon, desc }) => (
+              <div
+                key={key}
+                className={`login-role-card ${selectedRole === key ? "active" : ""}`}
+                onClick={() => setSelectedRole(key)}
+              >
+                <div className="role-icon"><Icon size={28} /></div>
+                <div className="role-label">{label}</div>
+                <div className="role-desc">{desc}</div>
+              </div>
+            ))}
+          </div>
 
           <form onSubmit={handleSubmit}>
             <div className="login-field">
@@ -59,7 +96,7 @@ export default function LoginPage() {
               <input
                 id="email"
                 type="email"
-                placeholder="Enter your email"
+                placeholder={`Enter your ${selectedRole} email`}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -101,9 +138,15 @@ export default function LoginPage() {
             </div>
 
             <button type="submit" className="login-submit" disabled={loading}>
-              {loading ? "Logging in..." : "Login"}
+              {loading ? "Signing in..." : "Sign In"}
             </button>
           </form>
+
+          {selectedRole !== "admin" && (
+            <p className="login-register-link">
+              Don&apos;t have an account? <Link to="/register">Register here</Link>
+            </p>
+          )}
         </div>
       </div>
     </div>

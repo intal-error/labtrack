@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { auth } from "../services/firebase";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "../services/firebase";
 
 const AuthContext = createContext(null);
 
@@ -10,24 +11,67 @@ export function useAuth() {
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [role, setRole] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const timeout = setTimeout(() => setLoading(false), 5000);
+
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
+      if (firebaseUser) {
+        try {
+          const profilePromise = (async () => {
+            const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+            if (userDoc.exists()) {
+              const data = userDoc.data();
+              setRole(data.role || null);
+              setUserProfile({ id: userDoc.id, ...data });
+              return;
+            }
+            const adminDoc = await getDoc(doc(db, "admins", firebaseUser.uid));
+            if (adminDoc.exists()) {
+              const data = adminDoc.data();
+              setRole("admin");
+              setUserProfile({ id: adminDoc.id, role: "admin", ...data });
+            } else {
+              setRole(null);
+              setUserProfile(null);
+            }
+          })();
+
+          await Promise.race([
+            profilePromise,
+            new Promise((resolve) => setTimeout(resolve, 4000)),
+          ]);
+        } catch {
+          setRole(null);
+          setUserProfile(null);
+        }
+      } else {
+        setRole(null);
+        setUserProfile(null);
+      }
+      clearTimeout(timeout);
       setLoading(false);
     });
-    return unsubscribe;
+    return () => {
+      clearTimeout(timeout);
+      unsubscribe();
+    };
   }, []);
 
   const logout = async () => {
     await signOut(auth);
+    setRole(null);
+    setUserProfile(null);
     localStorage.clear();
     sessionStorage.clear();
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, logout }}>
+    <AuthContext.Provider value={{ user, role, userProfile, loading, logout }}>
       {children}
     </AuthContext.Provider>
   );

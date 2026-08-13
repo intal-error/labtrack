@@ -1,0 +1,93 @@
+.register-page{position:relative;min-height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.register-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
+.register-overlay{position:absolute;inset:0;background:linear-gradient(135deg,rgba(0,40,20,.88) 0%,rgba(0,77,38,.75) 45%,rgba(0,120,60,.55) 100%);z-index:1}
+.register-content{position:relative;z-index:2;width:100%;max-width:1200px;padding:40px;display:grid;grid-template-columns:1.1fr 1fr;gap:60px;align-items:center}
+
+/* Left branding */
+.register-left{color:#fff}
+.register-brand{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+.register-logo{width:52px;height:52px;object-fit:contain;filter:drop-shadow(0 2px 6px rgba(0,0,0,.4))}
+.register-brand-name{font-size:1.1rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;opacity:.9}
+.register-title{font-size:3.6rem;font-weight:300;line-height:1.05;margin-bottom:16px;text-shadow:0 3px 12px rgba(0,0,0,.35)}
+.register-title-bold{font-weight:800}
+.register-subtitle{font-size:1.15rem;font-weight:600;margin-bottom:12px;opacity:.95}
+.register-desc{font-size:.98rem;line-height:1.7;max-width:420px;opacity:.8}
+
+/* Right card */
+.register-card{
+  background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);
+  border-radius:22px;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  box-shadow:0 12px 40px rgba(0,0,0,.3);
+  padding:42px 38px;max-width:520px;width:100%;justify-self:end;
+  animation:fadeInRegister .6s ease;
+  max-height:90vh;overflow-y:auto;
+}
+.register-card::-webkit-scrollbar{width:6px}
+.register-card::-webkit-scrollbar-thumb{background:rgba(255,255,255,.3);border-radius:3px}
+.register-card-title{font-size:1.7rem;font-weight:700;color:#fff;margin-bottom:6px}
+.register-card-subtitle{font-size:.95rem;color:rgba(255,255,255,.75);margin-bottom:20px}
+@keyframes fadeInRegister{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+
+/* Tab selector */
+.register-tab-selector{display:flex;gap:10px;margin-bottom:24px}
+.register-tab{
+  flex:1;display:flex;align-items:center;justify-content:center;gap:8px;
+  padding:12px;border-radius:12px;border:2px solid rgba(255,255,255,.15);
+  background:rgba(255,255,255,.08);color:rgba(255,255,255,.7);
+  font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;
+}
+.register-tab:hover{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.3);color:#fff}
+.register-tab.active{background:rgba(46,125,50,.25);border-color:#4caf50;color:#fff}
+
+/* Form */
+.register-card form{display:flex;flex-direction:column;gap:14px}
+.register-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.register-field label{display:block;font-size:.82rem;font-weight:600;color:rgba(255,255,255,.9);margin-bottom:5px;letter-spacing:.3px}
+.register-field input,.register-field select{
+  width:100%;padding:11px 12px;
+  background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.28);
+  border-radius:10px;font-size:14px;color:#fff;transition:all .22s;
+}
+.register-field input::placeholder{color:rgba(255,255,255,.5)}
+.register-field input:focus,.register-field select:focus{outline:none;border-color:rgba(255,255,255,.6);background:rgba(255,255,255,.2);box-shadow:0 0 0 3px rgba(255,255,255,.12)}
+.register-field select option{background:#1a1a2e;color:#fff}
+
+/* Password */
+.register-password-wrap{position:relative}
+.register-password-wrap input{padding-right:40px}
+.register-password-toggle{
+  position:absolute;top:50%;right:10px;transform:translateY(-50%);
+  background:none;border:none;color:rgba(255,255,255,.65);cursor:pointer;
+  display:grid;place-items:center;padding:4px;transition:color .2s;
+}
+.register-password-toggle:hover{color:#fff}
+
+/* Submit */
+.register-submit{
+  width:100%;padding:14px;border:none;border-radius:11px;
+  background:linear-gradient(135deg,#2e7d32,#43a047);color:#fff;
+  font-size:1.02rem;font-weight:700;cursor:pointer;transition:all .25s;
+  letter-spacing:.4px;box-shadow:0 6px 18px rgba(0,120,60,.4);margin-top:4px;
+}
+.register-submit:hover{background:linear-gradient(135deg,#1b5e20,#2e7d32);transform:translateY(-2px);box-shadow:0 8px 22px rgba(0,120,60,.5)}
+.register-submit:disabled{opacity:.65;cursor:not-allowed;transform:none}
+
+/* Login link */
+.register-login-link{text-align:center;color:rgba(255,255,255,.75);font-size:.9rem;margin-top:18px}
+.register-login-link a{color:#fff;font-weight:600;text-decoration:none;transition:color .2s}
+.register-login-link a:hover{text-decoration:underline;color:#4caf50}
+
+/* Responsive */
+@media(max-width:900px){
+  .register-content{grid-template-columns:1fr;gap:30px;padding:90px 20px 40px;justify-items:center}
+  .register-left{text-align:center}
+  .register-brand{justify-content:center}
+  .register-desc{margin:0 auto}
+  .register-title{font-size:2.6rem}
+  .register-card{justify-self:center}
+}
+@media(max-width:480px){
+  .register-card{padding:30px 22px}
+  .register-title{font-size:2.1rem}
+  .register-row{grid-template-columns:1fr}
+}

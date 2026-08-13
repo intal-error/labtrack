@@ -1,14 +1,35 @@
+import { auth } from "./firebase";
+import { getIdToken } from "firebase/auth";
+
 const API_URL = import.meta.env.VITE_API_URL || "/api";
+const TIMEOUT_MS = 8000;
 
 async function request(path, options = {}) {
+  let headers = { "Content-Type": "application/json", ...options.headers };
+
+  if (auth.currentUser) {
+    try {
+      const token = await getIdToken(auth.currentUser);
+      headers["Authorization"] = `Bearer ${token}`;
+    } catch {
+      // Token refresh failed, continue without token
+    }
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
   let res;
   try {
     res = await fetch(`${API_URL}${path}`, {
-      headers: { "Content-Type": "application/json", ...options.headers },
+      headers,
+      signal: controller.signal,
       ...options,
     });
   } catch {
-    throw new Error("Cannot reach the server. Run 'npm run dev:backend'.");
+    throw new Error("Server is offline. Please try again later.");
+  } finally {
+    clearTimeout(timer);
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "Request failed" }));
@@ -38,11 +59,22 @@ export const api = {
   deleteAdmin: (id) => request(`/admin/${id}`, { method: "DELETE" }),
 
   downloadReport: async (type) => {
+    let headers = {};
+    if (auth.currentUser) {
+      try {
+        const token = await getIdToken(auth.currentUser);
+        headers["Authorization"] = `Bearer ${token}`;
+      } catch {}
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     let res;
     try {
-      res = await fetch(`${API_URL}/reports/${type}`);
+      res = await fetch(`${API_URL}/reports/${type}`, { headers, signal: controller.signal });
     } catch {
-      throw new Error("Cannot reach the server. Run 'npm run dev:backend'.");
+      throw new Error("Server is offline. Please try again later.");
+    } finally {
+      clearTimeout(timer);
     }
     if (!res.ok) throw new Error("Download failed");
     const blob = await res.blob();
@@ -57,15 +89,49 @@ export const api = {
   uploadImage: async (file) => {
     const formData = new FormData();
     formData.append("file", file);
+    let headers = {};
+    if (auth.currentUser) {
+      try {
+        const token = await getIdToken(auth.currentUser);
+        headers["Authorization"] = `Bearer ${token}`;
+      } catch {}
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     let res;
     try {
-      res = await fetch(`${API_URL}/upload/image`, { method: "POST", body: formData });
+      res = await fetch(`${API_URL}/upload/image`, { method: "POST", headers, body: formData, signal: controller.signal });
     } catch {
-      throw new Error("Cannot reach the server. Run 'npm run dev:backend'.");
+      throw new Error("Server is offline. Please try again later.");
+    } finally {
+      clearTimeout(timer);
     }
     if (!res.ok) throw new Error("Upload failed");
     return res.json();
   },
 
   generateQR: (text) => request("/upload/qr", { method: "POST", body: JSON.stringify({ text }) }),
+
+  // Auth
+  register: (data) => request("/auth/register", { method: "POST", body: JSON.stringify(data) }),
+  getProfile: () => request("/auth/profile"),
+
+  // Records
+  getRecords: () => request("/records"),
+  createRecord: (data) => request("/records", { method: "POST", body: JSON.stringify(data) }),
+  updateRecord: (id, data) => request(`/records/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteRecord: (id) => request(`/records/${id}`, { method: "DELETE" }),
+
+  // Classes
+  getClasses: () => request("/classes"),
+
+  // Notifications
+  getNotifications: () => request("/notifications"),
+  dismissNotification: (id) => request(`/notifications/${id}`, { method: "DELETE" }),
+
+  // Documents
+  getDocuments: () => request("/documents"),
+
+  // Report Summary
+  getReportSummary: () => request("/reports/summary"),
 };

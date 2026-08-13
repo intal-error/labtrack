@@ -3,24 +3,58 @@ import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { FiMenu, FiX } from "react-icons/fi";
-import { MdDashboard, MdQrCodeScanner, MdInventory, MdPerson, MdAdminPanelSettings, MdInfo, MdLogout, MdDarkMode, MdLightMode } from "react-icons/md";
+import {
+  MdDashboard, MdQrCodeScanner, MdInventory, MdPerson, MdAdminPanelSettings, MdInfo,
+  MdLogout, MdDarkMode, MdLightMode, MdTableChart, MdClass, MdAssessment,
+  MdNotifications, MdPeople, MdFolderOpen, MdSettings
+} from "react-icons/md";
 import { FaHandHolding, FaUndoAlt } from "react-icons/fa";
 import "../../styles/pages/layout.css";
 
-const navItems = [
-  { path: "/", label: "Dashboard", icon: MdDashboard },
-  { path: "/scanner", label: "Scan Borrow/Return", icon: MdQrCodeScanner },
-  { path: "/borrowed", label: "Borrowed", icon: FaHandHolding },
-  { path: "/returned", label: "Returned", icon: FaUndoAlt },
-  { path: "/catalog", label: "Catalog", icon: MdInventory },
-  { path: "/persona", label: "Persona", icon: MdPerson },
-  { path: "/admin", label: "Admin", icon: MdAdminPanelSettings },
-  { path: "/about", label: "About", icon: MdInfo },
+const ROLE_LABELS = { student: "Student", faculty: "Faculty", admin: "Admin" };
+const ROLE_COLORS = { student: "#1976d2", faculty: "#7b1fa2", admin: "#d32f2f" };
+
+const navSections = [
+  {
+    label: "HOME",
+    items: [
+      { path: "/overview", label: "Overview", icon: MdDashboard, roles: ["student", "faculty", "admin"] },
+      { path: "/records", label: "Records", icon: MdTableChart, roles: ["faculty", "admin"] },
+      { path: "/classes", label: "Classes", icon: MdClass, roles: ["faculty", "admin"] },
+      { path: "/reports", label: "Reports", icon: MdAssessment, roles: ["faculty", "admin"] },
+    ],
+  },
+  {
+    label: "TOOLS",
+    items: [
+      { path: "/scanner", label: "Scan Borrow/Return", icon: MdQrCodeScanner, roles: ["student", "faculty", "admin"] },
+      { path: "/borrowed", label: "Borrowed", icon: FaHandHolding, roles: ["student", "faculty", "admin"] },
+      { path: "/returned", label: "Returned", icon: FaUndoAlt, roles: ["student", "faculty", "admin"] },
+      { path: "/catalog", label: "Catalog", icon: MdInventory, roles: ["faculty", "admin"] },
+    ],
+  },
+  {
+    label: "SYSTEM",
+    items: [
+      { path: "/notifications", label: "Notifications", icon: MdNotifications, roles: ["student", "faculty", "admin"] },
+      { path: "/members", label: "Members", icon: MdPeople, roles: ["admin"] },
+      { path: "/documents", label: "Documents", icon: MdFolderOpen, roles: ["student", "faculty", "admin"] },
+      { path: "/settings", label: "Settings", icon: MdSettings, roles: ["admin"] },
+    ],
+  },
+  {
+    label: "OTHER",
+    items: [
+      { path: "/persona", label: "Persona", icon: MdPerson, roles: ["faculty", "admin"] },
+      { path: "/admin", label: "Admin", icon: MdAdminPanelSettings, roles: ["admin"] },
+      { path: "/about", label: "About", icon: MdInfo, roles: ["student", "faculty", "admin"] },
+    ],
+  },
 ];
 
 export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { logout } = useAuth();
+  const { user, role, userProfile, logout, loading } = useAuth();
   const { dark, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
@@ -28,6 +62,24 @@ export default function DashboardLayout() {
     await logout();
     navigate("/login");
   };
+
+  if (loading || !role) {
+    return (
+      <div className="loading-screen">
+        <div className="spinner-lg" />
+      </div>
+    );
+  }
+
+  const userInitials = userProfile
+    ? `${(userProfile.firstName || "")[0] || ""}${(userProfile.lastName || "")[0] || ""}`.toUpperCase()
+    : user?.displayName
+      ? user.displayName.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)
+      : user?.email?.[0]?.toUpperCase() || "?";
+
+  const displayName = userProfile
+    ? `${userProfile.firstName} ${userProfile.lastName}`
+    : user?.displayName || user?.email || "User";
 
   return (
     <div className="app-layout">
@@ -44,21 +96,43 @@ export default function DashboardLayout() {
           </div>
         </div>
 
+        <div className="sidebar-user">
+          <div className="sidebar-user-avatar" style={{ background: ROLE_COLORS[role] || "#2e7d32" }}>
+            {userInitials}
+          </div>
+          <div className="sidebar-user-info">
+            <div className="sidebar-user-name">{displayName}</div>
+            <div className="sidebar-user-role" style={{ color: ROLE_COLORS[role] || "#2e7d32" }}>
+              {ROLE_LABELS[role] || role}
+            </div>
+          </div>
+        </div>
+
         <nav>
           <ul>
-            {navItems.map(({ path, label, icon: Icon }) => (
-              <li key={path}>
-                <NavLink
-                  to={path}
-                  end={path === "/"}
-                  className={({ isActive }) => isActive ? "active" : ""}
-                  onClick={() => setSidebarOpen(false)}
-                >
-                  <span className="nav-icon"><Icon size={18} /></span>
-                  <span className="nav-label">{label}</span>
-                </NavLink>
-              </li>
-            ))}
+            {navSections.map((section) => {
+              const visibleItems = section.items.filter((item) => item.roles.includes(role));
+              if (visibleItems.length === 0) return null;
+              return (
+                <li key={section.label} className="nav-section-wrap">
+                  <div className="nav-section">{section.label}</div>
+                  <ul>
+                    {visibleItems.map(({ path, label, icon: Icon }) => (
+                      <li key={path}>
+                        <NavLink
+                          to={path}
+                          className={({ isActive }) => isActive ? "active" : ""}
+                          onClick={() => setSidebarOpen(false)}
+                        >
+                          <span className="nav-icon"><Icon size={18} /></span>
+                          <span className="nav-label">{label}</span>
+                        </NavLink>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              );
+            })}
           </ul>
         </nav>
 

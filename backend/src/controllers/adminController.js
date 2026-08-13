@@ -5,14 +5,18 @@ const ADMIN_COLLECTIONS = ["admin", "admins"];
 const getAll = async (req, res) => {
   try {
     const admins = [];
-    for (const coll of ADMIN_COLLECTIONS) {
-      try {
-        const snap = await db.collection(coll).get();
-        snap.forEach((doc) => admins.push({ id: doc.id, collection: coll, ...doc.data() }));
-      } catch (e) {
-        // collection may not exist
+    // Read from users collection where role=admin
+    const usersSnap = await db.collection("users").where("role", "==", "admin").get();
+    usersSnap.forEach((doc) => admins.push({ id: doc.id, ...doc.data() }));
+
+    // Also include any admins only in the admins collection (legacy)
+    const adminsSnap = await db.collection("admins").get();
+    adminsSnap.forEach((doc) => {
+      if (!admins.find((a) => a.id === doc.id)) {
+        admins.push({ id: doc.id, collection: "admins", ...doc.data() });
       }
-    }
+    });
+
     res.json(admins);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -27,6 +31,26 @@ const create = async (req, res) => {
     }
 
     const userRecord = await auth.createUser({ email, password, displayName: `${firstName} ${lastName}` });
+
+    // Set custom claims so authorize() middleware works
+    await auth.setCustomUserClaims(userRecord.uid, { role: "admin" });
+
+    const adminData = {
+      firstName,
+      lastName,
+      email,
+      contact: contact || "",
+      position: position || "",
+      role: "admin",
+      status: "active",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    // Store in users collection so AuthContext can read the role
+    await db.collection("users").doc(userRecord.uid).set(adminData);
+
+    // Also store in admins collection for backward compatibility
     await db.collection("admins").doc(userRecord.uid).set({
       firstname: firstName,
       lastname: lastName,
@@ -50,6 +74,19 @@ const update = async (req, res) => {
     const { id } = req.params;
     const { firstName, lastName, contact, position, password } = req.body;
 
+    // Update in users collection
+    const userDoc = await db.collection("users").doc(id).get();
+    if (userDoc.exists) {
+      await db.collection("users").doc(id).set({
+        firstName,
+        lastName,
+        contact: contact || "",
+        position: position || "",
+        updatedAt: new Date(),
+      }, { merge: true });
+    }
+
+    // Also update in admins collection (legacy)
     for (const coll of ADMIN_COLLECTIONS) {
       const docRef = db.collection(coll).doc(id);
       const doc = await docRef.get();
@@ -81,6 +118,9 @@ const update = async (req, res) => {
 const remove = async (req, res) => {
   try {
     const { id } = req.params;
+    // Delete from users collection
+    try { await db.collection("users").doc(id).delete(); } catch (e) {}
+    // Delete from admins collection (legacy)
     for (const coll of ADMIN_COLLECTIONS) {
       try { await db.collection(coll).doc(id).delete(); } catch (e) {}
     }

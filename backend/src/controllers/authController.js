@@ -1,0 +1,99 @@
+const { db, auth } = require("../config/firebase");
+
+const register = async (req, res) => {
+  try {
+    const {
+      role, email, password, firstName, lastName,
+      schoolId, course, year, section,
+      employeeId, department, position,
+      contact,
+    } = req.body;
+
+    if (!role || !email || !password || !firstName || !lastName) {
+      return res.status(400).json({ error: "Required fields missing" });
+    }
+
+    if (!["student", "faculty"].includes(role)) {
+      return res.status(400).json({ error: "Invalid role. Must be student or faculty." });
+    }
+
+    if (role === "student" && !schoolId) {
+      return res.status(400).json({ error: "School ID is required for students" });
+    }
+
+    if (role === "faculty" && !employeeId) {
+      return res.status(400).json({ error: "Employee ID is required for faculty" });
+    }
+
+    let userRecord;
+    try {
+      userRecord = await auth.createUser({
+        email,
+        password,
+        displayName: `${firstName} ${lastName}`,
+      });
+    } catch (err) {
+      if (err.code === "auth/email-already-in-use") {
+        return res.status(409).json({ error: "This email is already registered" });
+      }
+      if (err.code === "auth/invalid-email") {
+        return res.status(400).json({ error: "Invalid email address" });
+      }
+      if (err.code === "auth/weak-password") {
+        return res.status(400).json({ error: "Password is too weak (min 6 characters)" });
+      }
+      throw err;
+    }
+
+    // Set custom claims (non-critical — registration still succeeds if this fails)
+    try {
+      await auth.setCustomUserClaims(userRecord.uid, { role });
+    } catch (claimErr) {
+      console.warn("Failed to set custom claims (non-critical):", claimErr.message);
+    }
+
+    const userData = {
+      role,
+      firstName,
+      lastName,
+      email,
+      contact: contact || "",
+      status: "active",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    if (role === "student") {
+      userData.schoolId = schoolId;
+      userData.course = course || "";
+      userData.year = year || "";
+      userData.section = section || "";
+    } else {
+      userData.employeeId = employeeId;
+      userData.department = department || "";
+      userData.position = position || "";
+    }
+
+    await db.collection("users").doc(userRecord.uid).set(userData);
+
+    res.status(201).json({ id: userRecord.uid, message: "Registration successful" });
+  } catch (err) {
+    console.error("Registration error:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+const getProfile = async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const doc = await db.collection("users").doc(uid).get();
+    if (!doc.exists) {
+      return res.status(404).json({ error: "User profile not found" });
+    }
+    res.json({ id: doc.id, ...doc.data() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+module.exports = { register, getProfile };
