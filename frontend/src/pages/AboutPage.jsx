@@ -28,7 +28,7 @@ export default function AboutPage() {
             </p>
             <p>
               <strong>Developed by:</strong><br />
-              Arch A. Manorina and John Denzel Jamilano
+              Marc Lawrence H. Intal and Nasher De vera
             </p>
           </div>
         </div>
