@@ -6,7 +6,8 @@ import { FiMenu, FiX } from "react-icons/fi";
 import {
   MdDashboard, MdQrCodeScanner, MdInventory, MdPerson, MdAdminPanelSettings, MdInfo,
   MdLogout, MdDarkMode, MdLightMode, MdTableChart, MdClass, MdAssessment,
-  MdNotifications, MdPeople, MdFolderOpen, MdSettings
+  MdNotifications, MdPeople, MdFolderOpen, MdSettings,
+  MdChevronLeft, MdChevronRight, MdExpandMore, MdExpandLess
 } from "react-icons/md";
 import { FaHandHolding, FaUndoAlt } from "react-icons/fa";
 import "../../styles/pages/layout.css";
@@ -54,6 +55,10 @@ const navSections = [
 
 export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [openSections, setOpenSections] = useState(
+    Object.fromEntries(navSections.map((s) => [s.label, true]))
+  );
   const { user, role, userProfile, logout, loading } = useAuth();
   const { dark, toggleTheme } = useTheme();
   const navigate = useNavigate();
@@ -61,6 +66,10 @@ export default function DashboardLayout() {
   const handleLogout = async () => {
     await logout();
     navigate("/login");
+  };
+
+  const toggleSection = (label) => {
+    setOpenSections((prev) => ({ ...prev, [label]: !prev[label] }));
   };
 
   if (loading || !role) {
@@ -87,12 +96,16 @@ export default function DashboardLayout() {
         {sidebarOpen ? <FiX size={22} /> : <FiMenu size={22} />}
       </button>
 
-      <aside className={`sidebar ${sidebarOpen ? "active" : ""}`}>
-        <div className="sidebar-logo-wrap">
-          <img src="/logo.png" alt="SLSU Logo" className="sidebar-logo" />
-          <div className="sidebar-brand">
-            <div className="sidebar-brand-title">SLSU LabTrack</div>
-            <div className="sidebar-brand-sub">Lab Equipment Tracker</div>
+      <aside className={`sidebar ${collapsed ? "collapsed" : ""} ${sidebarOpen ? "active" : ""}`}>
+        <div className="sidebar-header">
+          <div className="sidebar-logo-wrap">
+            <div className="sidebar-logo-icon">L</div>
+            {!collapsed && (
+              <div className="sidebar-brand">
+                <div className="sidebar-brand-title">LabTrack</div>
+                <div className="sidebar-brand-sub">SLSU Lab Equipment</div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -100,12 +113,14 @@ export default function DashboardLayout() {
           <div className="sidebar-user-avatar" style={{ background: ROLE_COLORS[role] || "#2e7d32" }}>
             {userInitials}
           </div>
-          <div className="sidebar-user-info">
-            <div className="sidebar-user-name">{displayName}</div>
-            <div className="sidebar-user-role" style={{ color: ROLE_COLORS[role] || "#2e7d32" }}>
-              {ROLE_LABELS[role] || role}
+          {!collapsed && (
+            <div className="sidebar-user-info">
+              <div className="sidebar-user-name">{displayName}</div>
+              <div className="sidebar-user-role" style={{ color: ROLE_COLORS[role] || "#2e7d32" }}>
+                {ROLE_LABELS[role] || role}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <nav>
@@ -113,23 +128,37 @@ export default function DashboardLayout() {
             {navSections.map((section) => {
               const visibleItems = section.items.filter((item) => item.roles.includes(role));
               if (visibleItems.length === 0) return null;
+              const isOpen = openSections[section.label];
               return (
                 <li key={section.label} className="nav-section-wrap">
-                  <div className="nav-section">{section.label}</div>
-                  <ul>
-                    {visibleItems.map(({ path, label, icon: Icon }) => (
-                      <li key={path}>
-                        <NavLink
-                          to={path}
-                          className={({ isActive }) => isActive ? "active" : ""}
-                          onClick={() => setSidebarOpen(false)}
-                        >
-                          <span className="nav-icon"><Icon size={18} /></span>
-                          <span className="nav-label">{label}</span>
-                        </NavLink>
-                      </li>
-                    ))}
-                  </ul>
+                  <button
+                    className={`nav-section ${isOpen ? "open" : ""}`}
+                    onClick={() => toggleSection(section.label)}
+                  >
+                    <span className="nav-section-label">{section.label}</span>
+                    {!collapsed && (
+                      <span className="nav-section-chevron">
+                        {isOpen ? <MdExpandLess size={16} /> : <MdExpandMore size={16} />}
+                      </span>
+                    )}
+                  </button>
+                  {isOpen && (
+                    <ul className={`nav-items ${collapsed ? "collapsed-list" : ""}`}>
+                      {visibleItems.map(({ path, label, icon: Icon }) => (
+                        <li key={path}>
+                          <NavLink
+                            to={path}
+                            className={({ isActive }) => isActive ? "active" : ""}
+                            onClick={() => setSidebarOpen(false)}
+                            title={collapsed ? label : undefined}
+                          >
+                            <span className="nav-icon"><Icon size={18} /></span>
+                            {!collapsed && <span className="nav-label">{label}</span>}
+                          </NavLink>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </li>
               );
             })}
@@ -137,15 +166,19 @@ export default function DashboardLayout() {
         </nav>
 
         <div className="sidebar-bottom">
-          <button className="sidebar-bottom-item" onClick={toggleTheme}>
+          <button className="sidebar-bottom-item" onClick={toggleTheme} title={dark ? "Light Mode" : "Dark Mode"}>
             <span className="nav-icon">{dark ? <MdLightMode size={18} /> : <MdDarkMode size={18} />}</span>
-            <span className="nav-label">{dark ? "Light Mode" : "Dark Mode"}</span>
+            {!collapsed && <span className="nav-label">{dark ? "Light Mode" : "Dark Mode"}</span>}
           </button>
-          <button className="sidebar-bottom-item" onClick={handleLogout}>
+          <button className="sidebar-bottom-item" onClick={handleLogout} title="Logout">
             <span className="nav-icon"><MdLogout size={18} /></span>
-            <span className="nav-label">Logout</span>
+            {!collapsed && <span className="nav-label">Logout</span>}
           </button>
         </div>
+
+        <button className="sidebar-toggle" onClick={() => setCollapsed(!collapsed)} title={collapsed ? "Expand" : "Collapse"}>
+          {collapsed ? <MdChevronRight size={18} /> : <MdChevronLeft size={18} />}
+        </button>
       </aside>
 
       <div className={`sidebar-overlay ${sidebarOpen ? "active" : ""}`} onClick={() => setSidebarOpen(false)} />
