@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { api } from "../../services/api";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
-import { MdDescription, MdPictureAsPdf, MdTableChart, MdFolder } from "react-icons/md";
+import { MdDescription, MdPictureAsPdf, MdTableChart } from "react-icons/md";
 
 export default function DocumentsTab() {
   const [documents, setDocuments] = useState([]);

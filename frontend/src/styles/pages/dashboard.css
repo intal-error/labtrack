@@ -1,5 +1,0 @@
-.dashboard-page{padding:20px 30px;text-align:center}
-.dashboard-page h1{color:var(--dark-green);font-size:2.2rem;font-weight:700;letter-spacing:1px;margin-bottom:5px;position:relative}
-.dashboard-page h1::after{content:"";display:block;width:80px;height:4px;background:linear-gradient(90deg,var(--green),var(--orange));margin:10px auto 0;border-radius:3px}
-@media(max-width:600px){.dashboard-page{padding:15px}.dashboard-page h1{font-size:1.6rem}}
-body.dark .dashboard-page h1{color:#e6f2de}

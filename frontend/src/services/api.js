@@ -114,7 +114,6 @@ export const api = {
 
   // Auth
   register: (data) => request("/auth/register", { method: "POST", body: JSON.stringify(data) }),
-  getProfile: () => request("/auth/profile"),
 
   // Records
   getRecords: () => request("/records"),
