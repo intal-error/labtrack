@@ -10,8 +10,8 @@ node_modules/
 dist/
 build/
 
-# firebase
-.firebase/
+# vercel
+.vercel/
 
 # IDE
 .vscode/
