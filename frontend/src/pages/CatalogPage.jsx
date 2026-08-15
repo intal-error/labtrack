@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../services/api";
+import { COURSES } from "../constants/courses";
 import { numOr, getAvailableQuantity } from "../utils/helpers";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Modal from "../components/ui/Modal";
@@ -10,13 +11,14 @@ export default function CatalogPage() {
   const [items, setItems] = useState([]);
   const [allItems, setAllItems] = useState([]);
   const [filter, setFilter] = useState("All");
+  const [filterCourse, setFilterCourse] = useState("All");
   const [sort, setSort] = useState("name");
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [showQr, setShowQr] = useState(null);
   const [showUpdate, setShowUpdate] = useState(null);
   const [imageOverlay, setImageOverlay] = useState(null);
-  const [form, setForm] = useState({ itemName: "", category: "", quantity: "", condition: "", status: "Available", imageUrl: "", barcode: "" });
+  const [form, setForm] = useState({ itemName: "", category: "", course: "", quantity: "", condition: "", status: "Available", imageUrl: "", barcode: "" });
   const [uploading, setUploading] = useState(false);
 
   const load = useCallback(async () => {
@@ -24,14 +26,16 @@ export default function CatalogPage() {
     try {
       const data = await api.getCatalog();
       setAllItems(data);
-      let filtered = filter === "All" ? data : data.filter((i) => i.status === filter);
+      let filtered = data;
+      if (filter !== "All") filtered = filtered.filter((i) => i.status === filter);
+      if (filterCourse !== "All") filtered = filtered.filter((i) => i.course === filterCourse);
       if (sort === "name") filtered.sort((a, b) => (a.itemName || "").localeCompare(b.itemName || ""));
       else if (sort === "number") filtered.sort((a, b) => (parseFloat(a.itemName) || 0) - (parseFloat(b.itemName) || 0));
       else if (sort === "date") filtered.sort((a, b) => new Date(b.createdAt?.seconds * 1000 || 0) - new Date(a.createdAt?.seconds * 1000 || 0));
       setItems(filtered);
     } catch (err) { toast.error(err.message || "Failed to load catalog"); }
     finally { setLoading(false); }
-  }, [filter, sort]);
+  }, [filter, filterCourse, sort]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -61,7 +65,7 @@ export default function CatalogPage() {
       await api.createCatalogItem({ ...form, quantity: Number(form.quantity) || 0 });
       toast.success("Item created!");
       setShowCreate(false);
-      setForm({ itemName: "", category: "", quantity: "", condition: "", status: "Available", imageUrl: "", barcode: "" });
+      setForm({ itemName: "", category: "", course: "", quantity: "", condition: "", status: "Available", imageUrl: "", barcode: "" });
       load();
     } catch (err) { toast.error(err.message); }
   };
@@ -169,6 +173,10 @@ export default function CatalogPage() {
               {f}
             </button>
           ))}
+          <select className="catalog-course-filter" value={filterCourse} onChange={(e) => setFilterCourse(e.target.value)}>
+            <option value="All">All Courses</option>
+            {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
         </div>
         <div className="catalog-sort">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="4" y1="6" x2="16" y2="6"/><line x1="4" y1="12" x2="12" y2="12"/><line x1="4" y1="18" x2="8" y2="18"/></svg>
@@ -252,6 +260,10 @@ export default function CatalogPage() {
               <option value="Tools">Tools</option>
               <option value="Equipment">Equipment</option>
             </select>
+            <select value={form.course} onChange={(e) => setForm({ ...form, course: e.target.value })} required>
+              <option value="" disabled>Select Course</option>
+              {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
             <input type="number" placeholder="Quantity" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} required />
             <input type="text" placeholder="Barcode (optional)" value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} />
             <select value={form.condition} onChange={(e) => setForm({ ...form, condition: e.target.value })} required>
@@ -297,6 +309,10 @@ export default function CatalogPage() {
               <option value="" disabled>Select Category</option>
               <option value="Tools">Tools</option>
               <option value="Equipment">Equipment</option>
+            </select>
+            <select value={showUpdate.course || ""} onChange={(e) => setShowUpdate({ ...showUpdate, course: e.target.value })} required>
+              <option value="" disabled>Select Course</option>
+              {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
             <input type="number" placeholder="Quantity" value={showUpdate.quantity || ""} onChange={(e) => setShowUpdate({ ...showUpdate, quantity: e.target.value })} required />
             <select value={showUpdate.condition || ""} onChange={(e) => setShowUpdate({ ...showUpdate, condition: e.target.value })} required>

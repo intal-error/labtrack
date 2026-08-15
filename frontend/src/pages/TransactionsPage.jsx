@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../services/api";
+import { COURSES } from "../constants/courses";
 import { toDate, formatDate, getRemainingQuantity } from "../utils/helpers";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import toast from "react-hot-toast";
@@ -37,6 +38,7 @@ export default function TransactionsPage() {
   const [returned, setReturned] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [filterCourse, setFilterCourse] = useState("All");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -68,14 +70,20 @@ export default function TransactionsPage() {
   };
 
   const filterItems = (items) => {
-    if (!search) return items;
-    const q = search.toLowerCase();
-    return items.filter((item) =>
-      (item.schoolID || "").toLowerCase().includes(q) ||
-      (item.firstName || "").toLowerCase().includes(q) ||
-      (item.lastName || "").toLowerCase().includes(q) ||
-      (item.itemName || "").toLowerCase().includes(q)
-    );
+    let result = items;
+    if (filterCourse !== "All") {
+      result = result.filter((item) => item.course === filterCourse);
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      result = result.filter((item) =>
+        (item.schoolID || "").toLowerCase().includes(q) ||
+        (item.firstName || "").toLowerCase().includes(q) ||
+        (item.lastName || "").toLowerCase().includes(q) ||
+        (item.itemName || "").toLowerCase().includes(q)
+      );
+    }
+    return result;
   };
 
   const activeItems = activeTab === "borrowed" ? filterItems(borrowed) : filterItems(returned);
@@ -156,9 +164,15 @@ export default function TransactionsPage() {
             <span className="tab-count">{returned.length}</span>
           </button>
         </div>
-        <div className="transactions-search">
-          <svg className="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          <input placeholder="Search by name, ID, or item..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        <div className="transactions-filters">
+          <select className="transactions-course-filter" value={filterCourse} onChange={(e) => setFilterCourse(e.target.value)}>
+            <option value="All">All Courses</option>
+            {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <div className="transactions-search">
+            <svg className="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input placeholder="Search by name, ID, or item..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
         </div>
       </div>
 

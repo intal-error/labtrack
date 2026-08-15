@@ -4,7 +4,7 @@ const register = async (req, res) => {
   try {
     const {
       role, email, password, firstName, lastName,
-      schoolId, course, year, section,
+      schoolId, course, year,
       employeeId, department, position,
       contact,
     } = req.body;
@@ -67,7 +67,6 @@ const register = async (req, res) => {
       userData.schoolId = schoolId;
       userData.course = course || "";
       userData.year = year || "";
-      userData.section = section || "";
     } else {
       userData.employeeId = employeeId;
       userData.department = department || "";

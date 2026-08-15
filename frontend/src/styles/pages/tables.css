@@ -1,5 +1,9 @@
 .tables-page h1{margin-top:25px;margin-bottom:15px;font-size:28px;font-weight:700;color:var(--dark-green)}
-.tables-page .btn-report{display:inline-block;margin-bottom:20px}
+.tables-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;flex-wrap:wrap;gap:12px}
+.tables-actions{display:flex;gap:10px;align-items:center}
+.tables-course-filter{padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg-card);color:var(--text);cursor:pointer;min-width:160px}
+.tables-course-filter:focus{outline:none;border-color:var(--green);box-shadow:0 0 3px rgba(46,125,50,.3)}
+.tables-page .btn-report{display:inline-block}
 .table-wrapper{width:100%;max-width:1200px;background:var(--bg-card);border-radius:12px;margin:0 auto 30px;padding:0;overflow-y:auto;max-height:calc(100vh - 300px);box-sizing:border-box;scrollbar-width:thin;scrollbar-color:var(--green) #f0f0f0;box-shadow:0 2px 6px rgba(0,0,0,.1)}
 .table-wrapper::-webkit-scrollbar{width:8px}
 .table-wrapper::-webkit-scrollbar-thumb{background:var(--green);border-radius:10px}
@@ -45,6 +49,9 @@ body.dark .btn-report{background:#1b3b27;color:#edf6ea;border-color:#2d5a39}
 .tab-btn.active svg{stroke:#fff}
 .tab-count{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:10px;font-size:11px;font-weight:700;background:rgba(0,0,0,.1)}
 .tab-btn:not(.active) .tab-count{background:var(--border);color:var(--text-muted)}
+.transactions-filters{display:flex;gap:10px;align-items:center}
+.transactions-course-filter{padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg-card);color:var(--text);cursor:pointer;min-width:160px}
+.transactions-course-filter:focus{outline:none;border-color:var(--green);box-shadow:0 0 3px rgba(46,125,50,.3)}
 .transactions-search{position:relative;display:flex;align-items:center}
 .transactions-search .search-icon{position:absolute;left:12px;color:var(--text-muted);pointer-events:none}
 .transactions-search input{padding:8px 12px 8px 36px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg-card);color:var(--text);min-width:260px;transition:border .2s}

@@ -115,9 +115,9 @@ export default function DashboardLayout() {
           {!collapsed && (
             <div className="sidebar-user-info">
               <div className="sidebar-user-name">{displayName}</div>
-              <div className="sidebar-user-role" style={{ color: ROLE_COLORS[role] || "#2e7d32" }}>
+              <span className="sidebar-user-role" style={{ background: `${ROLE_COLORS[role] || "#2e7d32"}20`, color: ROLE_COLORS[role] || "#2e7d32" }}>
                 {ROLE_LABELS[role] || role}
-              </div>
+              </span>
             </div>
           )}
         </div>
@@ -165,11 +165,11 @@ export default function DashboardLayout() {
         </nav>
 
         <div className="sidebar-bottom">
-          <button className="sidebar-bottom-item" onClick={toggleTheme} title={dark ? "Light Mode" : "Dark Mode"}>
+          <button className="sidebar-bottom-item theme-toggle" onClick={toggleTheme} title={dark ? "Light Mode" : "Dark Mode"}>
             <span className="nav-icon">{dark ? <MdLightMode size={18} /> : <MdDarkMode size={18} />}</span>
             {!collapsed && <span className="nav-label">{dark ? "Light Mode" : "Dark Mode"}</span>}
           </button>
-          <button className="sidebar-bottom-item" onClick={handleLogout} title="Logout">
+          <button className="sidebar-bottom-item logout-btn" onClick={handleLogout} title="Logout">
             <span className="nav-icon"><MdLogout size={18} /></span>
             {!collapsed && <span className="nav-label">Logout</span>}
           </button>

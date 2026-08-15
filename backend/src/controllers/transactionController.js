@@ -118,6 +118,12 @@ const recordBorrow = async (req, res) => {
       const available = getAvailableQuantity(current);
       if (available < quantity) throw new Error(`Only ${available} available`);
 
+      let userCourse = borrower.course || "";
+      if (!userCourse && borrower.userId) {
+        const userSnap = await t.get(db.collection(USERS).doc(borrower.userId));
+        if (userSnap.exists) userCourse = userSnap.data().course || "";
+      }
+
       const nextAvailable = available - quantity;
       const userData = {
         schoolID: borrower.schoolID,
@@ -127,6 +133,7 @@ const recordBorrow = async (req, res) => {
         updatedAt: new Date(),
       };
       if (borrower.email) userData.email = borrower.email;
+      if (userCourse) userData.course = userCourse;
       if (!borrower.userId) userData.createdAt = new Date();
 
       const loanData = {
@@ -141,6 +148,7 @@ const recordBorrow = async (req, res) => {
         schoolID: borrower.schoolID,
         firstName: borrower.firstName,
         lastName: borrower.lastName,
+        course: userCourse,
         userId: userRef.id,
         dueDate: new Date(dueDate),
         timestamp: new Date(),
@@ -210,6 +218,7 @@ const recordReturn = async (req, res) => {
         schoolID: borrow.schoolID,
         firstName: borrow.firstName || "",
         lastName: borrow.lastName || "",
+        course: borrow.course || "",
         userId: borrow.userId || null,
         timestamp: new Date(),
         returnedAt: new Date(),

@@ -29,6 +29,7 @@ const create = async (req, res) => {
     const docRef = await db.collection(COLLECTION).add({
       itemName: data.itemName,
       category: data.category,
+      course: data.course || "",
       quantity,
       condition: data.condition,
       status: data.status || "Available",

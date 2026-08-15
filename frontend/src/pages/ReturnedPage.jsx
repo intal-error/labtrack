@@ -1,14 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../services/api";
+import { COURSES } from "../constants/courses";
 import { toDate, formatDate } from "../utils/helpers";
 import TransactionTable from "../components/ui/TransactionTable";
 import toast from "react-hot-toast";
 import "../styles/pages/tables.css";
 
-const columns = ["School ID", "First Name", "Last Name", "Item Name", "Quantity", "Date & Time Returned", "Status"];
+const columns = ["School ID", "First Name", "Last Name", "Course", "Item Name", "Quantity", "Date & Time Returned", "Status"];
 
 export default function ReturnedPage() {
   const [items, setItems] = useState([]);
+  const [filterCourse, setFilterCourse] = useState("All");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -26,6 +28,8 @@ export default function ReturnedPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  const filtered = filterCourse === "All" ? items : items.filter((i) => i.course === filterCourse);
+
   const downloadReport = async () => {
     try { await api.downloadReport("returned"); toast.success("Report downloaded!"); }
     catch (err) { toast.error(err.message || "Download failed"); }
@@ -33,11 +37,19 @@ export default function ReturnedPage() {
 
   return (
     <section className="tables-page">
-      <h1>Returned Tools</h1>
-      <button className="btn btn-report" onClick={downloadReport}>Download Report</button>
+      <div className="tables-header">
+        <h1>Returned Tools</h1>
+        <div className="tables-actions">
+          <select className="tables-course-filter" value={filterCourse} onChange={(e) => setFilterCourse(e.target.value)}>
+            <option value="All">All Courses</option>
+            {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <button className="btn btn-report" onClick={downloadReport}>Download Report</button>
+        </div>
+      </div>
       <TransactionTable
         columns={columns}
-        items={items}
+        items={filtered}
         loading={loading}
         error={error}
         onRetry={load}
@@ -46,6 +58,7 @@ export default function ReturnedPage() {
             <td>{item.schoolID || "-"}</td>
             <td>{item.firstName || "-"}</td>
             <td>{item.lastName || "-"}</td>
+            <td>{item.course || "-"}</td>
             <td>{item.itemName || "-"}</td>
             <td>{item.quantity || 0}</td>
             <td>{formatDate(toDate(item.timestamp))}</td>

@@ -4,19 +4,10 @@ import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../services/firebase";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
+import { COURSES } from "../constants/courses";
 import { MdSchool, MdPerson, MdVisibility, MdVisibilityOff } from "react-icons/md";
 import toast from "react-hot-toast";
 import "../styles/pages/register.css";
-
-const COURSES = [
-  "BS Information Technology",
-  "BS Computer Science",
-  "BS Information Systems",
-  "BS Education",
-  "BS Business Administration",
-  "BS Accountancy",
-  "Other",
-];
 
 const YEARS = ["1st Year", "2nd Year", "3rd Year", "4th Year", "5th Year"];
 
@@ -47,7 +38,6 @@ export default function RegisterPage() {
     schoolId: "",
     course: "",
     year: "",
-    section: "",
     employeeId: "",
     department: "",
     position: "",
@@ -87,7 +77,6 @@ export default function RegisterPage() {
           schoolId: form.schoolId.trim(),
           course: form.course,
           year: form.year,
-          section: form.section.trim(),
         } : {
           employeeId: form.employeeId.trim(),
           department: form.department.trim(),
@@ -210,15 +199,6 @@ export default function RegisterPage() {
                       {YEARS.map((y) => <option key={y}>{y}</option>)}
                     </select>
                   </div>
-                </div>
-                <div className="register-field">
-                  <label>Section</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. A, B, C"
-                    value={form.section}
-                    onChange={(e) => update("section", e.target.value)}
-                  />
                 </div>
               </>
             ) : (
