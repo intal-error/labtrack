@@ -126,61 +126,181 @@ export default function ScannerPage() {
 
   return (
     <section className="scanner-page">
-      <h1>SCAN BORROW / RETURN</h1>
-      <div className="scanner-shell">
-        <p className="scanner-help">Use a phone camera to scan borrower ID and tool QR code/barcode, or enter codes manually.</p>
+      <div className="scanner-header">
+        <h1>Scan Borrow / Return</h1>
+        <p className="scanner-subtitle">Scan QR codes or enter codes manually to borrow or return equipment</p>
+      </div>
 
+      <div className="scanner-shell">
         <div className="scanner-mode">
-          <button className={`btn ${action === "borrowed" ? "green scanner-mode-active" : "btn-outline"}`} onClick={() => setAction("borrowed")} type="button">Borrow</button>
-          <button className={`btn ${action === "returned" ? "green scanner-mode-active" : "btn-outline"}`} onClick={() => setAction("returned")} type="button">Return</button>
+          <button className={`scanner-mode-btn ${action === "borrowed" ? "active" : ""}`} onClick={() => setAction("borrowed")} type="button">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Borrow
+          </button>
+          <button className={`scanner-mode-btn ${action === "returned" ? "active" : ""}`} onClick={() => setAction("returned")} type="button">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20,6 9,17 4,12"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            Return
+          </button>
         </div>
 
         <form onSubmit={handleSubmit} noValidate>
-          <div className="scanner-step">
-            <div className="scanner-step-heading"><span>1</span><div><h2>Borrower</h2><p>Scan or enter school ID</p></div></div>
-            <div className="scanner-inline">
-              <input type="text" placeholder="School ID" value={schoolId} onChange={(e) => { setSchoolId(e.target.value); setSelectedUser(null); setBorrowerResult(null); }} />
-              <button type="button" className="btn green" onClick={() => setCameraTarget("borrower")}>Scan ID</button>
-              <button type="button" className="btn btn-outline" onClick={lookupBorrower}>Find</button>
+          <div className="scanner-step-card">
+            <div className="scanner-step-header">
+              <div className="scanner-step-badge">1</div>
+              <div className="scanner-step-text">
+                <h2>Borrower</h2>
+                <p>Scan or enter school ID</p>
+              </div>
             </div>
-            {borrowerResult && <div className="scanner-selection"><strong>{borrowerResult.name}</strong><div>School ID: {borrowerResult.schoolID}{borrowerResult.role ? ` | Role: ${borrowerResult.role}` : ""}{borrowerResult.course ? ` | Course: ${borrowerResult.course}` : ""}</div></div>}
-            <div className="scanner-borrower-fields">
-              <input type="text" placeholder="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required={action === "borrowed"} />
-              <input type="text" placeholder="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)} required={action === "borrowed"} />
-              <input type="email" placeholder="Email (optional)" value={email} onChange={(e) => setEmail(e.target.value)} className="full-width" />
-              <select value={role} onChange={(e) => setRole(e.target.value)}><option value="Student">Student</option><option value="faculty">Faculty</option></select>
+            <div className="scanner-step-body">
+              <div className="scanner-input-row">
+                <div className="scanner-input-wrap">
+                  <svg className="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+                  <input type="text" placeholder="School ID" value={schoolId} onChange={(e) => { setSchoolId(e.target.value); setSelectedUser(null); setBorrowerResult(null); }} />
+                </div>
+                <button type="button" className="scanner-btn-scan" onClick={() => setCameraTarget("borrower")}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                  Scan
+                </button>
+                <button type="button" className="scanner-btn-find" onClick={lookupBorrower}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                  Find
+                </button>
+              </div>
+
+              {borrowerResult && (
+                <div className="scanner-result-card">
+                  <div className="scanner-result-icon borrower">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  </div>
+                  <div className="scanner-result-info">
+                    <strong>{borrowerResult.name}</strong>
+                    <div className="scanner-result-meta">
+                      {borrowerResult.schoolID && <span>ID: {borrowerResult.schoolID}</span>}
+                      {borrowerResult.role && <span>{borrowerResult.role}</span>}
+                      {borrowerResult.course && <span>{borrowerResult.course}</span>}
+                    </div>
+                  </div>
+                  <svg className="scanner-result-check" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>
+                </div>
+              )}
+
+              <div className="scanner-fields-grid">
+                <div className="scanner-field">
+                  <label>First Name</label>
+                  <input type="text" placeholder="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required={action === "borrowed"} />
+                </div>
+                <div className="scanner-field">
+                  <label>Last Name</label>
+                  <input type="text" placeholder="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)} required={action === "borrowed"} />
+                </div>
+                <div className="scanner-field full-width">
+                  <label>Email</label>
+                  <input type="email" placeholder="Email (optional)" value={email} onChange={(e) => setEmail(e.target.value)} />
+                </div>
+                <div className="scanner-field">
+                  <label>Role</label>
+                  <select value={role} onChange={(e) => setRole(e.target.value)}>
+                    <option value="Student">Student</option>
+                    <option value="faculty">Faculty</option>
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="scanner-step">
-            <div className="scanner-step-heading"><span>2</span><div><h2>Tool or equipment</h2><p>Scan QR code or barcode on the item</p></div></div>
-            <div className="scanner-inline">
-              <input type="text" placeholder="Tool QR or barcode" value={itemCode} onChange={(e) => { setItemCode(e.target.value); setSelectedItem(null); setItemResult(null); }} />
-              <button type="button" className="btn green" onClick={() => setCameraTarget("item")}>Scan tool</button>
-              <button type="button" className="btn btn-outline" onClick={lookupItem}>Find</button>
+          <div className="scanner-step-card">
+            <div className="scanner-step-header">
+              <div className="scanner-step-badge">2</div>
+              <div className="scanner-step-text">
+                <h2>Tool or Equipment</h2>
+                <p>Scan QR code or barcode on the item</p>
+              </div>
             </div>
-            {itemResult && <div className="scanner-selection"><strong>{itemResult.name}</strong><div>Available: {itemResult.available} of {itemResult.total}{itemResult.condition ? ` | Condition: ${itemResult.condition}` : ""}{itemResult.category ? ` | Category: ${itemResult.category}` : ""}</div></div>}
+            <div className="scanner-step-body">
+              <div className="scanner-input-row">
+                <div className="scanner-input-wrap">
+                  <svg className="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                  <input type="text" placeholder="Tool QR or barcode" value={itemCode} onChange={(e) => { setItemCode(e.target.value); setSelectedItem(null); setItemResult(null); }} />
+                </div>
+                <button type="button" className="scanner-btn-scan" onClick={() => setCameraTarget("item")}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                  Scan
+                </button>
+                <button type="button" className="scanner-btn-find" onClick={lookupItem}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                  Find
+                </button>
+              </div>
+
+              {itemResult && (
+                <div className="scanner-result-card">
+                  <div className="scanner-result-icon item">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                  </div>
+                  <div className="scanner-result-info">
+                    <strong>{itemResult.name}</strong>
+                    <div className="scanner-result-meta">
+                      <span>{itemResult.available} of {itemResult.total} available</span>
+                      {itemResult.condition && <span>{itemResult.condition}</span>}
+                      {itemResult.category && <span>{itemResult.category}</span>}
+                    </div>
+                  </div>
+                  <svg className="scanner-result-check" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>
+                </div>
+              )}
+            </div>
           </div>
 
           {cameraTarget && (
             <ScannerCamera target={cameraTarget} onScan={handleCameraScan} onStop={() => setCameraTarget(null)} />
           )}
 
-          <div className="scanner-transaction-fields">
-            <label>Quantity</label>
-            <input type="number" min="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} required />
-            {action === "borrowed" && (
-              <>
-                <label>Due date and time</label>
-                <input type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-              </>
-            )}
+          <div className="scanner-transaction-card">
+            <div className="scanner-transaction-header">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10,9 9,9 8,9"/></svg>
+              <span>Transaction Details</span>
+            </div>
+            <div className="scanner-transaction-grid">
+              <div className="scanner-field">
+                <label>Quantity</label>
+                <input type="number" min="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} required />
+              </div>
+              {action === "borrowed" && (
+                <div className="scanner-field">
+                  <label>Due Date & Time</label>
+                  <input type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+                </div>
+              )}
+            </div>
           </div>
 
-          <button type="submit" className="btn green scanner-submit" disabled={submitting}>
-            {submitting ? "Recording..." : action === "borrowed" ? "Record Borrow" : "Record Return"}
+          <button type="submit" className={`scanner-submit-btn ${action}`} disabled={submitting}>
+            {submitting ? (
+              <>
+                <div className="scanner-spinner" />
+                Recording...
+              </>
+            ) : (
+              <>
+                {action === "borrowed" ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20,6 9,17 4,12"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                )}
+                {action === "borrowed" ? "Record Borrow" : "Record Return"}
+              </>
+            )}
           </button>
-          {txStatus && <p className={`scanner-transaction-status ${txStatusType === "success" ? "is-success" : txStatusType === "error" ? "is-error" : ""}`}>{txStatus}</p>}
+
+          {txStatus && (
+            <div className={`scanner-status-banner ${txStatusType}`}>
+              {txStatusType === "success" && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>}
+              {txStatusType === "error" && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>}
+              {!txStatusType && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>}
+              <span>{txStatus}</span>
+            </div>
+          )}
         </form>
       </div>
     </section>

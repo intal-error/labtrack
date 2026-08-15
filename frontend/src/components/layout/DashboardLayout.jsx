@@ -9,7 +9,7 @@ import {
   MdNotifications, MdPeople, MdFolderOpen, MdSettings,
   MdChevronLeft, MdChevronRight, MdExpandMore, MdExpandLess
 } from "react-icons/md";
-import { FaHandHolding, FaUndoAlt } from "react-icons/fa";
+import { FaExchangeAlt } from "react-icons/fa";
 import "../../styles/pages/layout.css";
 
 const ROLE_LABELS = { student: "Student", faculty: "Faculty", admin: "Admin" };
@@ -29,8 +29,7 @@ const navSections = [
     label: "TOOLS",
     items: [
       { path: "/scanner", label: "Scan Borrow/Return", icon: MdQrCodeScanner, roles: ["student", "faculty", "admin"] },
-      { path: "/borrowed", label: "Borrowed", icon: FaHandHolding, roles: ["student", "faculty", "admin"] },
-      { path: "/returned", label: "Returned", icon: FaUndoAlt, roles: ["student", "faculty", "admin"] },
+      { path: "/transactions", label: "Transactions", icon: FaExchangeAlt, roles: ["student", "faculty", "admin"] },
       { path: "/catalog", label: "Catalog", icon: MdInventory, roles: ["faculty", "admin"] },
     ],
   },
@@ -99,7 +98,7 @@ export default function DashboardLayout() {
       <aside className={`sidebar ${collapsed ? "collapsed" : ""} ${sidebarOpen ? "active" : ""}`}>
         <div className="sidebar-header">
           <div className="sidebar-logo-wrap">
-            <div className="sidebar-logo-icon">L</div>
+            <img className="sidebar-logo-icon" src="/slsulucena.jpg" alt="SLSU" />
             {!collapsed && (
               <div className="sidebar-brand">
                 <div className="sidebar-brand-title">LabTrack</div>

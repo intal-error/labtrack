@@ -6,8 +6,7 @@ import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import DashboardLayout from "./components/layout/DashboardLayout";
 import ScannerPage from "./pages/ScannerPage";
-import BorrowedPage from "./pages/BorrowedPage";
-import ReturnedPage from "./pages/ReturnedPage";
+import TransactionsPage from "./pages/TransactionsPage";
 import CatalogPage from "./pages/CatalogPage";
 import PersonaPage from "./pages/PersonaPage";
 import AdminPage from "./pages/AdminPage";
@@ -62,8 +61,9 @@ function App() {
               <Route path="members" element={<RoleRoute allowed={["admin"]}><MembersTab /></RoleRoute>} />
               <Route path="documents" element={<DocumentsTab />} />
               <Route path="scanner" element={<ScannerPage />} />
-              <Route path="borrowed" element={<BorrowedPage />} />
-              <Route path="returned" element={<ReturnedPage />} />
+              <Route path="transactions" element={<TransactionsPage />} />
+              <Route path="borrowed" element={<Navigate to="/transactions" replace />} />
+              <Route path="returned" element={<Navigate to="/transactions" replace />} />
               <Route path="catalog" element={<RoleRoute allowed={["admin", "faculty"]}><CatalogPage /></RoleRoute>} />
               <Route path="persona" element={<RoleRoute allowed={["admin", "faculty"]}><PersonaPage /></RoleRoute>} />
               <Route path="admin" element={<RoleRoute allowed={["admin"]}><AdminPage /></RoleRoute>} />
