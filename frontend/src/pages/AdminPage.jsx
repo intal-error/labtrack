@@ -91,11 +91,6 @@ export default function AdminPage() {
               <span className="admin-action-label">Account List</span>
               <span className="admin-action-desc">View all admin accounts</span>
             </button>
-            <button className="admin-action-card" onClick={handleLogout}>
-              <div className="admin-action-icon red"><MdLogout size={28} /></div>
-              <span className="admin-action-label">Logout</span>
-              <span className="admin-action-desc">Sign out of admin panel</span>
-            </button>
           </div>
         </div>
       )}

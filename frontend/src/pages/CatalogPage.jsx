@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "../services/api";
 import { COURSES } from "../constants/courses";
 import { numOr, getAvailableQuantity } from "../utils/helpers";
@@ -8,11 +8,11 @@ import toast from "react-hot-toast";
 import "../styles/pages/catalog.css";
 
 export default function CatalogPage() {
-  const [items, setItems] = useState([]);
   const [allItems, setAllItems] = useState([]);
   const [filter, setFilter] = useState("All");
   const [filterCourse, setFilterCourse] = useState("All");
   const [sort, setSort] = useState("name");
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [showQr, setShowQr] = useState(null);
@@ -26,18 +26,24 @@ export default function CatalogPage() {
     try {
       const data = await api.getCatalog();
       setAllItems(data);
-      let filtered = data;
-      if (filter !== "All") filtered = filtered.filter((i) => i.status === filter);
-      if (filterCourse !== "All") filtered = filtered.filter((i) => i.course === filterCourse);
-      if (sort === "name") filtered.sort((a, b) => (a.itemName || "").localeCompare(b.itemName || ""));
-      else if (sort === "number") filtered.sort((a, b) => (parseFloat(a.itemName) || 0) - (parseFloat(b.itemName) || 0));
-      else if (sort === "date") filtered.sort((a, b) => new Date(b.createdAt?.seconds * 1000 || 0) - new Date(a.createdAt?.seconds * 1000 || 0));
-      setItems(filtered);
     } catch (err) { toast.error(err.message || "Failed to load catalog"); }
     finally { setLoading(false); }
-  }, [filter, filterCourse, sort]);
+  }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const filteredItems = useMemo(() => {
+    let result = allItems;
+    if (filter !== "All") result = result.filter((i) => i.status === filter);
+    if (filterCourse !== "All") result = result.filter((i) => i.course === filterCourse);
+    if (search) result = result.filter((i) =>
+      (i.itemName || "").toLowerCase().includes(search.toLowerCase())
+    );
+    if (sort === "name") result.sort((a, b) => (a.itemName || "").localeCompare(b.itemName || ""));
+    else if (sort === "number") result.sort((a, b) => (parseFloat(a.itemName) || 0) - (parseFloat(b.itemName) || 0));
+    else if (sort === "date") result.sort((a, b) => new Date(b.createdAt?.seconds * 1000 || 0) - new Date(a.createdAt?.seconds * 1000 || 0));
+    return result;
+  }, [allItems, filter, filterCourse, search, sort]);
 
   const stats = {
     total: allItems.length,
@@ -166,6 +172,15 @@ export default function CatalogPage() {
 
       <div className="catalog-toolbar">
         <div className="catalog-filter-pills">
+          <div className="catalog-search-box">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input
+              type="text"
+              placeholder="Search items..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
           {["All", "Available", "Borrowed"].map((f) => (
             <button key={f} className={`filter-pill ${filter === f ? "active" : ""}`} onClick={() => setFilter(f)}>
               {f === "Available" && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>}
@@ -188,7 +203,7 @@ export default function CatalogPage() {
         </div>
       </div>
 
-      {items.length === 0 ? (
+      {filteredItems.length === 0 ? (
         <div className="catalog-empty">
           <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
           <h3>No items found</h3>
@@ -200,7 +215,7 @@ export default function CatalogPage() {
         </div>
       ) : (
         <div className="catalog-grid">
-          {items.map((item) => {
+          {filteredItems.map((item) => {
             const avail = getAvailableQuantity(item);
             const total = Math.max(0, numOr(item.quantity));
             return (

@@ -1,27 +1,38 @@
 import { useState, useEffect } from "react";
 import { api } from "../../services/api";
+import { useAuth } from "../../context/AuthContext";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
-import { MdWarning, MdInfo, MdCheckCircle, MdError } from "react-icons/md";
+import { MdWarning, MdInfo, MdCheckCircle, MdError, MdNotificationsOff, MdFilterList } from "react-icons/md";
+
+const TYPE_CONFIG = {
+  alert: { icon: <MdError size={22} />, label: "Alert", color: "#d32f2f", bg: "linear-gradient(135deg,#ffebee,#ffcdd2)" },
+  overdue: { icon: <MdError size={22} />, label: "Overdue", color: "#d32f2f", bg: "linear-gradient(135deg,#ffebee,#ffcdd2)" },
+  warning: { icon: <MdWarning size={22} />, label: "Warning", color: "#f57c00", bg: "linear-gradient(135deg,#fff3e0,#ffe0b2)" },
+  success: { icon: <MdCheckCircle size={22} />, label: "Success", color: "#2e7d32", bg: "linear-gradient(135deg,#e8f5e9,#c8e6c9)" },
+  info: { icon: <MdInfo size={22} />, label: "Info", color: "#1565c0", bg: "linear-gradient(135deg,#e3f2fd,#bbdefb)" },
+};
 
 export default function NotificationsTab() {
+  const { role } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("all");
 
   useEffect(() => { loadNotifications(); }, []);
 
   async function loadNotifications() {
     try {
-      const data = await api.getNotifications();
+      let data;
+      if (role === "admin") {
+        data = await api.getNotifications();
+      } else {
+        data = await api.getMyNotifications();
+      }
       setNotifications(data);
     } catch {
       setNotifications([
-        { id: "1", type: "alert", title: "Missing Records", message: "3 students have no grade records for CS101.", time: "2 hours ago", read: false },
-        { id: "2", type: "warning", title: "Incomplete Submissions", message: "Faculty deadline for grade submission is in 3 days.", time: "5 hours ago", read: false },
-        { id: "3", type: "info", title: "System Update", message: "New laboratory catalog items have been added.", time: "1 day ago", read: true },
-        { id: "4", type: "warning", title: "Pending Evaluations", message: "12 student evaluations are awaiting review.", time: "1 day ago", read: false },
-        { id: "5", type: "alert", title: "Overdue Items", message: "5 laboratory items are past their return date.", time: "2 days ago", read: true },
-        { id: "6", type: "success", title: "Grade Submission Complete", message: "All grades for BSCS-A have been submitted.", time: "3 days ago", read: true },
+        { id: "1", type: "info", title: "System Update", message: "New laboratory catalog items have been added.", read: false, createdAt: new Date().toISOString() },
       ]);
     } finally {
       setLoading(false);
@@ -36,42 +47,107 @@ export default function NotificationsTab() {
     toast.success("Notification dismissed");
   }
 
-  function iconType(type) {
-    switch (type) {
-      case "alert": return <MdError size={20} />;
-      case "warning": return <MdWarning size={20} />;
-      case "success": return <MdCheckCircle size={20} />;
-      default: return <MdInfo size={20} />;
-    }
+  async function markRead(id) {
+    try {
+      await api.markNotificationRead(id);
+      setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
+    } catch { /* ignore */ }
+  }
+
+  async function markAllRead() {
+    try {
+      await api.markAllNotificationsRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      toast.success("All marked as read");
+    } catch { /* ignore */ }
+  }
+
+  function timeAgo(date) {
+    if (!date) return "";
+    const d = typeof date?.toDate === "function" ? date.toDate() : new Date(date);
+    const seconds = Math.floor((Date.now() - d.getTime()) / 1000);
+    if (seconds < 60) return "Just now";
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d ago`;
+    return d.toLocaleDateString();
   }
 
   const unread = notifications.filter((n) => !n.read).length;
+  const filtered = notifications.filter((n) => {
+    if (filter === "unread") return !n.read;
+    if (filter === "read") return n.read;
+    return true;
+  });
 
   if (loading) return <div className="page-loading"><div className="spinner-lg" /></div>;
 
   return (
     <div className="tab-content">
-      <div className="records-header">
-        <h2>Notifications {unread > 0 && <span style={{ fontSize: 14, color: "var(--red)" }}>({unread} unread)</span>}</h2>
-        <button className="btn btn-outline" onClick={() => setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))}>Mark all read</button>
+      <div className="notif-header">
+        <div className="notif-header-left">
+          <h2>Notifications</h2>
+          {unread > 0 && <span className="notif-unread-badge">{unread} unread</span>}
+        </div>
+        {unread > 0 && (
+          <button className="btn btn-primary btn-sm" onClick={markAllRead}>
+            <MdCheckCircle size={14} /> Mark all read
+          </button>
+        )}
+      </div>
+
+      <div className="notif-filters">
+        <button className={`notif-filter-btn ${filter === "all" ? "active" : ""}`} onClick={() => setFilter("all")}>
+          All <span className="notif-filter-count">{notifications.length}</span>
+        </button>
+        <button className={`notif-filter-btn ${filter === "unread" ? "active" : ""}`} onClick={() => setFilter("unread")}>
+          Unread <span className="notif-filter-count">{unread}</span>
+        </button>
+        <button className={`notif-filter-btn ${filter === "read" ? "active" : ""}`} onClick={() => setFilter("read")}>
+          Read <span className="notif-filter-count">{notifications.length - unread}</span>
+        </button>
       </div>
 
       <div className="notification-list">
-        {notifications.length === 0 ? (
-          <p className="empty-state">No notifications</p>
-        ) : notifications.map((n) => (
-          <div className="notification-item" key={n.id} style={{ opacity: n.read ? 0.7 : 1, borderLeft: n.read ? "none" : "3px solid var(--green)" }}>
-            <div className={`notification-icon ${n.type}`}>
-              {iconType(n.type)}
-            </div>
-            <div className="notification-body">
-              <h4>{n.title}</h4>
-              <p>{n.message}</p>
-            </div>
-            <span className="notification-time">{n.time}</span>
-            <button className="btn-dismiss" onClick={() => dismissNotification(n.id)}>Dismiss</button>
+        {filtered.length === 0 ? (
+          <div className="notif-empty">
+            <MdNotificationsOff size={48} />
+            <h3>No notifications</h3>
+            <p>{filter === "all" ? "You're all caught up!" : `No ${filter} notifications`}</p>
           </div>
-        ))}
+        ) : filtered.map((n) => {
+          const config = TYPE_CONFIG[n.type] || TYPE_CONFIG.info;
+          return (
+            <div className={`notif-card ${n.read ? "read" : "unread"}`} key={n.id}>
+              <div className="notif-card-icon" style={{ background: config.bg, color: config.color }}>
+                {config.icon}
+              </div>
+              <div className="notif-card-body">
+                <div className="notif-card-top">
+                  <h4>{n.title}</h4>
+                  <span className="notif-type-badge" style={{ background: `${config.color}15`, color: config.color }}>
+                    {config.label}
+                  </span>
+                </div>
+                <p>{n.message}</p>
+                <span className="notif-card-time">{timeAgo(n.createdAt)}</span>
+              </div>
+              <div className="notif-card-actions">
+                {!n.read && (
+                  <button className="notif-action-btn read" onClick={() => markRead(n.id)}>
+                    <MdCheckCircle size={14} /> Read
+                  </button>
+                )}
+                <button className="notif-action-btn dismiss" onClick={() => dismissNotification(n.id)}>
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

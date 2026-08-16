@@ -1,21 +1,22 @@
 /* ── Layout ─────────────────────────────────────────── */
-.app-layout{display:flex;height:100vh;padding:12px;background:var(--bg)}
-.main-content{flex:1;padding:24px 28px;background:var(--bg-card);border-radius:16px;overflow-y:auto;position:relative;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.app-layout{display:flex;height:100vh;padding:12px;background:var(--bg);background-image:radial-gradient(ellipse at 20% 50%,var(--accent-glow) 0%,transparent 50%)}
+.main-content{flex:1;padding:24px 28px;background:var(--bg-card);border-radius:16px;overflow-y:auto;position:relative;box-shadow:0 1px 3px rgba(0,0,0,.06);border:1px solid rgba(0,0,0,.03)}
 
 /* ── Sidebar ────────────────────────────────────────── */
 .sidebar{
   width:250px;flex-shrink:0;display:flex;flex-direction:column;
-  background:linear-gradient(180deg,var(--bg-card) 0%,rgba(255,255,255,.97) 100%);
+  background:linear-gradient(180deg,var(--bg-card) 0%,rgba(240,247,242,.97) 100%);
   border-radius:18px;
   box-shadow:0 4px 24px rgba(0,0,0,.08),0 0 0 1px rgba(0,0,0,.03);
   padding:0;overflow:hidden;
   transition:width .3s cubic-bezier(.4,0,.2,1);
   z-index:100;position:relative;
+  border:1px solid rgba(46,125,50,.06);
 }
 .sidebar.collapsed{width:72px}
 
 /* Header / Logo */
-.sidebar-header{padding:24px 16px 16px;border-bottom:1px solid rgba(0,0,0,.04)}
+.sidebar-header{padding:24px 16px 16px;border-bottom:1px solid rgba(46,125,50,.08);background:linear-gradient(180deg,rgba(46,125,50,.03) 0%,transparent 100%)}
 .sidebar.collapsed .sidebar-header{padding:24px 0 16px;border-bottom:none}
 .sidebar-logo-wrap{display:flex;align-items:center;gap:14px}
 .sidebar.collapsed .sidebar-logo-wrap{justify-content:center}
@@ -110,6 +111,19 @@
 .sidebar a .nav-label{white-space:nowrap;overflow:hidden}
 .sidebar.collapsed a .nav-label{display:none}
 
+/* Notification badge */
+.notif-badge{
+  margin-left:auto;padding:2px 7px;min-width:18px;height:18px;
+  background:linear-gradient(135deg,#ef5350,#d32f2f);color:#fff;
+  border-radius:10px;font-size:10px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;
+  line-height:1;letter-spacing:.3px;
+  box-shadow:0 2px 6px rgba(211,47,47,.4);
+  animation:notifPulse 2s ease-in-out infinite;
+}
+.sidebar a.active .notif-badge{background:rgba(255,255,255,.9);color:#d32f2f;box-shadow:0 2px 6px rgba(0,0,0,.15)}
+@keyframes notifPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+
 /* Bottom */
 .sidebar-bottom{
   width:100%;padding:10px;
@@ -171,10 +185,11 @@
 
 /* ── Dark mode ──────────────────────────────────────── */
 body.dark .sidebar{
-  background:linear-gradient(180deg,#111b14 0%,#0f1914 100%);
-  box-shadow:0 4px 24px rgba(0,0,0,.3),0 0 0 1px rgba(255,255,255,.04);
+  background:linear-gradient(180deg,#132b1d 0%,#0e2218 100%);
+  box-shadow:0 4px 24px rgba(0,0,0,.4),0 0 0 1px rgba(76,175,80,.06);
+  border-color:rgba(76,175,80,.08);
 }
-body.dark .sidebar-header{border-bottom-color:rgba(255,255,255,.05)}
+body.dark .sidebar-header{border-bottom-color:rgba(76,175,80,.08);background:linear-gradient(180deg,rgba(76,175,80,.04) 0%,transparent 100%)}
 body.dark .sidebar.collapsed .sidebar-header{border-bottom:none}
 body.dark .sidebar-logo-icon{border-color:rgba(255,255,255,.08);box-shadow:0 4px 16px rgba(0,0,0,.3)}
 body.dark .sidebar-brand-title{color:#e6f2de}
@@ -184,8 +199,8 @@ body.dark .sidebar-user-name{color:#e3f1de}
 body.dark .sidebar a{color:#7a9a7a}
 body.dark .sidebar a:hover{background:rgba(255,255,255,.05);color:#c5e0c0}
 body.dark .sidebar a.active{
-  background:linear-gradient(135deg,#2e7d32,#1b5e20);
-  color:#fff;box-shadow:0 3px 16px rgba(46,125,50,.35);
+  background:linear-gradient(135deg,#1e6b35,#145a28);
+  color:#fff;box-shadow:0 3px 16px rgba(46,125,50,.4),inset 0 1px 0 rgba(255,255,255,.08);
 }
 body.dark .sidebar .nav-section{color:#5a7a5a}
 body.dark .sidebar .nav-section:hover{color:#a5c5a0}
@@ -196,7 +211,8 @@ body.dark .sidebar-bottom-item.theme-toggle:hover{background:rgba(251,192,45,.1)
 body.dark .sidebar-bottom-item.logout-btn:hover{background:rgba(239,83,80,.1);color:#ef5350}
 body.dark .sidebar-toggle{color:#7a9a7a;border-top-color:rgba(255,255,255,.05)}
 body.dark .sidebar-toggle:hover{background:rgba(255,255,255,.05);color:#c5e0c0}
-body.dark .main-content{background:var(--bg-card)}
+body.dark .main-content{background:var(--bg-card);border-color:rgba(76,175,80,.06)}
 body.dark .burger-btn{background:var(--bg-card);color:#e0e0e0}
 body.dark .burger-btn:hover{background:rgba(255,255,255,.08)}
 body.dark .sidebar-overlay.active{background:rgba(0,0,0,.6)}
+body.dark .notif-badge{box-shadow:0 2px 8px rgba(239,83,80,.5)}

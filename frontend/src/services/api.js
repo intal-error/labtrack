@@ -115,22 +115,32 @@ export const api = {
   // Auth
   register: (data) => request("/auth/register", { method: "POST", body: JSON.stringify(data) }),
 
-  // Records
-  getRecords: () => request("/records"),
-  createRecord: (data) => request("/records", { method: "POST", body: JSON.stringify(data) }),
-  updateRecord: (id, data) => request(`/records/${id}`, { method: "PUT", body: JSON.stringify(data) }),
-  deleteRecord: (id) => request(`/records/${id}`, { method: "DELETE" }),
-
-  // Classes
-  getClasses: () => request("/classes"),
-
   // Notifications
   getNotifications: () => request("/notifications"),
+  getMyNotifications: () => request("/notifications/user"),
+  createNotification: (data) => request("/notifications", { method: "POST", body: JSON.stringify(data) }),
+  markNotificationRead: (id) => request(`/notifications/${id}/read`, { method: "PUT" }),
+  markAllNotificationsRead: () => request("/notifications/read-all", { method: "PUT" }),
   dismissNotification: (id) => request(`/notifications/${id}`, { method: "DELETE" }),
 
   // Documents
   getDocuments: () => request("/documents"),
 
-  // Report Summary
-  getReportSummary: () => request("/reports/summary"),
+  // Maintenance
+  getMaintenance: () => request("/maintenance"),
+  createMaintenance: (data) => request("/maintenance", { method: "POST", body: JSON.stringify(data) }),
+  updateMaintenance: (id, data) => request(`/maintenance/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteMaintenance: (id) => request(`/maintenance/${id}`, { method: "DELETE" }),
+
+  // Incidents
+  getIncidents: () => request("/incidents"),
+  getMyIncidents: () => request("/incidents/mine"),
+  createIncident: (data) => request("/incidents", { method: "POST", body: JSON.stringify(data) }),
+  updateIncident: (id, data) => request(`/incidents/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+
+  // Manuals
+  getManuals: () => request("/manuals"),
+  createManual: (data) => request("/manuals", { method: "POST", body: JSON.stringify(data) }),
+  deleteManual: (id) => request(`/manuals/${id}`, { method: "DELETE" }),
+
 };

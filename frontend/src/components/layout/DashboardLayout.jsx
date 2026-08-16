@@ -1,13 +1,15 @@
-import { useState } from "react";
-import { Outlet, NavLink, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
+import { api } from "../../services/api";
 import { FiMenu, FiX } from "react-icons/fi";
 import {
   MdDashboard, MdQrCodeScanner, MdInventory, MdPerson, MdAdminPanelSettings, MdInfo,
-  MdLogout, MdDarkMode, MdLightMode, MdTableChart, MdClass, MdAssessment,
+  MdLogout, MdDarkMode, MdLightMode,
   MdNotifications, MdPeople, MdFolderOpen, MdSettings,
-  MdChevronLeft, MdChevronRight, MdExpandMore, MdExpandLess
+  MdChevronLeft, MdChevronRight, MdExpandMore, MdExpandLess,
+  MdBuild, MdWarning, MdMenuBook, MdHistory, MdAssessment
 } from "react-icons/md";
 import { FaExchangeAlt } from "react-icons/fa";
 import "../../styles/pages/layout.css";
@@ -20,9 +22,8 @@ const navSections = [
     label: "HOME",
     items: [
       { path: "/overview", label: "Overview", icon: MdDashboard, roles: ["student", "faculty", "admin"] },
-      { path: "/records", label: "Records", icon: MdTableChart, roles: ["faculty", "admin"] },
-      { path: "/classes", label: "Classes", icon: MdClass, roles: ["faculty", "admin"] },
-      { path: "/reports", label: "Reports", icon: MdAssessment, roles: ["faculty", "admin"] },
+      { path: "/usage-logs", label: "My Activity", icon: MdHistory, roles: ["student"] },
+      { path: "/reports", label: "Reports", icon: MdAssessment, roles: ["admin"] },
     ],
   },
   {
@@ -31,12 +32,15 @@ const navSections = [
       { path: "/scanner", label: "Scan Borrow/Return", icon: MdQrCodeScanner, roles: ["student", "faculty", "admin"] },
       { path: "/transactions", label: "Transactions", icon: FaExchangeAlt, roles: ["student", "faculty", "admin"] },
       { path: "/catalog", label: "Catalog", icon: MdInventory, roles: ["faculty", "admin"] },
+      { path: "/maintenance", label: "Maintenance", icon: MdBuild, roles: ["admin", "faculty"] },
     ],
   },
   {
     label: "SYSTEM",
     items: [
       { path: "/notifications", label: "Notifications", icon: MdNotifications, roles: ["student", "faculty", "admin"] },
+      { path: "/incidents", label: "Incidents", icon: MdWarning, roles: ["admin", "faculty", "student"] },
+      { path: "/manuals", label: "Lab Manuals", icon: MdMenuBook, roles: ["student", "faculty", "admin"] },
       { path: "/members", label: "Members", icon: MdPeople, roles: ["admin"] },
       { path: "/documents", label: "Documents", icon: MdFolderOpen, roles: ["student", "faculty", "admin"] },
       { path: "/settings", label: "Settings", icon: MdSettings, roles: ["admin"] },
@@ -58,9 +62,36 @@ export default function DashboardLayout() {
   const [openSections, setOpenSections] = useState(
     Object.fromEntries(navSections.map((s) => [s.label, true]))
   );
+  const [unreadCount, setUnreadCount] = useState(0);
   const { user, role, userProfile, logout, loading } = useAuth();
   const { dark, toggleTheme } = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  async function fetchUnreadCount() {
+    try {
+      let data;
+      if (role === "admin") {
+        data = await api.getNotifications();
+      } else {
+        data = await api.getMyNotifications();
+      }
+      const unread = data.filter((n) => !n.read).length;
+      setUnreadCount(unread);
+    } catch {
+      setUnreadCount(0);
+    }
+  }
+
+  useEffect(() => {
+    if (role) fetchUnreadCount();
+  }, [role]);
+
+  useEffect(() => {
+    if (location.pathname === "/notifications") {
+      fetchUnreadCount();
+    }
+  }, [location.pathname]);
 
   const handleLogout = async () => {
     await logout();
@@ -153,6 +184,9 @@ export default function DashboardLayout() {
                           >
                             <span className="nav-icon"><Icon size={18} /></span>
                             {!collapsed && <span className="nav-label">{label}</span>}
+                            {path === "/notifications" && unreadCount > 0 && (
+                              <span className="notif-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>
+                            )}
                           </NavLink>
                         </li>
                       ))}

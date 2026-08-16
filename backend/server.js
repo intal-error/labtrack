@@ -10,10 +10,11 @@ const userRoutes = require("./src/routes/users");
 const adminRoutes = require("./src/routes/admin");
 const reportRoutes = require("./src/routes/reports");
 const uploadRoutes = require("./src/routes/upload");
-const recordsRoutes = require("./src/routes/records");
-const classesRoutes = require("./src/routes/classes");
 const notificationsRoutes = require("./src/routes/notifications");
 const documentsRoutes = require("./src/routes/documents");
+const maintenanceRoutes = require("./src/routes/maintenance");
+const incidentRoutes = require("./src/routes/incidents");
+const manualRoutes = require("./src/routes/manuals");
 const { checkOverdueTransactions } = require("./src/utils/overdueChecker");
 
 const app = express();
@@ -33,12 +34,13 @@ app.get("/api/health", (req, res) => res.json({ status: "ok", timestamp: new Dat
 app.use("/api/catalog", verifyToken, catalogRoutes);
 app.use("/api/transactions", verifyToken, transactionRoutes);
 app.use("/api/users", verifyToken, userRoutes);
-app.use("/api/records", verifyToken, recordsRoutes);
-app.use("/api/classes", verifyToken, classesRoutes);
 app.use("/api/notifications", verifyToken, notificationsRoutes);
 app.use("/api/documents", verifyToken, documentsRoutes);
 app.use("/api/reports", verifyToken, reportRoutes);
 app.use("/api/upload", verifyToken, uploadRoutes);
+app.use("/api/maintenance", verifyToken, maintenanceRoutes);
+app.use("/api/incidents", verifyToken, incidentRoutes);
+app.use("/api/manuals", verifyToken, manualRoutes);
 
 // Admin-only routes
 app.use("/api/admin", verifyToken, authorize("admin"), adminRoutes);

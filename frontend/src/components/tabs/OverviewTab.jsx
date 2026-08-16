@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
+import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts";
 import { api } from "../../services/api";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
@@ -21,8 +21,6 @@ const CardIcon = ({ type }) => {
 export default function OverviewTab() {
   const [counts, setCounts] = useState({ borrowed: 0, returned: 0, students: 0, faculty: 0, users: 0 });
   const [chartData, setChartData] = useState([]);
-  const [gradeData, setGradeData] = useState([]);
-  const [trendData, setTrendData] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -38,27 +36,6 @@ export default function OverviewTab() {
           { name: "Returned", value: chartDataRes.returned },
           { name: "Available", value: chartDataRes.available },
           { name: "Inventory", value: chartDataRes.inventory },
-        ]);
-
-        const records = await api.getRecords().catch(() => []);
-        if (records.length) {
-          const grades = { Passed: 0, Failed: 0, Pending: 0, "In Progress": 0 };
-          records.forEach((r) => {
-            const s = (r.status || "").toLowerCase();
-            if (s === "passed") grades.Passed++;
-            else if (s === "failed") grades.Failed++;
-            else if (s === "pending") grades.Pending++;
-            else grades["In Progress"]++;
-          });
-          setGradeData(Object.entries(grades).map(([name, value]) => ({ name, value })).filter((d) => d.value > 0));
-        }
-
-        setTrendData([
-          { month: "Jan", performance: 82, completion: 75 },
-          { month: "Feb", performance: 85, completion: 80 },
-          { month: "Mar", performance: 78, completion: 72 },
-          { month: "Apr", performance: 90, completion: 88 },
-          { month: "May", performance: 88, completion: 85 },
         ]);
       } catch {
         toast.error("Failed to load overview");
@@ -101,7 +78,7 @@ export default function OverviewTab() {
         <div className="overview-card red">
           <div className="overview-card-icon"><CardIcon type="pending" /></div>
           <span>{chartData.find((d) => d.name === "Inventory")?.value || 0}</span>
-          <div className="overview-card-label">Pending Records</div>
+          <div className="overview-card-label">Pending Items</div>
           <small>Need attention</small>
         </div>
         <div className="overview-card orange">
@@ -116,46 +93,21 @@ export default function OverviewTab() {
         <div className="chart-box">
           <h3>Laboratory Inventory</h3>
           {chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={280}>
-              <PieChart>
-                <Pie data={chartData} cx="50%" cy="50%" outerRadius={100} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={chartData} barSize={50} barGap={8}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,.08)" />
+                <XAxis dataKey="name" tick={{ fontSize: 13, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
+                <YAxis domain={[0, 5]} allowDecimals={false} tick={{ fontSize: 12, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{ background: "#132b1d", border: "1px solid rgba(76,175,80,.2)", borderRadius: 10, color: "#e3f1de", fontSize: 13 }}
+                  cursor={{ fill: "rgba(76,175,80,.06)" }}
+                />
+                <Bar dataKey="value" name="Count" radius={[8, 8, 0, 0]}>
                   {chartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
+                </Bar>
+              </BarChart>
             </ResponsiveContainer>
           ) : <p>No data available</p>}
-        </div>
-
-        <div className="chart-box">
-          <h3>Grade Distribution</h3>
-          {gradeData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={280}>
-              <PieChart>
-                <Pie data={gradeData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
-                  {gradeData.map((_, i) => <Cell key={i} fill={COLORS[(i + 2) % COLORS.length]} />)}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : <p>No records yet</p>}
-        </div>
-
-        <div className="chart-box chart-box-full">
-          <h3>Performance Trends</h3>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={trendData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="performance" fill="#2e7d32" name="Performance" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="completion" fill="#ff9800" name="Completion" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
         </div>
       </div>
     </div>

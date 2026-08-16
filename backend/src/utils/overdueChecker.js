@@ -2,6 +2,7 @@ const { db } = require("../config/firebase");
 const { sendOverdueEmail } = require("./emailService");
 
 const TRANS = "transactions";
+const NOTIF = "notifications";
 
 const checkOverdueTransactions = async () => {
   try {
@@ -25,6 +26,19 @@ const checkOverdueTransactions = async () => {
 
         try {
           await sendOverdueEmail(name, email, d.itemName || "Unknown Item", dueTime.toLocaleString());
+
+          if (d.userId) {
+            await db.collection(NOTIF).add({
+              targetUserId: d.userId,
+              type: "overdue",
+              title: "Overdue Return",
+              message: `Your borrowed "${d.itemName || "Unknown Item"}" is past its due date. Please return it as soon as possible.`,
+              read: false,
+              link: "/transactions",
+              createdAt: new Date(),
+            });
+          }
+
           await db.collection(TRANS).doc(doc.id).set(
             { reminderSent: true, reminderSentAt: new Date() },
             { merge: true }
