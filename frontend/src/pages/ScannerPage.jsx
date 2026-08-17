@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { api } from "../services/api";
 import { db } from "../services/firebase";
 import { getDocs, collection, query, where } from "firebase/firestore";
@@ -8,6 +8,14 @@ import { resolveItem } from "../components/scanner/ItemLookup";
 import ScannerCamera from "../components/scanner/ScannerCamera";
 import toast from "react-hot-toast";
 import "../styles/pages/scanner.css";
+
+function defaultDueDate() {
+  const d = new Date();
+  d.setDate(d.getDate() + 7);
+  d.setHours(17, 0, 0, 0);
+  const offset = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - offset).toISOString().slice(0, 16);
+}
 
 export default function ScannerPage() {
   const [action, setAction] = useState("borrowed");
@@ -28,11 +36,22 @@ export default function ScannerPage() {
   const [txStatusType, setTxStatusType] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  const step2Ref = useRef(null);
+
   useEffect(() => {
-    const now = new Date(Date.now() + 86400000);
-    const offset = now.getTimezoneOffset() * 60000;
-    setDueDate(new Date(now.getTime() - offset).toISOString().slice(0, 16));
+    setDueDate(defaultDueDate());
   }, []);
+
+  useEffect(() => {
+    if (action === "returned") setDueDate("");
+    else if (!dueDate) setDueDate(defaultDueDate());
+  }, [action]);
+
+  const scrollToStep2 = () => {
+    setTimeout(() => {
+      step2Ref.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 200);
+  };
 
   const lookupBorrower = async () => {
     if (!schoolId.trim()) { setTxStatus("Enter a school ID first."); setTxStatusType("error"); return; }
@@ -51,6 +70,7 @@ export default function ScannerPage() {
     setRole(d.role === "faculty" ? "faculty" : "Student");
     setBorrowerResult({ name: `${d.firstName || ""} ${d.lastName || ""}`.trim(), schoolID: d.schoolID || schoolId, role: d.role, course: d.course });
     setTxStatus("Borrower found."); setTxStatusType("success");
+    scrollToStep2();
   };
 
   const lookupItem = async () => {
@@ -122,7 +142,10 @@ export default function ScannerPage() {
     setSchoolId(""); setItemCode(""); setFirstName(""); setLastName(""); setEmail(""); setQuantity(1);
     setSelectedItem(null); setSelectedUser(null); setBorrowerResult(null); setItemResult(null);
     setTxStatus(""); setTxStatusType("");
+    setDueDate(defaultDueDate());
   };
+
+  const isBorrow = action === "borrowed";
 
   return (
     <section className="scanner-page">
@@ -133,22 +156,31 @@ export default function ScannerPage() {
 
       <div className="scanner-shell">
         <div className="scanner-mode">
-          <button className={`scanner-mode-btn ${action === "borrowed" ? "active" : ""}`} onClick={() => setAction("borrowed")} type="button">
+          <button className={`scanner-mode-btn ${isBorrow ? "active" : ""}`} onClick={() => setAction("borrowed")} type="button">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             Borrow
           </button>
-          <button className={`scanner-mode-btn ${action === "returned" ? "active" : ""}`} onClick={() => setAction("returned")} type="button">
+          <button className={`scanner-mode-btn ${!isBorrow ? "active" : ""}`} onClick={() => setAction("returned")} type="button">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20,6 9,17 4,12"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
             Return
           </button>
         </div>
+
+        {txStatus && (
+          <div className={`scanner-status-banner ${txStatusType}`}>
+            {txStatusType === "success" && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>}
+            {txStatusType === "error" && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>}
+            {!txStatusType && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>}
+            <span>{txStatus}</span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} noValidate>
           <div className="scanner-step-card">
             <div className="scanner-step-header">
               <div className="scanner-step-badge">1</div>
               <div className="scanner-step-text">
-                <h2>Borrower</h2>
+                <h2>{isBorrow ? "Borrower" : "Returner"}</h2>
                 <p>Scan or enter school ID</p>
               </div>
             </div>
@@ -185,31 +217,33 @@ export default function ScannerPage() {
                 </div>
               )}
 
-              <div className="scanner-fields-grid">
-                <div className="scanner-field">
-                  <label>First Name</label>
-                  <input type="text" placeholder="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required={action === "borrowed"} />
+              {isBorrow && (
+                <div className="scanner-fields-grid">
+                  <div className="scanner-field">
+                    <label>First Name</label>
+                    <input type="text" placeholder="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+                  </div>
+                  <div className="scanner-field">
+                    <label>Last Name</label>
+                    <input type="text" placeholder="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
+                  </div>
+                  <div className="scanner-field full-width">
+                    <label>Email</label>
+                    <input type="email" placeholder="Email (optional)" value={email} onChange={(e) => setEmail(e.target.value)} />
+                  </div>
+                  <div className="scanner-field">
+                    <label>Role</label>
+                    <select value={role} onChange={(e) => setRole(e.target.value)}>
+                      <option value="Student">Student</option>
+                      <option value="faculty">Faculty</option>
+                    </select>
+                  </div>
                 </div>
-                <div className="scanner-field">
-                  <label>Last Name</label>
-                  <input type="text" placeholder="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)} required={action === "borrowed"} />
-                </div>
-                <div className="scanner-field full-width">
-                  <label>Email</label>
-                  <input type="email" placeholder="Email (optional)" value={email} onChange={(e) => setEmail(e.target.value)} />
-                </div>
-                <div className="scanner-field">
-                  <label>Role</label>
-                  <select value={role} onChange={(e) => setRole(e.target.value)}>
-                    <option value="Student">Student</option>
-                    <option value="faculty">Faculty</option>
-                  </select>
-                </div>
-              </div>
+              )}
             </div>
           </div>
 
-          <div className="scanner-step-card">
+          <div className="scanner-step-card" ref={step2Ref}>
             <div className="scanner-step-header">
               <div className="scanner-step-badge">2</div>
               <div className="scanner-step-text">
@@ -234,14 +268,16 @@ export default function ScannerPage() {
               </div>
 
               {itemResult && (
-                <div className="scanner-result-card">
+                <div className={`scanner-result-card ${itemResult.available <= 0 ? "low-stock" : itemResult.available <= 2 ? "warn-stock" : ""}`}>
                   <div className="scanner-result-icon item">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
                   </div>
                   <div className="scanner-result-info">
                     <strong>{itemResult.name}</strong>
                     <div className="scanner-result-meta">
-                      <span>{itemResult.available} of {itemResult.total} available</span>
+                      <span className={itemResult.available <= 0 ? "stock-out" : itemResult.available <= 2 ? "stock-low" : ""}>
+                        {itemResult.available} of {itemResult.total} available
+                      </span>
                       {itemResult.condition && <span>{itemResult.condition}</span>}
                       {itemResult.category && <span>{itemResult.category}</span>}
                     </div>
@@ -266,13 +302,31 @@ export default function ScannerPage() {
                 <label>Quantity</label>
                 <input type="number" min="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} required />
               </div>
-              {action === "borrowed" && (
+              {isBorrow && (
                 <div className="scanner-field">
                   <label>Due Date & Time</label>
                   <input type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
                 </div>
               )}
             </div>
+            {isBorrow && (
+              <div className="scanner-due-shortcuts">
+                <span className="due-shortcut-label">Quick due date:</span>
+                <div className="due-shortcut-btns">
+                  {[{ label: "1 day", days: 1 }, { label: "3 days", days: 3 }, { label: "7 days", days: 7 }, { label: "2 weeks", days: 14 }].map(({ label, days }) => (
+                    <button key={days} type="button" className="due-shortcut-btn" onClick={() => {
+                      const d = new Date();
+                      d.setDate(d.getDate() + days);
+                      d.setHours(17, 0, 0, 0);
+                      const offset = d.getTimezoneOffset() * 60000;
+                      setDueDate(new Date(d.getTime() - offset).toISOString().slice(0, 16));
+                    }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <button type="submit" className={`scanner-submit-btn ${action}`} disabled={submitting}>
@@ -283,24 +337,15 @@ export default function ScannerPage() {
               </>
             ) : (
               <>
-                {action === "borrowed" ? (
+                {isBorrow ? (
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                 ) : (
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20,6 9,17 4,12"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
                 )}
-                {action === "borrowed" ? "Record Borrow" : "Record Return"}
+                {isBorrow ? "Record Borrow" : "Record Return"}
               </>
             )}
           </button>
-
-          {txStatus && (
-            <div className={`scanner-status-banner ${txStatusType}`}>
-              {txStatusType === "success" && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>}
-              {txStatusType === "error" && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>}
-              {!txStatusType && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>}
-              <span>{txStatus}</span>
-            </div>
-          )}
         </form>
       </div>
     </section>

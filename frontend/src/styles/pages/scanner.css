@@ -60,6 +60,18 @@
 .scanner-submit-btn:disabled{opacity:.7;cursor:not-allowed;transform:none}
 .scanner-submit-btn svg{stroke:#fff}
 
+.scanner-due-shortcuts{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+.due-shortcut-label{font-size:12px;color:var(--text-muted);font-weight:500;flex-shrink:0}
+.due-shortcut-btns{display:flex;gap:6px;flex-wrap:wrap}
+.due-shortcut-btn{padding:5px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-card);color:var(--text-muted);font-size:11px;font-weight:600;cursor:pointer;transition:all .2s}
+.due-shortcut-btn:hover{border-color:var(--green);color:var(--green);background:rgba(46,125,50,.05)}
+.due-shortcut-btn:active{background:var(--green);color:#fff}
+
+.scanner-result-card.low-stock{border-color:#ffcdd2;background:linear-gradient(135deg,#fff8e1,#fff3e0)}
+.scanner-result-card.warn-stock{border-color:#ffe0b2;background:linear-gradient(135deg,#fff8e1,#fffde7)}
+.scanner-result-meta .stock-out{color:#c62828;font-weight:700}
+.scanner-result-meta .stock-low{color:#ef6c00;font-weight:700}
+
 .scanner-spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
@@ -90,6 +102,7 @@
   .scanner-fields-grid{grid-template-columns:1fr}
   .scanner-fields-grid .full-width{grid-column:auto}
   .scanner-transaction-grid{grid-template-columns:1fr}
+  .scanner-due-shortcuts{flex-direction:column;align-items:flex-start}
   #qr-reader{height:250px}
 }
 
@@ -121,3 +134,8 @@ body.dark .scanner-status-banner.success{background:#1b3a2a;color:#66bb6a;border
 body.dark .scanner-status-banner.error{background:#3a1b1b;color:#ef9a9a;border-color:#c62828}
 body.dark .scanner-status-banner:not(.success):not(.error){background:#3a2a1b;color:#ffb74d;border-color:#ef6c00}
 body.dark .scanner-camera-wrap{border-color:#264d35}
+body.dark .due-shortcut-btn{border-color:#264d35;color:#8a9e88}
+body.dark .due-shortcut-btn:hover{border-color:#66bb6a;color:#66bb6a;background:rgba(102,187,106,.08)}
+body.dark .due-shortcut-btn:active{background:#2e7d32;color:#fff}
+body.dark .scanner-result-card.low-stock{background:linear-gradient(135deg,#3a1b1b,#3a2a1b);border-color:#c62828}
+body.dark .scanner-result-card.warn-stock{background:linear-gradient(135deg,#3a2a1b,#3a3520);border-color:#ef6c00}
