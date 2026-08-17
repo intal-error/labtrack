@@ -47,7 +47,7 @@ const create = async (req, res) => {
 const update = async (req, res) => {
   try {
     const { id } = req.params;
-    const data = { ...req.body, updatedAt: new Date() };
+    const data = { ...req.body, updatedAt: new Date().toISOString() };
     await db.collection(COLLECTION).doc(id).set(data, { merge: true });
     res.json({ message: "Incident updated" });
   } catch (err) {
@@ -55,4 +55,16 @@ const update = async (req, res) => {
   }
 };
 
-module.exports = { getAll, getMyIncidents, create, update };
+const remove = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const doc = await db.collection(COLLECTION).doc(id).get();
+    if (!doc.exists) return res.status(404).json({ error: "Incident not found" });
+    await db.collection(COLLECTION).doc(id).delete();
+    res.json({ message: "Incident deleted" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+module.exports = { getAll, getMyIncidents, create, update, remove };

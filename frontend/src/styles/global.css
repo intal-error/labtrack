@@ -35,5 +35,10 @@ input:focus,select:focus{outline:none;border-color:var(--green);box-shadow:0 0 3
 body.dark .modal-content{border-color:#2c4d33}
 body.dark .modal-content h2{color:#e6f2de}
 body.dark input,body.dark select{background:#15231d;border-color:var(--border);color:#e7f1e5}
+.btn-primary{background:var(--green);color:#fff}
+.btn-primary:hover{background:var(--green-dark)}
+.btn-danger{background:var(--red);color:#fff}
+.btn-danger:hover{background:var(--red-hover)}
+.btn-sm{padding:5px 10px;font-size:12px}
 body.dark .btn-outline{border-color:var(--green);color:var(--green)}
 body.dark .btn-outline:hover{background:var(--green);color:#fff}

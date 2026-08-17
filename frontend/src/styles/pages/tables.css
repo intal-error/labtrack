@@ -172,6 +172,7 @@ body.dark .transactions-table-wrapper{border-color:#264d35;background:#17291d}
 body.dark .transactions-table thead th{background:#134a27}
 body.dark .transactions-table tbody td{border-color:#203827;color:#e3f1de}
 body.dark .transactions-table tbody tr:hover{background:rgba(255,255,255,.04)}
+body.dark table tbody tr:nth-child(even){background:transparent}
 body.dark .status-borrowed{background:linear-gradient(135deg,#3a2a1b,#4d3526);color:#ffb74d}
 body.dark .status-returned{background:linear-gradient(135deg,#1b3a2a,#264d35);color:#66bb6a}
 body.dark .transactions-empty{border-color:#264d35;background:#17291d}

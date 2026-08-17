@@ -1,13 +1,33 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
-import { MdWarning, MdAdd, MdEdit, MdInfo } from "react-icons/md";
+import { MdWarning, MdAdd, MdEdit, MdDelete, MdSearch, MdInfo, MdOutlineWarning } from "react-icons/md";
 
 const SEVERITY_COLORS = { low: "#2e7d32", medium: "#f57c00", high: "#d32f2f", critical: "#b71c1c" };
 const STATUS_COLORS = { open: "#d32f2f", investigating: "#f57c00", resolved: "#2e7d32" };
 const TYPE_LABELS = { damage: "Damage", accident: "Accident", irregularity: "Irregularity", other: "Other" };
+const STATUS_TABS = ["All", "Open", "Investigating", "Resolved"];
+
+function timeAgo(date) {
+  if (!date) return "";
+  const d = typeof date === "string" ? new Date(date) : date;
+  const now = new Date();
+  const diff = now - d;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 4) return `${weeks}w ago`;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+const EMPTY_FORM = { catalogId: "", title: "", description: "", type: "irregularity", severity: "medium" };
 
 export default function IncidentTab() {
   const { role, userProfile, user } = useAuth();
@@ -15,7 +35,11 @@ export default function IncidentTab() {
   const [catalog, setCatalog] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ catalogId: "", title: "", description: "", type: "irregularity", severity: "medium" });
+  const [editing, setEditing] = useState(null);
+  const [search, setSearch] = useState("");
+  const [filterStatus, setFilterStatus] = useState("All");
+  const [filterSeverity, setFilterSeverity] = useState("All");
+  const [form, setForm] = useState(EMPTY_FORM);
 
   const canCreate = role === "admin" || role === "faculty";
 
@@ -33,22 +57,63 @@ export default function IncidentTab() {
     }
   }
 
+  const stats = useMemo(() => ({
+    total: incidents.length,
+    open: incidents.filter((i) => i.status === "open").length,
+    investigating: incidents.filter((i) => i.status === "investigating").length,
+    resolved: incidents.filter((i) => i.status === "resolved").length,
+  }), [incidents]);
+
+  const filtered = useMemo(() => incidents.filter((inc) => {
+    const matchSearch = !search ||
+      inc.title?.toLowerCase().includes(search.toLowerCase()) ||
+      inc.description?.toLowerCase().includes(search.toLowerCase()) ||
+      inc.reporterName?.toLowerCase().includes(search.toLowerCase());
+    const matchStatus = filterStatus === "All" || inc.status === filterStatus.toLowerCase();
+    const matchSeverity = filterSeverity === "All" || inc.severity === filterSeverity.toLowerCase();
+    return matchSearch && matchStatus && matchSeverity;
+  }), [incidents, search, filterStatus, filterSeverity]);
+
+  function openAdd() {
+    setForm(EMPTY_FORM);
+    setEditing(null);
+    setShowForm(true);
+  }
+
+  function openEdit(inc) {
+    setForm({
+      catalogId: inc.catalogId || "",
+      title: inc.title || "",
+      description: inc.description || "",
+      type: inc.type || "irregularity",
+      severity: inc.severity || "medium",
+    });
+    setEditing(inc);
+    setShowForm(true);
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     try {
       const item = catalog.find((c) => c.id === form.catalogId);
-      await api.createIncident({
-        ...form,
-        itemName: item ? item.itemName : "",
-        reporterName: userProfile ? `${userProfile.firstName} ${userProfile.lastName}` : user?.displayName || "",
-        reporterRole: role,
-      });
-      toast.success("Incident reported");
+      if (editing) {
+        await api.updateIncident(editing.id, { ...form, itemName: item ? item.itemName : "" });
+        toast.success("Incident updated");
+      } else {
+        await api.createIncident({
+          ...form,
+          itemName: item ? item.itemName : "",
+          reporterName: userProfile ? `${userProfile.firstName} ${userProfile.lastName}` : user?.displayName || "",
+          reporterRole: role,
+        });
+        toast.success("Incident reported");
+      }
       setShowForm(false);
-      setForm({ catalogId: "", title: "", description: "", type: "irregularity", severity: "medium" });
+      setEditing(null);
+      setForm(EMPTY_FORM);
       load();
     } catch {
-      toast.error("Failed to report incident");
+      toast.error(editing ? "Failed to update incident" : "Failed to report incident");
     }
   }
 
@@ -62,6 +127,17 @@ export default function IncidentTab() {
     }
   }
 
+  async function handleDelete(id) {
+    if (!confirm("Delete this incident?")) return;
+    try {
+      await api.deleteIncident(id);
+      toast.success("Deleted");
+      load();
+    } catch {
+      toast.error("Failed to delete");
+    }
+  }
+
   if (loading) return <div className="page-loading"><div className="spinner-lg" /></div>;
 
   return (
@@ -69,14 +145,68 @@ export default function IncidentTab() {
       <div className="records-header">
         <h2><MdWarning size={22} /> Incident Reports</h2>
         {canCreate && (
-          <button className="btn btn-primary" onClick={() => setShowForm(true)}><MdAdd size={16} /> Report Incident</button>
+          <button className="btn btn-primary" onClick={openAdd}><MdAdd size={16} /> Report Incident</button>
         )}
       </div>
 
+      <div className="incident-stats">
+        <div className={`incident-stat-card ${filterStatus === "All" ? "active" : ""}`} onClick={() => setFilterStatus("All")}>
+          <div className="incident-stat-icon total"><MdWarning size={20} /></div>
+          <div className="incident-stat-info">
+            <span className="incident-stat-number">{stats.total}</span>
+            <span className="incident-stat-label">Total</span>
+          </div>
+        </div>
+        <div className={`incident-stat-card ${filterStatus === "Open" ? "active" : ""}`} onClick={() => setFilterStatus("Open")}>
+          <div className="incident-stat-icon open"><MdOutlineWarning size={20} /></div>
+          <div className="incident-stat-info">
+            <span className="incident-stat-number">{stats.open}</span>
+            <span className="incident-stat-label">Open</span>
+          </div>
+        </div>
+        <div className={`incident-stat-card ${filterStatus === "Investigating" ? "active" : ""}`} onClick={() => setFilterStatus("Investigating")}>
+          <div className="incident-stat-icon investigating"><MdInfo size={20} /></div>
+          <div className="incident-stat-info">
+            <span className="incident-stat-number">{stats.investigating}</span>
+            <span className="incident-stat-label">Investigating</span>
+          </div>
+        </div>
+        <div className={`incident-stat-card ${filterStatus === "Resolved" ? "active" : ""}`} onClick={() => setFilterStatus("Resolved")}>
+          <div className="incident-stat-icon resolved"><MdEdit size={20} /></div>
+          <div className="incident-stat-info">
+            <span className="incident-stat-number">{stats.resolved}</span>
+            <span className="incident-stat-label">Resolved</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="incident-toolbar">
+        <div className="incident-filter-tabs">
+          {STATUS_TABS.map((s) => (
+            <button key={s} className={`incident-filter-btn ${filterStatus === s ? "active" : ""}`} onClick={() => setFilterStatus(s)}>
+              {s}
+            </button>
+          ))}
+        </div>
+        <div className="incident-toolbar-right">
+          <select className="incident-severity-filter" value={filterSeverity} onChange={(e) => setFilterSeverity(e.target.value)}>
+            <option value="All">All Severity</option>
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+            <option value="Critical">Critical</option>
+          </select>
+          <div className="incident-search">
+            <MdSearch size={16} />
+            <input type="text" placeholder="Search incidents..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+        </div>
+      </div>
+
       {showForm && (
-        <div className="modal-overlay" onClick={() => setShowForm(false)}>
+        <div className="modal-overlay" onClick={() => { setShowForm(false); setEditing(null); }}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3>Report Incident</h3>
+            <h3>{editing ? "Edit Incident" : "Report Incident"}</h3>
             <form onSubmit={handleSubmit}>
               <div className="form-group">
                 <label>Title</label>
@@ -114,8 +244,8 @@ export default function IncidentTab() {
                 <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={4} required placeholder="Describe the incident in detail..." />
               </div>
               <div className="form-actions">
-                <button type="button" className="btn btn-outline" onClick={() => setShowForm(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Submit Report</button>
+                <button type="button" className="btn btn-outline" onClick={() => { setShowForm(false); setEditing(null); }}>Cancel</button>
+                <button type="submit" className="btn btn-primary">{editing ? "Update" : "Submit Report"}</button>
               </div>
             </form>
           </div>
@@ -123,10 +253,14 @@ export default function IncidentTab() {
       )}
 
       <div className="incident-list">
-        {incidents.length === 0 ? (
-          <p className="empty-state">No incidents reported</p>
-        ) : incidents.map((inc) => (
-          <div className="incident-card" key={inc.id}>
+        {filtered.length === 0 ? (
+          <div className="incident-empty">
+            <MdWarning size={48} />
+            <h3>{search || filterStatus !== "All" || filterSeverity !== "All" ? "No matching incidents" : "No incidents reported"}</h3>
+            <p>{search || filterStatus !== "All" || filterSeverity !== "All" ? "Try adjusting your search or filters" : canCreate ? "Click 'Report Incident' to submit your first report" : "No incidents have been reported yet"}</p>
+          </div>
+        ) : filtered.map((inc) => (
+          <div className={`incident-card incident-severity-${inc.severity}`} key={inc.id}>
             <div className="incident-card-header">
               <div className="incident-card-title">
                 <MdWarning size={18} style={{ color: SEVERITY_COLORS[inc.severity] }} />
@@ -146,20 +280,24 @@ export default function IncidentTab() {
                 <span>Type: {TYPE_LABELS[inc.type] || inc.type}</span>
                 {inc.itemName && <span>Item: {inc.itemName}</span>}
                 <span>Reported by: {inc.reporterName} ({inc.reporterRole})</span>
-                <span>{inc.createdAt ? new Date(inc.createdAt).toLocaleDateString() : ""}</span>
+                {inc.createdAt && <span>{timeAgo(inc.createdAt)}</span>}
               </div>
               <p className="incident-desc">{inc.description}</p>
             </div>
-            {role === "admin" && inc.status !== "resolved" && (
+            {role === "admin" && (
               <div className="incident-card-actions">
+                <button className="btn btn-sm btn-outline" onClick={() => openEdit(inc)}><MdEdit size={14} /> Edit</button>
                 {inc.status === "open" && (
                   <button className="btn btn-sm btn-outline" onClick={() => updateStatus(inc.id, "investigating")}>
-                    <MdEdit size={14} /> Mark Investigating
+                    <MdInfo size={14} /> Mark Investigating
                   </button>
                 )}
-                <button className="btn btn-sm btn-primary" onClick={() => updateStatus(inc.id, "resolved")}>
-                  <MdInfo size={14} /> Mark Resolved
-                </button>
+                {inc.status !== "resolved" && (
+                  <button className="btn btn-sm btn-primary" onClick={() => updateStatus(inc.id, "resolved")}>
+                    <MdInfo size={14} /> Mark Resolved
+                  </button>
+                )}
+                <button className="btn btn-sm btn-danger" onClick={() => handleDelete(inc.id)}><MdDelete size={14} /></button>
               </div>
             )}
           </div>

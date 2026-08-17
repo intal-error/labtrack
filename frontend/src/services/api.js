@@ -137,10 +137,12 @@ export const api = {
   getMyIncidents: () => request("/incidents/mine"),
   createIncident: (data) => request("/incidents", { method: "POST", body: JSON.stringify(data) }),
   updateIncident: (id, data) => request(`/incidents/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteIncident: (id) => request(`/incidents/${id}`, { method: "DELETE" }),
 
   // Manuals
   getManuals: () => request("/manuals"),
   createManual: (data) => request("/manuals", { method: "POST", body: JSON.stringify(data) }),
+  updateManual: (id, data) => request(`/manuals/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteManual: (id) => request(`/manuals/${id}`, { method: "DELETE" }),
 
 };
