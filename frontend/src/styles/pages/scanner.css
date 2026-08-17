@@ -70,7 +70,9 @@
 
 /* Camera */
 .scanner-camera-wrap{margin:4px 0 18px;padding:12px;border:1px solid var(--border);border-radius:14px;background:#112017}
-#qr-reader{overflow:hidden;width:100%;min-height:220px;border-radius:10px;background:#000}
+#qr-reader{overflow:hidden;width:100%;height:300px;border-radius:10px;background:#000;position:relative}
+#qr-reader video{width:100%!important;height:100%!important;object-fit:cover!important}
+#qr-reader img[alt="Info icon"]{display:none}
 .scanner-status{min-height:22px;margin:10px 2px 8px;color:#e8f6e8;font-size:14px}
 .scanner-stop{width:100%}
 
@@ -88,7 +90,7 @@
   .scanner-fields-grid{grid-template-columns:1fr}
   .scanner-fields-grid .full-width{grid-column:auto}
   .scanner-transaction-grid{grid-template-columns:1fr}
-  #qr-reader{min-height:250px}
+  #qr-reader{height:250px}
 }
 
 body.dark .scanner-page h1{color:#e6f2de}
