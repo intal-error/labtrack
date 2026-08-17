@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "../services/api";
 import { COURSES } from "../constants/courses";
 import { toDate, formatDate, getRemainingQuantity } from "../utils/helpers";
+import { useAuth } from "../context/AuthContext";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import toast from "react-hot-toast";
 import "../styles/pages/tables.css";
@@ -32,13 +33,81 @@ function timeAgo(date) {
   return formatDate(date);
 }
 
+function getOverdueInfo(date, quantity, returnedQuantity) {
+  if (!date) return null;
+  const now = new Date();
+  const diff = now - date;
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  if (days >= 14) return { text: `${days}d overdue`, className: "overdue-critical" };
+  if (days >= 7) return { text: `${days}d overdue`, className: "overdue-warning" };
+  return null;
+}
+
+const SORT_OPTIONS = [
+  { value: "date-desc", label: "Newest First" },
+  { value: "date-asc", label: "Oldest First" },
+  { value: "name-asc", label: "Name A-Z" },
+  { value: "name-desc", label: "Name Z-A" },
+  { value: "qty-desc", label: "Qty High-Low" },
+  { value: "qty-asc", label: "Qty Low-High" },
+];
+
+const DATE_RANGES = [
+  { value: "all", label: "All Time" },
+  { value: "today", label: "Today" },
+  { value: "week", label: "This Week" },
+  { value: "month", label: "This Month" },
+];
+
+function matchesDateRange(date, range) {
+  if (!date || range === "all") return true;
+  const now = new Date();
+  const d = new Date(date);
+  if (range === "today") {
+    return d.toDateString() === now.toDateString();
+  }
+  if (range === "week") {
+    return (now - d) < 7 * 24 * 60 * 60 * 1000;
+  }
+  if (range === "month") {
+    return (now - d) < 30 * 24 * 60 * 60 * 1000;
+  }
+  return true;
+}
+
+function sortItems(items, sortBy) {
+  const [key, dir] = sortBy.split("-");
+  const mult = dir === "asc" ? 1 : -1;
+  return [...items].sort((a, b) => {
+    if (key === "date") {
+      const da = toDate(a.timestamp)?.getTime() || 0;
+      const db = toDate(b.timestamp)?.getTime() || 0;
+      return (da - db) * mult;
+    }
+    if (key === "name") {
+      const na = `${a.firstName || ""} ${a.lastName || ""}`.trim().toLowerCase();
+      const nb = `${b.firstName || ""} ${b.lastName || ""}`.trim().toLowerCase();
+      return na.localeCompare(nb) * mult;
+    }
+    if (key === "qty") {
+      return ((a.quantity || 0) - (b.quantity || 0)) * mult;
+    }
+    return 0;
+  });
+}
+
 export default function TransactionsPage() {
+  const { role } = useAuth();
   const [activeTab, setActiveTab] = useState("borrowed");
   const [borrowed, setBorrowed] = useState([]);
   const [returned, setReturned] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterCourse, setFilterCourse] = useState("All");
+  const [sortBy, setSortBy] = useState("date-desc");
+  const [dateRange, setDateRange] = useState("all");
+  const [viewMode, setViewMode] = useState("grid");
+  const [returningId, setReturningId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -58,7 +127,7 @@ export default function TransactionsPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const stats = {
+  const stats = useMemo(() => ({
     totalBorrowed: borrowed.length,
     totalReturned: returned.length,
     active: borrowed.filter((b) => getRemainingQuantity(b) > 0).length,
@@ -67,12 +136,15 @@ export default function TransactionsPage() {
       if (!d) return false;
       return (Date.now() - d.getTime()) < 7 * 24 * 60 * 60 * 1000;
     }).length,
-  };
+  }), [borrowed, returned]);
 
-  const filterItems = (items) => {
+  const filterItems = useCallback((items) => {
     let result = items;
     if (filterCourse !== "All") {
       result = result.filter((item) => item.course === filterCourse);
+    }
+    if (dateRange !== "all") {
+      result = result.filter((item) => matchesDateRange(toDate(item.timestamp), dateRange));
     }
     if (search) {
       const q = search.toLowerCase();
@@ -80,13 +152,34 @@ export default function TransactionsPage() {
         (item.schoolID || "").toLowerCase().includes(q) ||
         (item.firstName || "").toLowerCase().includes(q) ||
         (item.lastName || "").toLowerCase().includes(q) ||
-        (item.itemName || "").toLowerCase().includes(q)
+        (item.itemName || "").toLowerCase().includes(q) ||
+        (item.course || "").toLowerCase().includes(q)
       );
     }
-    return result;
-  };
+    return sortItems(result, sortBy);
+  }, [filterCourse, dateRange, search, sortBy]);
 
-  const activeItems = activeTab === "borrowed" ? filterItems(borrowed) : filterItems(returned);
+  const activeItems = useMemo(() =>
+    activeTab === "borrowed" ? filterItems(borrowed) : filterItems(returned),
+  [activeTab, borrowed, returned, filterItems]);
+
+  const allCount = useMemo(() => {
+    const all = activeTab === "borrowed" ? borrowed : returned;
+    let result = all;
+    if (filterCourse !== "All") result = result.filter((i) => i.course === filterCourse);
+    if (dateRange !== "all") result = result.filter((i) => matchesDateRange(toDate(i.timestamp), dateRange));
+    if (search) {
+      const q = search.toLowerCase();
+      result = result.filter((i) =>
+        (i.schoolID || "").toLowerCase().includes(q) ||
+        (i.firstName || "").toLowerCase().includes(q) ||
+        (i.lastName || "").toLowerCase().includes(q) ||
+        (i.itemName || "").toLowerCase().includes(q) ||
+        (i.course || "").toLowerCase().includes(q)
+      );
+    }
+    return result.length;
+  }, [activeTab, borrowed, returned, filterCourse, dateRange, search]);
 
   const downloadReport = async () => {
     try {
@@ -97,6 +190,22 @@ export default function TransactionsPage() {
     }
   };
 
+  async function handleQuickReturn(item) {
+    const remaining = getRemainingQuantity(item);
+    if (remaining <= 0) return;
+    if (!confirm(`Return ${remaining} of "${item.itemName}" from ${item.firstName}?`)) return;
+    setReturningId(item.id);
+    try {
+      await api.recordReturn({ transactionId: item.id, quantity: remaining });
+      toast.success("Item returned successfully");
+      load();
+    } catch (err) {
+      toast.error(err.message || "Return failed");
+    } finally {
+      setReturningId(null);
+    }
+  }
+
   if (loading) return <LoadingSpinner />;
 
   return (
@@ -106,10 +215,16 @@ export default function TransactionsPage() {
           <h1>Transactions</h1>
           <p className="transactions-subtitle">Track all borrowed and returned equipment</p>
         </div>
-        <button className="btn btn-green" onClick={downloadReport}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          Download Report
-        </button>
+        <div className="transactions-header-actions">
+          <button className="btn btn-outline btn-refresh" onClick={load}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            Refresh
+          </button>
+          <button className="btn btn-green" onClick={downloadReport}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download Report
+          </button>
+        </div>
       </div>
 
       <div className="transactions-stats">
@@ -152,26 +267,45 @@ export default function TransactionsPage() {
       </div>
 
       <div className="transactions-toolbar">
-        <div className="transactions-tabs">
-          <button className={`tab-btn ${activeTab === "borrowed" ? "active" : ""}`} onClick={() => setActiveTab("borrowed")}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-            Borrowed
-            <span className="tab-count">{borrowed.length}</span>
-          </button>
-          <button className={`tab-btn ${activeTab === "returned" ? "active" : ""}`} onClick={() => setActiveTab("returned")}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20,6 9,17 4,12"/></svg>
-            Returned
-            <span className="tab-count">{returned.length}</span>
-          </button>
+        <div className="transactions-toolbar-left">
+          <div className="transactions-tabs">
+            <button className={`tab-btn ${activeTab === "borrowed" ? "active" : ""}`} onClick={() => setActiveTab("borrowed")}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+              Borrowed
+              <span className="tab-count">{borrowed.length}</span>
+            </button>
+            <button className={`tab-btn ${activeTab === "returned" ? "active" : ""}`} onClick={() => setActiveTab("returned")}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20,6 9,17 4,12"/></svg>
+              Returned
+              <span className="tab-count">{returned.length}</span>
+            </button>
+          </div>
+          <div className="transactions-result-count">
+            Showing {activeItems.length} of {allCount}
+          </div>
         </div>
-        <div className="transactions-filters">
+        <div className="transactions-toolbar-right">
+          <div className="transactions-view-toggle">
+            <button className={`view-btn ${viewMode === "grid" ? "active" : ""}`} onClick={() => setViewMode("grid")} title="Grid view">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            </button>
+            <button className={`view-btn ${viewMode === "list" ? "active" : ""}`} onClick={() => setViewMode("list")} title="List view">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            </button>
+          </div>
+          <select className="transactions-sort-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+            {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <select className="transactions-date-filter" value={dateRange} onChange={(e) => setDateRange(e.target.value)}>
+            {DATE_RANGES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+          </select>
           <select className="transactions-course-filter" value={filterCourse} onChange={(e) => setFilterCourse(e.target.value)}>
             <option value="All">All Courses</option>
             {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
           <div className="transactions-search">
             <svg className="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            <input placeholder="Search by name, ID, or item..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input placeholder="Search name, ID, item..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
         </div>
       </div>
@@ -194,9 +328,9 @@ export default function TransactionsPage() {
             )}
           </svg>
           <h3>No {activeTab} records found</h3>
-          <p>{search ? "Try adjusting your search terms" : `No ${activeTab} transactions yet`}</p>
+          <p>{search || filterCourse !== "All" || dateRange !== "all" ? "Try adjusting your filters" : `No ${activeTab} transactions yet`}</p>
         </div>
-      ) : (
+      ) : viewMode === "grid" ? (
         <div className="transactions-grid">
           {activeItems.map((item) => {
             const date = toDate(item.timestamp);
@@ -204,9 +338,11 @@ export default function TransactionsPage() {
             const remaining = isBorrowed ? getRemainingQuantity(item) : null;
             const fullName = `${item.firstName || ""} ${item.lastName || ""}`.trim();
             const color = getAvatarColor(fullName);
+            const overdue = isBorrowed ? getOverdueInfo(date, item.quantity, item.returnedQuantity) : null;
+            const isReturning = returningId === item.id;
 
             return (
-              <div className="transaction-card" key={item.id}>
+              <div className={`transaction-card ${overdue?.className || ""}`} key={item.id}>
                 <div className={`transaction-card-accent ${isBorrowed ? "accent-borrowed" : "accent-returned"}`} />
                 <div className="transaction-card-body">
                   <div className="transaction-card-top">
@@ -220,9 +356,12 @@ export default function TransactionsPage() {
                         {item.schoolID || "-"}
                       </p>
                     </div>
-                    <span className={`transaction-status-badge ${isBorrowed ? "status-borrowed" : "status-returned"}`}>
-                      {isBorrowed ? "Borrowed" : (item.status || "Returned")}
-                    </span>
+                    <div className="transaction-card-badges">
+                      {overdue && <span className={`overdue-badge ${overdue.className}`}>{overdue.text}</span>}
+                      <span className={`transaction-status-badge ${isBorrowed ? "status-borrowed" : "status-returned"}`}>
+                        {isBorrowed ? "Borrowed" : (item.status || "Returned")}
+                      </span>
+                    </div>
                   </div>
                   <div className="transaction-card-details">
                     <div className="transaction-detail">
@@ -231,15 +370,14 @@ export default function TransactionsPage() {
                     </div>
                     <div className="transaction-detail">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-                      <span>
-                        Qty: {isBorrowed ? `${remaining} / ${item.quantity || 0}` : (item.quantity || 0)}
-                      </span>
+                      <span>Qty: {isBorrowed ? `${remaining} / ${item.quantity || 0}` : (item.quantity || 0)}</span>
                     </div>
                     <div className="transaction-detail">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
-                      <span>{date ? formatDate(date) : "-"}</span>
+                      <span>{date ? timeAgo(date) : "-"}</span>
                     </div>
                   </div>
+                  {item.course && <span className="transaction-course-tag">{item.course}</span>}
                   {isBorrowed && item.quantity > 0 && (
                     <div className="transaction-progress">
                       <div className="progress-bar">
@@ -248,10 +386,77 @@ export default function TransactionsPage() {
                       <span className="progress-label">{item.quantity - remaining} of {item.quantity} returned</span>
                     </div>
                   )}
+                  {isBorrowed && remaining > 0 && role === "admin" && (
+                    <button className="btn btn-sm btn-return" onClick={() => handleQuickReturn(item)} disabled={isReturning}>
+                      {isReturning ? "Returning..." : "Quick Return"}
+                    </button>
+                  )}
                 </div>
               </div>
             );
           })}
+        </div>
+      ) : (
+        <div className="transactions-table-wrapper">
+          <table className="transactions-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>School ID</th>
+                {activeTab === "borrowed" && <th>Course</th>}
+                <th>Item</th>
+                <th>Qty</th>
+                <th>Date</th>
+                <th>Status</th>
+                {activeTab === "borrowed" && role === "admin" && <th>Action</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {activeItems.map((item) => {
+                const date = toDate(item.timestamp);
+                const isBorrowed = activeTab === "borrowed";
+                const remaining = isBorrowed ? getRemainingQuantity(item) : null;
+                const fullName = `${item.firstName || ""} ${item.lastName || ""}`.trim();
+                const overdue = isBorrowed ? getOverdueInfo(date, item.quantity, item.returnedQuantity) : null;
+                const isReturning = returningId === item.id;
+
+                return (
+                  <tr key={item.id} className={overdue?.className || ""}>
+                    <td className="table-name-cell">
+                      <div className="table-user">
+                        <div className="transaction-avatar-sm" style={{ background: getAvatarColor(fullName) }}>
+                          {getInitials(item.firstName, item.lastName)}
+                        </div>
+                        <span>{fullName || "-"}</span>
+                      </div>
+                    </td>
+                    <td>{item.schoolID || "-"}</td>
+                    {isBorrowed && <td>{item.course || "-"}</td>}
+                    <td>{item.itemName || "-"}</td>
+                    <td>{isBorrowed ? `${remaining} / ${item.quantity || 0}` : (item.quantity || 0)}</td>
+                    <td>{date ? timeAgo(date) : "-"}</td>
+                    <td>
+                      <div className="table-status-cell">
+                        {overdue && <span className={`overdue-badge-sm ${overdue.className}`}>{overdue.text}</span>}
+                        <span className={`transaction-status-badge-sm ${isBorrowed ? "status-borrowed" : "status-returned"}`}>
+                          {isBorrowed ? "Borrowed" : (item.status || "Returned")}
+                        </span>
+                      </div>
+                    </td>
+                    {isBorrowed && role === "admin" && (
+                      <td>
+                        {remaining > 0 && (
+                          <button className="btn btn-xs btn-return" onClick={() => handleQuickReturn(item)} disabled={isReturning}>
+                            {isReturning ? "..." : "Return"}
+                          </button>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </section>
