@@ -12,7 +12,12 @@ const STATUS_TABS = ["All", "Open", "Investigating", "Resolved"];
 
 function timeAgo(date) {
   if (!date) return "";
-  const d = typeof date === "string" ? new Date(date) : date;
+  let d;
+  if (date?.toDate) d = date.toDate();
+  else if (typeof date === "string" || typeof date === "number") d = new Date(date);
+  else if (date instanceof Date) d = date;
+  else return "";
+  if (isNaN(d.getTime())) return "";
   const now = new Date();
   const diff = now - d;
   const mins = Math.floor(diff / 60000);
@@ -48,8 +53,8 @@ export default function IncidentTab() {
   async function load() {
     try {
       const [i, c] = await Promise.all([api.getIncidents(), api.getCatalog()]);
-      setIncidents(i);
-      setCatalog(c);
+      setIncidents(Array.isArray(i) ? i : []);
+      setCatalog(Array.isArray(c) ? c : []);
     } catch {
       toast.error("Failed to load incidents");
     } finally {

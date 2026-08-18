@@ -61,13 +61,41 @@ const getReturned = async (req, res) => {
   }
 };
 
+const getMyBorrowed = async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const snap = await db.collection(TRANS).where("action", "==", "borrowed").get();
+    const items = snap.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .filter((d) => d.userId === uid && isOpenBorrow(d))
+      .sort((a, b) => (toDate(b.timestamp)?.getTime() || 0) - (toDate(a.timestamp)?.getTime() || 0));
+    res.json(items);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+const getMyReturned = async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const snap = await db.collection(TRANS).where("action", "==", "returned").get();
+    const items = snap.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .filter((d) => d.userId === uid)
+      .sort((a, b) => (toDate(b.timestamp)?.getTime() || 0) - (toDate(a.timestamp)?.getTime() || 0));
+    res.json(items);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 const getDashboardCounts = async (req, res) => {
   try {
     const [borrowedSnap, returnedSnap, usersSnap, studentsSnap, facultySnap] = await Promise.all([
       db.collection(TRANS).where("action", "==", "borrowed").get(),
       db.collection(TRANS).where("action", "==", "returned").get(),
       db.collection(USERS).get(),
-      db.collection(USERS).where("role", "==", "Student").get(),
+      db.collection(USERS).where("role", "==", "student").get(),
       db.collection(USERS).where("role", "==", "faculty").get(),
     ]);
     const activeBorrowed = borrowedSnap.docs.filter((doc) => isOpenBorrow(doc.data())).length;
@@ -147,7 +175,7 @@ const recordBorrow = async (req, res) => {
         schoolID: borrower.schoolID,
         firstName: borrower.firstName,
         lastName: borrower.lastName,
-        role: borrower.role || "Student",
+        role: borrower.role || "student",
         updatedAt: new Date(),
       };
       if (borrower.email) userData.email = borrower.email;
@@ -284,4 +312,4 @@ const recordReturn = async (req, res) => {
   }
 };
 
-module.exports = { getBorrowed, getReturned, getDashboardCounts, getChartData, recordBorrow, recordReturn };
+module.exports = { getBorrowed, getReturned, getMyBorrowed, getMyReturned, getDashboardCounts, getChartData, recordBorrow, recordReturn };

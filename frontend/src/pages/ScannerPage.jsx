@@ -24,7 +24,7 @@ export default function ScannerPage() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState("Student");
+  const [role, setRole] = useState("student");
   const [quantity, setQuantity] = useState(1);
   const [dueDate, setDueDate] = useState("");
   const [selectedItem, setSelectedItem] = useState(null);
@@ -67,7 +67,7 @@ export default function ScannerPage() {
     setFirstName(d.firstName || d.firstname || "");
     setLastName(d.lastName || d.lastname || "");
     setEmail(d.email || "");
-    setRole(d.role === "faculty" ? "faculty" : "Student");
+    setRole(d.role === "faculty" ? "faculty" : "student");
     setBorrowerResult({ name: `${d.firstName || ""} ${d.lastName || ""}`.trim(), schoolID: d.schoolID || schoolId, role: d.role, course: d.course });
     setTxStatus("Borrower found."); setTxStatusType("success");
     scrollToStep2();
@@ -234,7 +234,7 @@ export default function ScannerPage() {
                   <div className="scanner-field">
                     <label>Role</label>
                     <select value={role} onChange={(e) => setRole(e.target.value)}>
-                      <option value="Student">Student</option>
+                      <option value="student">Student</option>
                       <option value="faculty">Faculty</option>
                     </select>
                   </div>

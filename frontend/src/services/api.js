@@ -43,6 +43,8 @@ export const api = {
   getChartData: () => request("/transactions/chart"),
   getBorrowed: () => request("/transactions/borrowed"),
   getReturned: () => request("/transactions/returned"),
+  getMyBorrowed: () => request("/transactions/my-borrowed"),
+  getMyReturned: () => request("/transactions/my-returned"),
   recordBorrow: (data) => request("/transactions/borrow", { method: "POST", body: JSON.stringify(data) }),
   recordReturn: (data) => request("/transactions/return", { method: "POST", body: JSON.stringify(data) }),
 
@@ -126,6 +128,10 @@ export const api = {
   // Documents
   getDocuments: () => request("/documents"),
   deleteDocument: (id) => request(`/documents/${id}`, { method: "DELETE" }),
+
+  // Settings
+  getSettings: () => request("/settings"),
+  saveSettings: (data) => request("/settings", { method: "PUT", body: JSON.stringify(data) }),
 
   // Maintenance
   getMaintenance: () => request("/maintenance"),

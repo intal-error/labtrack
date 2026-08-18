@@ -21,7 +21,7 @@ const navSections = [
   {
     label: "HOME",
     items: [
-      { path: "/overview", label: "Overview", icon: MdDashboard, roles: ["student", "faculty", "admin"] },
+      { path: "/overview", label: "Overview", icon: MdDashboard, roles: ["faculty", "admin"] },
       { path: "/usage-logs", label: "My Activity", icon: MdHistory, roles: ["student"] },
       { path: "/reports", label: "Reports", icon: MdAssessment, roles: ["admin"] },
     ],
@@ -42,7 +42,7 @@ const navSections = [
       { path: "/incidents", label: "Incidents", icon: MdWarning, roles: ["admin", "faculty", "student"] },
       { path: "/manuals", label: "Lab Manuals", icon: MdMenuBook, roles: ["student", "faculty", "admin"] },
       { path: "/members", label: "Members", icon: MdPeople, roles: ["admin"] },
-      { path: "/documents", label: "Documents", icon: MdFolderOpen, roles: ["student", "faculty", "admin"] },
+      { path: "/documents", label: "Documents", icon: MdFolderOpen, roles: ["faculty", "admin"] },
       { path: "/settings", label: "Settings", icon: MdSettings, roles: ["admin"] },
     ],
   },

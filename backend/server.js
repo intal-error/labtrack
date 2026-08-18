@@ -11,6 +11,7 @@ const adminRoutes = require("./src/routes/admin");
 const reportRoutes = require("./src/routes/reports");
 const uploadRoutes = require("./src/routes/upload");
 const notificationsRoutes = require("./src/routes/notifications");
+const settingsRoutes = require("./src/routes/settings");
 const documentsRoutes = require("./src/routes/documents");
 const maintenanceRoutes = require("./src/routes/maintenance");
 const incidentRoutes = require("./src/routes/incidents");
@@ -44,6 +45,7 @@ app.use("/api/manuals", verifyToken, manualRoutes);
 
 // Admin-only routes
 app.use("/api/admin", verifyToken, authorize("admin"), adminRoutes);
+app.use("/api/settings", verifyToken, authorize("admin"), settingsRoutes);
 
 // Error handler
 app.use(errorHandler);

@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
+import { Component } from "react";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import LoginPage from "./pages/LoginPage";
@@ -37,6 +38,11 @@ function RoleRoute({ children, allowed }) {
   return children;
 }
 
+function IndexRedirect() {
+  const { role } = useAuth();
+  return <Navigate to={role === "student" ? "/usage-logs" : "/overview"} replace />;
+}
+
 function GuestRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="loading-screen"><div className="spinner-lg" /></div>;
@@ -44,17 +50,43 @@ function GuestRoute({ children }) {
   return children;
 }
 
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error, info) {
+    console.error("ErrorBoundary caught:", error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", gap: 16, background: "var(--bg)", color: "var(--text)" }}>
+          <h2>Something went wrong</h2>
+          <p style={{ color: "var(--text-muted)" }}>Please refresh the page or try again.</p>
+          <button className="btn btn-primary" onClick={() => { this.setState({ hasError: false }); window.location.reload(); }}>Reload Page</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <ThemeProvider>
+          <ErrorBoundary>
           <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
           <Routes>
             <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
             <Route path="/register" element={<GuestRoute><RegisterPage /></GuestRoute>} />
             <Route path="/" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
-              <Route index element={<Navigate to="/overview" replace />} />
+              <Route index element={<IndexRedirect />} />
               <Route path="overview" element={<OverviewTab />} />
 
               <Route path="notifications" element={<NotificationsTab />} />
@@ -77,6 +109,7 @@ function App() {
             </Route>
             <Route path="*" element={<Navigate to="/overview" replace />} />
           </Routes>
+          </ErrorBoundary>
         </ThemeProvider>
       </AuthProvider>
     </BrowserRouter>

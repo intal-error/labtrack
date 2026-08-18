@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { api } from "../../services/api";
 import { useTheme } from "../../context/ThemeContext";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
 
 export default function SettingsTab() {
   const { dark, toggleTheme } = useTheme();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState({
     emailNotifications: true,
     autoBackup: true,
@@ -16,18 +19,50 @@ export default function SettingsTab() {
     defaultRole: "Faculty",
   });
 
+  useEffect(() => {
+    async function load() {
+      try {
+        const data = await api.getSettings();
+        setSettings({
+          emailNotifications: data.emailNotifications ?? true,
+          autoBackup: data.autoBackup ?? true,
+          maintenanceMode: data.maintenanceMode ?? false,
+          allowStudentRegistration: data.allowStudentRegistration ?? true,
+          requirePasswordChange: data.requirePasswordChange ?? false,
+          sessionTimeout: data.sessionTimeout ?? 30,
+          maxLoginAttempts: data.maxLoginAttempts ?? 5,
+          defaultRole: data.defaultRole ?? "Faculty",
+        });
+      } catch {
+        toast.error("Failed to load settings");
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
   function handleToggle(key) {
     setSettings((prev) => ({ ...prev, [key]: !prev[key] }));
-    toast.success("Setting updated");
   }
 
   function handleChange(key, value) {
     setSettings((prev) => ({ ...prev, [key]: value }));
   }
 
-  function handleSave() {
-    toast.success("Settings saved successfully");
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await api.saveSettings(settings);
+      toast.success("Settings saved successfully");
+    } catch {
+      toast.error("Failed to save settings");
+    } finally {
+      setSaving(false);
+    }
   }
+
+  if (loading) return <div className="page-loading"><div className="spinner-lg" /></div>;
 
   return (
     <div className="tab-content">
@@ -65,7 +100,7 @@ export default function SettingsTab() {
         </label>
         <label style={{ flexDirection: "column", alignItems: "flex-start", gap: 8 }}>
           Session Timeout (minutes)
-          <select value={settings.sessionTimeout} onChange={(e) => handleChange("sessionTimeout", e.target.value)} style={{ width: "100%" }}>
+          <select value={settings.sessionTimeout} onChange={(e) => handleChange("sessionTimeout", Number(e.target.value))} style={{ width: "100%" }}>
             <option value={15}>15 minutes</option>
             <option value={30}>30 minutes</option>
             <option value={60}>1 hour</option>
@@ -74,7 +109,7 @@ export default function SettingsTab() {
         </label>
         <label style={{ flexDirection: "column", alignItems: "flex-start", gap: 8 }}>
           Max Login Attempts
-          <select value={settings.maxLoginAttempts} onChange={(e) => handleChange("maxLoginAttempts", e.target.value)} style={{ width: "100%" }}>
+          <select value={settings.maxLoginAttempts} onChange={(e) => handleChange("maxLoginAttempts", Number(e.target.value))} style={{ width: "100%" }}>
             <option value={3}>3 attempts</option>
             <option value={5}>5 attempts</option>
             <option value={10}>10 attempts</option>
@@ -93,12 +128,14 @@ export default function SettingsTab() {
           <select value={settings.defaultRole} onChange={(e) => handleChange("defaultRole", e.target.value)} style={{ width: "100%" }}>
             <option value="Faculty">Faculty</option>
             <option value="Staff">Staff</option>
-            <option value="Student">Student</option>
+            <option value="student">Student</option>
           </select>
         </label>
       </div>
 
-      <button className="btn btn-green" onClick={handleSave} style={{ marginTop: 15 }}>Save Settings</button>
+      <button className="btn btn-green" onClick={handleSave} disabled={saving} style={{ marginTop: 15 }}>
+        {saving ? "Saving..." : "Save Settings"}
+      </button>
     </div>
   );
 }
