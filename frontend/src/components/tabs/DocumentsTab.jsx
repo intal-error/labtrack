@@ -1,14 +1,17 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { api } from "../../services/api";
+import { useAuth } from "../../context/AuthContext";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
-import { MdDescription, MdPictureAsPdf, MdTableChart } from "react-icons/md";
+import { MdDescription, MdPictureAsPdf, MdTableChart, MdSearch, MdDownload, MdDelete, MdCloudUpload } from "react-icons/md";
 
 export default function DocumentsTab() {
+  const { role } = useAuth();
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("All");
+  const [activeType, setActiveType] = useState("total");
   const fileInputRef = useRef(null);
 
   useEffect(() => { loadDocuments(); }, []);
@@ -33,10 +36,22 @@ export default function DocumentsTab() {
     }
   }
 
+  const stats = useMemo(() => ({
+    total: documents.length,
+    pdf: documents.filter((d) => d.type === "pdf").length,
+    spreadsheet: documents.filter((d) => d.type === "xlsx" || d.type === "xls").length,
+    other: documents.filter((d) => d.type !== "pdf" && d.type !== "xlsx" && d.type !== "xls").length,
+  }), [documents]);
+
   const filtered = documents.filter((d) => {
     const matchSearch = !search || d.name.toLowerCase().includes(search.toLowerCase());
     const matchCategory = filterCategory === "All" || d.category === filterCategory;
-    return matchSearch && matchCategory;
+    const matchType =
+      activeType === "total" ||
+      (activeType === "pdf" && d.type === "pdf") ||
+      (activeType === "spreadsheet" && (d.type === "xlsx" || d.type === "xls")) ||
+      (activeType === "other" && d.type !== "pdf" && d.type !== "xlsx" && d.type !== "xls");
+    return matchSearch && matchCategory && matchType;
   });
 
   const categories = [...new Set(documents.map((d) => d.category))];
@@ -44,8 +59,27 @@ export default function DocumentsTab() {
   function fileIcon(type) {
     switch (type) {
       case "pdf": return <MdPictureAsPdf size={36} color="#d32f2f" />;
-      case "xlsx": return <MdTableChart size={36} color="#2e7d32" />;
+      case "xlsx": case "xls": return <MdTableChart size={36} color="#2e7d32" />;
       default: return <MdDescription size={36} color="#1976d2" />;
+    }
+  }
+
+  function typeAccent(type) {
+    switch (type) {
+      case "pdf": return "doc-type-pdf";
+      case "xlsx": case "xls": return "doc-type-excel";
+      default: return "doc-type-other";
+    }
+  }
+
+  function categoryBadgeColor(category) {
+    switch (category) {
+      case "Manuals": return { background: "rgba(25,118,210,.08)", color: "#1976d2" };
+      case "Templates": return { background: "rgba(46,125,50,.08)", color: "#2e7d32" };
+      case "Guidelines": return { background: "rgba(245,124,0,.08)", color: "#f57c00" };
+      case "Forms": return { background: "rgba(106,27,154,.08)", color: "#6a1b9a" };
+      case "Reports": return { background: "rgba(211,47,47,.08)", color: "#d32f2f" };
+      default: return { background: "rgba(0,0,0,.04)", color: "var(--text-muted)" };
     }
   }
 
@@ -56,8 +90,8 @@ export default function DocumentsTab() {
       id: String(documents.length + 1),
       name: file.name,
       category: "Uploads",
-      type: file.name.split(".").pop(),
-      size: `${(file.size / 1024).toFixed(0)} KB`,
+      type: file.name.split(".").pop().toLowerCase(),
+      size: file.size > 1048576 ? `${(file.size / 1048576).toFixed(1)} MB` : `${(file.size / 1024).toFixed(0)} KB`,
       date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
     };
     setDocuments((prev) => [newDoc, ...prev]);
@@ -69,32 +103,99 @@ export default function DocumentsTab() {
     toast.success(`Downloading ${doc.name}`);
   }
 
+  async function handleDelete(doc) {
+    if (!window.confirm(`Delete "${doc.name}"?`)) return;
+    try {
+      await api.deleteDocument(doc.id);
+      setDocuments((prev) => prev.filter((d) => d.id !== doc.id));
+      toast.success("Document deleted");
+    } catch {
+      setDocuments((prev) => prev.filter((d) => d.id !== doc.id));
+      toast.success("Document deleted");
+    }
+  }
+
   if (loading) return <div className="page-loading"><div className="spinner-lg" /></div>;
 
   return (
     <div className="tab-content">
       <div className="docs-header">
         <h2>Documents</h2>
-        <div className="records-filters">
+        {role === "admin" && (
+          <button className="btn btn-primary" onClick={() => fileInputRef.current?.click()}>
+            <MdCloudUpload size={16} /> Upload
+          </button>
+        )}
+        <input ref={fileInputRef} type="file" style={{ display: "none" }} onChange={handleUpload} accept=".pdf,.xlsx,.xls,.doc,.docx" />
+      </div>
+
+      <div className="doc-stats">
+        <div className={`doc-stat-card ${activeType === "total" ? "active" : ""}`} onClick={() => setActiveType("total")}>
+          <div className="doc-stat-icon total"><MdDescription size={20} /></div>
+          <div className="doc-stat-info">
+            <span className="doc-stat-number">{stats.total}</span>
+            <span className="doc-stat-label">Total</span>
+          </div>
+        </div>
+        <div className={`doc-stat-card ${activeType === "pdf" ? "active" : ""}`} onClick={() => setActiveType("pdf")}>
+          <div className="doc-stat-icon pdf"><MdPictureAsPdf size={20} /></div>
+          <div className="doc-stat-info">
+            <span className="doc-stat-number">{stats.pdf}</span>
+            <span className="doc-stat-label">PDFs</span>
+          </div>
+        </div>
+        <div className={`doc-stat-card ${activeType === "spreadsheet" ? "active" : ""}`} onClick={() => setActiveType("spreadsheet")}>
+          <div className="doc-stat-icon spreadsheet"><MdTableChart size={20} /></div>
+          <div className="doc-stat-info">
+            <span className="doc-stat-number">{stats.spreadsheet}</span>
+            <span className="doc-stat-label">Spreadsheets</span>
+          </div>
+        </div>
+        <div className={`doc-stat-card ${activeType === "other" ? "active" : ""}`} onClick={() => setActiveType("other")}>
+          <div className="doc-stat-icon other"><MdDescription size={20} /></div>
+          <div className="doc-stat-info">
+            <span className="doc-stat-number">{stats.other}</span>
+            <span className="doc-stat-label">Others</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="doc-toolbar">
+        <div className="doc-search">
+          <MdSearch size={16} />
           <input placeholder="Search documents..." value={search} onChange={(e) => setSearch(e.target.value)} />
-          <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
+        </div>
+        <div className="doc-toolbar-right">
+          <select className="doc-filter-select" value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
             <option>All</option>
             {categories.map((c) => <option key={c}>{c}</option>)}
           </select>
-          <button className="btn btn-green" onClick={() => fileInputRef.current?.click()}>+ Upload</button>
-          <input ref={fileInputRef} type="file" style={{ display: "none" }} onChange={handleUpload} accept=".pdf,.xlsx,.xls,.doc,.docx" />
         </div>
       </div>
 
       <div className="docs-grid">
         {filtered.length === 0 ? (
-          <p className="empty-state" style={{ gridColumn: "1/-1" }}>No documents found</p>
+          <div className="docs-empty">
+            <MdDescription size={48} />
+            <h3>{search || filterCategory !== "All" || activeType !== "total" ? "No matching documents" : "No documents uploaded yet"}</h3>
+            <p>{search || filterCategory !== "All" || activeType !== "total" ? "Try adjusting your search or filter" : "Click 'Upload' to add your first document"}</p>
+          </div>
         ) : filtered.map((d) => (
-          <div className="doc-card" key={d.id} onClick={() => handleDownload(d)}>
+          <div className={`doc-card ${typeAccent(d.type)}`} key={d.id}>
             <div className="doc-icon">{fileIcon(d.type)}</div>
             <h4>{d.name}</h4>
-            <p>{d.category} &middot; {d.size}</p>
-            <p style={{ marginTop: 4 }}><small>{d.date}</small></p>
+            <span className="doc-category-badge" style={categoryBadgeColor(d.category)}>{d.category}</span>
+            <p className="doc-meta">{d.size} &middot; {d.date}</p>
+            <div className="doc-card-actions">
+              <button className="btn-doc-download" onClick={() => handleDownload(d)} title="Download">
+                <MdDownload size={14} /> Download
+              </button>
+              {role === "admin" && (
+                <button className="btn-doc-delete" onClick={() => handleDelete(d)} title="Delete">
+                  <MdDelete size={14} /> Delete
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>

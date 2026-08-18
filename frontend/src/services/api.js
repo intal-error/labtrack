@@ -125,6 +125,7 @@ export const api = {
 
   // Documents
   getDocuments: () => request("/documents"),
+  deleteDocument: (id) => request(`/documents/${id}`, { method: "DELETE" }),
 
   // Maintenance
   getMaintenance: () => request("/maintenance"),

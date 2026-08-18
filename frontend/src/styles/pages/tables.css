@@ -47,12 +47,12 @@ body.dark .btn-report{background:#1b3b27;color:#edf6ea;border-color:#2d5a39}
 .transactions-toolbar-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .transactions-result-count{font-size:12px;color:var(--text-muted);font-weight:500}
 .transactions-tabs{display:flex;gap:4px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:4px}
-.tab-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border:none;border-radius:8px;background:transparent;color:var(--text-muted);font-size:13px;font-weight:500;cursor:pointer;transition:all .2s}
-.tab-btn:hover{color:var(--text);background:var(--bg)}
-.tab-btn.active{background:var(--green);color:#fff;box-shadow:0 2px 6px rgba(46,125,50,.3)}
-.tab-btn.active svg{stroke:#fff}
+.transactions-tabs .tab-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border:none;border-radius:8px;background:transparent;color:var(--text-muted);font-size:13px;font-weight:500;cursor:pointer;transition:all .2s}
+.transactions-tabs .tab-btn:hover{color:var(--text);background:var(--bg)}
+.transactions-tabs .tab-btn.active{background:var(--green);color:#fff;box-shadow:0 2px 6px rgba(46,125,50,.3)}
+.transactions-tabs .tab-btn.active svg{stroke:#fff}
 .tab-count{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:10px;font-size:11px;font-weight:700;background:rgba(255,255,255,.2);color:#fff}
-.tab-btn:not(.active) .tab-count{background:var(--border);color:var(--text-muted)}
+.transactions-tabs .tab-btn:not(.active) .tab-count{background:var(--border);color:var(--text-muted)}
 
 .transactions-view-toggle{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
 .view-btn{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border:none;background:var(--bg-card);color:var(--text-muted);cursor:pointer;transition:all .2s}
@@ -149,10 +149,10 @@ body.dark .transactions-stats .stat-returned-total .stat-icon{background:linear-
 body.dark .transactions-stats .stat-week .stat-icon{background:linear-gradient(135deg,#2d1b3a,#3d2650);color:#ce93d8}
 body.dark .transactions-stats .stat-number{color:#e3f1de}
 body.dark .transactions-tabs{background:#17291d;border-color:#264d35}
-body.dark .tab-btn{color:#b0c4ae}
-body.dark .tab-btn:hover{color:#e3f1de;background:#1f3527}
-body.dark .tab-btn.active{background:var(--green);color:#fff}
-body.dark .tab-btn:not(.active) .tab-count{background:#264d35;color:#b0c4ae}
+body.dark .transactions-tabs .tab-btn{color:#b0c4ae}
+body.dark .transactions-tabs .tab-btn:hover{color:#e3f1de;background:#1f3527}
+body.dark .transactions-tabs .tab-btn.active{background:var(--green);color:#fff}
+body.dark .transactions-tabs .tab-btn:not(.active) .tab-count{background:#264d35;color:#b0c4ae}
 body.dark .transactions-view-toggle{border-color:#264d35}
 body.dark .view-btn{background:#17291d;color:#8a9e88}
 body.dark .view-btn:hover{color:#e3f1de;background:#1f3527}

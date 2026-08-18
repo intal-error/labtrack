@@ -28,15 +28,24 @@ const checkOverdueTransactions = async () => {
           await sendOverdueEmail(name, email, d.itemName || "Unknown Item", dueTime.toLocaleString());
 
           if (d.userId) {
-            await db.collection(NOTIF).add({
-              targetUserId: d.userId,
-              type: "overdue",
-              title: "Overdue Return",
-              message: `Your borrowed "${d.itemName || "Unknown Item"}" is past its due date. Please return it as soon as possible.`,
-              read: false,
-              link: "/transactions",
-              createdAt: new Date(),
-            });
+            const existing = await db.collection(NOTIF)
+              .where("targetUserId", "==", d.userId)
+              .where("type", "==", "overdue")
+              .where("title", "==", "Overdue Return")
+              .limit(1)
+              .get();
+            if (existing.empty) {
+              await db.collection(NOTIF).add({
+                targetUserId: d.userId,
+                type: "overdue",
+                title: "Overdue Return",
+                message: `Your borrowed "${d.itemName || "Unknown Item"}" is past its due date. Please return it as soon as possible.`,
+                read: false,
+                dismissedBy: [],
+                link: "/transactions",
+                createdAt: new Date(),
+              });
+            }
           }
 
           await db.collection(TRANS).doc(doc.id).set(

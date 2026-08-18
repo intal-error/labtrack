@@ -107,9 +107,23 @@ const recordBorrow = async (req, res) => {
     const { itemId, borrower, quantity, dueDate } = req.body;
     const catalogRef = db.collection(CATALOG).doc(itemId);
     const borrowRef = db.collection(TRANS).doc();
-    const userRef = borrower.userId
-      ? db.collection(USERS).doc(borrower.userId)
-      : db.collection(USERS).doc();
+
+    let userRef;
+    let resolvedUser = null;
+    if (borrower.userId) {
+      userRef = db.collection(USERS).doc(borrower.userId);
+    } else if (borrower.schoolID) {
+      const userSnap = await db.collection(USERS)
+        .where("schoolId", "==", borrower.schoolID).limit(1).get();
+      if (!userSnap.empty) {
+        resolvedUser = { id: userSnap.docs[0].id, ...userSnap.docs[0].data() };
+        userRef = userSnap.docs[0].ref;
+      } else {
+        userRef = db.collection(USERS).doc();
+      }
+    } else {
+      userRef = db.collection(USERS).doc();
+    }
 
     await db.runTransaction(async (t) => {
       const catalogSnap = await t.get(catalogRef);
@@ -119,9 +133,13 @@ const recordBorrow = async (req, res) => {
       if (available < quantity) throw new Error(`Only ${available} available`);
 
       let userCourse = borrower.course || "";
-      if (!userCourse && borrower.userId) {
-        const userSnap = await t.get(db.collection(USERS).doc(borrower.userId));
-        if (userSnap.exists) userCourse = userSnap.data().course || "";
+      if (!userCourse) {
+        const userData = resolvedUser || (await t.get(db.collection(USERS).doc(userRef.id)));
+        if (userData?.data) {
+          userCourse = userData.data.course || "";
+        } else if (userData?.exists) {
+          userCourse = userData.data().course || "";
+        }
       }
 
       const nextAvailable = available - quantity;
@@ -134,7 +152,7 @@ const recordBorrow = async (req, res) => {
       };
       if (borrower.email) userData.email = borrower.email;
       if (userCourse) userData.course = userCourse;
-      if (!borrower.userId) userData.createdAt = new Date();
+      if (!borrower.userId && !resolvedUser) userData.createdAt = new Date();
 
       const loanData = {
         action: "borrowed",

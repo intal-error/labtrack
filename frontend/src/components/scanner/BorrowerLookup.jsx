@@ -13,7 +13,7 @@ export async function resolveUser(rawCode) {
   const uSnap = await getDocs(collection(db, "users"));
   const match = uSnap.docs.find((d) => {
     const u = d.data();
-    return [u.schoolID, u.studentID, u.barcode, u.qrCode].some((v) => candidates.has(normalize(v)));
+    return [u.schoolId, u.schoolID, u.studentID, u.barcode, u.qrCode].some((v) => candidates.has(normalize(v)));
   });
   return match ? { id: match.id, data: match.data(), scanCode: raw } : null;
 }

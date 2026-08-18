@@ -1,4 +1,4 @@
-const { db } = require("../config/firebase");
+const { db, admin } = require("../config/firebase");
 
 const COLLECTION = "notifications";
 
@@ -21,7 +21,13 @@ const getByUser = async (req, res) => {
       .orderBy("createdAt", "desc")
       .get();
     const notifications = [];
-    snap.forEach((doc) => notifications.push({ id: doc.id, ...doc.data() }));
+    snap.forEach((doc) => {
+      const data = doc.data();
+      const dismissedBy = data.dismissedBy || [];
+      if (!dismissedBy.includes(userId)) {
+        notifications.push({ id: doc.id, ...data });
+      }
+    });
     res.json(notifications);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -33,6 +39,7 @@ const create = async (req, res) => {
     const data = {
       ...req.body,
       read: false,
+      dismissedBy: [],
       createdAt: new Date(),
     };
     const ref = await db.collection(COLLECTION).add(data);
@@ -45,7 +52,11 @@ const create = async (req, res) => {
 const markRead = async (req, res) => {
   try {
     const { id } = req.params;
-    await db.collection(COLLECTION).doc(id).set({ read: true, readAt: new Date() }, { merge: true });
+    const userId = req.user.uid;
+    await db.collection(COLLECTION).doc(id).set(
+      { read: true, readAt: new Date(), dismissedBy: admin.firestore.FieldValue.arrayUnion(userId) },
+      { merge: true }
+    );
     res.json({ message: "Notification marked as read" });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -61,7 +72,11 @@ const markAllRead = async (req, res) => {
       .get();
     const batch = db.batch();
     snap.forEach((doc) => {
-      batch.set(doc.ref, { read: true, readAt: new Date() }, { merge: true });
+      batch.set(doc.ref, {
+        read: true,
+        readAt: new Date(),
+        dismissedBy: admin.firestore.FieldValue.arrayUnion(userId),
+      }, { merge: true });
     });
     await batch.commit();
     res.json({ message: "All notifications marked as read" });
@@ -73,7 +88,11 @@ const markAllRead = async (req, res) => {
 const dismiss = async (req, res) => {
   try {
     const { id } = req.params;
-    await db.collection(COLLECTION).doc(id).delete();
+    const userId = req.user.uid;
+    await db.collection(COLLECTION).doc(id).set(
+      { dismissedBy: admin.firestore.FieldValue.arrayUnion(userId) },
+      { merge: true }
+    );
     res.json({ message: "Notification dismissed" });
   } catch (err) {
     res.status(500).json({ error: err.message });
