@@ -6,12 +6,14 @@ const NOTIF = "notifications";
 
 const checkOverdueTransactions = async () => {
   try {
-    const snap = await db.collection(TRANS).get();
+    const snap = await db.collection(TRANS)
+      .where("action", "==", "borrowed")
+      .where("status", "!=", "returned")
+      .get();
     const now = new Date();
 
     for (const doc of snap.docs) {
       const d = doc.data();
-      if (d.action === "returned" || d.status === "Returned") continue;
       if (d.reminderSent) continue;
 
       const ts = d.timestamp?.toDate?.() || (d.timestamp?.seconds ? new Date(d.timestamp.seconds * 1000) : null);

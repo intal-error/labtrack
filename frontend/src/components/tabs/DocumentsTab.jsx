@@ -59,7 +59,7 @@ export default function DocumentsTab() {
   function fileIcon(type) {
     switch (type) {
       case "pdf": return <MdPictureAsPdf size={36} color="#d32f2f" />;
-      case "xlsx": case "xls": return <MdTableChart size={36} color="#2e7d32" />;
+      case "xlsx": case "xls": return <MdTableChart size={36} color="#E1FB15" />;
       default: return <MdDescription size={36} color="#1976d2" />;
     }
   }
@@ -75,7 +75,7 @@ export default function DocumentsTab() {
   function categoryBadgeColor(category) {
     switch (category) {
       case "Manuals": return { background: "rgba(25,118,210,.08)", color: "#1976d2" };
-      case "Templates": return { background: "rgba(46,125,50,.08)", color: "#2e7d32" };
+      case "Templates": return { background: "rgba(225,251,21,.08)", color: "#E1FB15" };
       case "Guidelines": return { background: "rgba(245,124,0,.08)", color: "#f57c00" };
       case "Forms": return { background: "rgba(106,27,154,.08)", color: "#6a1b9a" };
       case "Reports": return { background: "rgba(211,47,47,.08)", color: "#d32f2f" };
@@ -83,24 +83,26 @@ export default function DocumentsTab() {
     }
   }
 
-  function handleUpload(e) {
+  async function handleUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
-    const newDoc = {
-      id: String(documents.length + 1),
-      name: file.name,
-      category: "Uploads",
-      type: file.name.split(".").pop().toLowerCase(),
-      size: file.size > 1048576 ? `${(file.size / 1048576).toFixed(1)} MB` : `${(file.size / 1024).toFixed(0)} KB`,
-      date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-    };
-    setDocuments((prev) => [newDoc, ...prev]);
-    toast.success("Document uploaded");
-    e.target.value = "";
+    try {
+      const result = await api.uploadDocument(file);
+      setDocuments((prev) => [{ ...result, date: new Date(result.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) }, ...prev]);
+      toast.success("Document uploaded successfully");
+    } catch (err) {
+      toast.error(err.message || "Upload failed");
+    } finally {
+      e.target.value = "";
+    }
   }
 
   function handleDownload(doc) {
-    toast.success(`Downloading ${doc.name}`);
+    if (doc.fileUrl) {
+      window.open(doc.fileUrl, "_blank");
+    } else {
+      toast.error("No file available for download");
+    }
   }
 
   async function handleDelete(doc) {
@@ -185,12 +187,12 @@ export default function DocumentsTab() {
             <div className="doc-icon">{fileIcon(d.type)}</div>
             <h4>{d.name}</h4>
             <span className="doc-category-badge" style={categoryBadgeColor(d.category)}>{d.category}</span>
-            <p className="doc-meta">{d.size} &middot; {d.date}</p>
+            <p className="doc-meta">{d.size} &middot; {d.date || (d.createdAt ? new Date(d.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "")}</p>
             <div className="doc-card-actions">
               <button className="btn-doc-download" onClick={() => handleDownload(d)} title="Download">
                 <MdDownload size={14} /> Download
               </button>
-              {role === "admin" && (
+        {(role === "admin" || role === "faculty") && (
                 <button className="btn-doc-delete" onClick={() => handleDelete(d)} title="Delete">
                   <MdDelete size={14} /> Delete
                 </button>

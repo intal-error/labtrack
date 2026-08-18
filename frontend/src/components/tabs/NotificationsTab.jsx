@@ -9,7 +9,7 @@ const TYPE_CONFIG = {
   alert: { icon: <MdError size={22} />, label: "Alert", color: "#d32f2f", bg: "linear-gradient(135deg,#ffebee,#ffcdd2)" },
   overdue: { icon: <MdError size={22} />, label: "Overdue", color: "#d32f2f", bg: "linear-gradient(135deg,#ffebee,#ffcdd2)" },
   warning: { icon: <MdWarning size={22} />, label: "Warning", color: "#f57c00", bg: "linear-gradient(135deg,#fff3e0,#ffe0b2)" },
-  success: { icon: <MdCheckCircle size={22} />, label: "Success", color: "#2e7d32", bg: "linear-gradient(135deg,#e8f5e9,#c8e6c9)" },
+  success: { icon: <MdCheckCircle size={22} />, label: "Success", color: "#32D583", bg: "linear-gradient(135deg,#e8f5e9,#c8e6c9)" },
   info: { icon: <MdInfo size={22} />, label: "Info", color: "#1565c0", bg: "linear-gradient(135deg,#e3f2fd,#bbdefb)" },
 };
 

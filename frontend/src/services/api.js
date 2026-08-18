@@ -112,10 +112,36 @@ export const api = {
     return res.json();
   },
 
+  uploadDocument: async (file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    let headers = {};
+    if (auth.currentUser) {
+      try {
+        const token = await getIdToken(auth.currentUser);
+        headers["Authorization"] = `Bearer ${token}`;
+      } catch {}
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30000);
+    let res;
+    try {
+      res = await fetch(`${API_URL}/upload/document`, { method: "POST", headers, body: formData, signal: controller.signal });
+    } catch {
+      throw new Error("Server is offline. Please try again later.");
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!res.ok) throw new Error("Upload failed");
+    return res.json();
+  },
+
   generateQR: (text) => request("/upload/qr", { method: "POST", body: JSON.stringify({ text }) }),
 
   // Auth
   register: (data) => request("/auth/register", { method: "POST", body: JSON.stringify(data) }),
+  updateProfile: (data) => request("/auth/profile", { method: "PUT", body: JSON.stringify(data) }),
+  changePassword: (data) => request("/auth/password", { method: "PUT", body: JSON.stringify(data) }),
 
   // Notifications
   getNotifications: () => request("/notifications"),

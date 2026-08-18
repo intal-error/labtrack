@@ -9,7 +9,7 @@ import {
   MdLogout, MdDarkMode, MdLightMode,
   MdNotifications, MdPeople, MdFolderOpen, MdSettings,
   MdChevronLeft, MdChevronRight, MdExpandMore, MdExpandLess,
-  MdBuild, MdWarning, MdMenuBook, MdHistory, MdAssessment
+  MdBuild, MdWarning, MdMenuBook, MdHistory, MdAssessment, MdAccountCircle
 } from "react-icons/md";
 import { FaExchangeAlt } from "react-icons/fa";
 import "../../styles/pages/layout.css";
@@ -49,6 +49,7 @@ const navSections = [
   {
     label: "OTHER",
     items: [
+      { path: "/profile", label: "My Profile", icon: MdAccountCircle, roles: ["student", "faculty", "admin"] },
       { path: "/persona", label: "Persona", icon: MdPerson, roles: ["faculty", "admin"] },
       { path: "/admin", label: "Admin", icon: MdAdminPanelSettings, roles: ["admin"] },
       { path: "/about", label: "About", icon: MdInfo, roles: ["student", "faculty", "admin"] },
@@ -140,13 +141,13 @@ export default function DashboardLayout() {
         </div>
 
         <div className="sidebar-user">
-          <div className="sidebar-user-avatar" style={{ background: ROLE_COLORS[role] || "#2e7d32" }}>
+          <div className="sidebar-user-avatar" style={{ background: ROLE_COLORS[role] || "#32D583" }}>
             {userInitials}
           </div>
           {!collapsed && (
             <div className="sidebar-user-info">
               <div className="sidebar-user-name">{displayName}</div>
-              <span className="sidebar-user-role" style={{ background: `${ROLE_COLORS[role] || "#2e7d32"}20`, color: ROLE_COLORS[role] || "#2e7d32" }}>
+              <span className="sidebar-user-role" style={{ background: `${ROLE_COLORS[role] || "#32D583"}20`, color: ROLE_COLORS[role] || "#32D583" }}>
                 {ROLE_LABELS[role] || role}
               </span>
             </div>

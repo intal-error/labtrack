@@ -3,7 +3,7 @@
 .about-left{flex:.6;position:relative;background:var(--green);display:flex;align-items:center;justify-content:center;overflow:hidden}
 .about-left .overlay-image{position:absolute;inset:0;z-index:1}
 .about-left .overlay-image .bg-img{width:100%;height:100%;object-fit:cover;opacity:.3;filter:brightness(90%) contrast(105%)}
-.about-left::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,77,38,.85),rgba(0,77,38,.6),rgba(0,77,38,.9));z-index:1}
+.about-left::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.85),rgba(0,0,0,.6),rgba(0,0,0,.9));z-index:1}
 .about-left-content{position:relative;z-index:2;color:#fff;text-align:center}
 .about-logo{width:120px;height:auto;margin-bottom:15px;filter:drop-shadow(0 2px 5px rgba(0,0,0,.4))}
 .system-title{font-size:1.9rem;font-weight:700;line-height:1.4;text-shadow:0 2px 6px rgba(0,0,0,.4)}
@@ -12,10 +12,10 @@
 .about-text h2{color:var(--dark-green);margin-bottom:20px;font-size:1.8rem;font-weight:700}
 .about-text p{color:#333;line-height:1.7;font-size:1rem;margin-bottom:15px}
 @media(max-width:900px){.about-split{flex-direction:column;height:auto}.about-left{flex:none;height:220px}.about-right{flex:none;padding:30px 20px}.about-text{padding:25px 20px}.system-title{font-size:1.5rem}.about-text h2{font-size:1.4rem}.about-text p{font-size:.95rem}}
-body.dark .about-left{background:#0f3f1f}
-body.dark .about-left::after{background:linear-gradient(180deg,rgba(1,30,14,.9),rgba(1,30,14,.7),rgba(1,30,14,.95))}
-body.dark .about-right{background:#0d120d}
-body.dark .about-text{background:#17291d;border-color:#264d35}
-body.dark .about-text h2{color:#e6f2de}
-body.dark .about-text p{color:#dcebd8}
-body.dark .system-title,body.dark .about-left-content{color:#e8f2de}
+body.dark .about-left{background:#0a0a0a}
+body.dark .about-left::after{background:linear-gradient(180deg,rgba(0,0,0,.9),rgba(0,0,0,.7),rgba(0,0,0,.95))}
+body.dark .about-right{background:#0a0a0a}
+body.dark .about-text{background:#131313;border-color:#2a2a2a}
+body.dark .about-text h2{color:#FFFFFF}
+body.dark .about-text p{color:#cccccc}
+body.dark .system-title,body.dark .about-left-content{color:#FFFFFF}

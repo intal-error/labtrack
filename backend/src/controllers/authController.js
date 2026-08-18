@@ -95,4 +95,70 @@ const getProfile = async (req, res) => {
   }
 };
 
-module.exports = { register, getProfile };
+const updateProfile = async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const { firstName, lastName, contact } = req.body;
+
+    if (!firstName || !lastName) {
+      return res.status(400).json({ error: "First name and last name are required" });
+    }
+
+    const updates = {
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      contact: (contact || "").trim(),
+      updatedAt: new Date(),
+    };
+
+    await db.collection("users").doc(uid).set(updates, { merge: true });
+
+    try {
+      await auth.updateUser(uid, { displayName: `${firstName.trim()} ${lastName.trim()}` });
+    } catch {
+      // Non-critical: Firebase Auth display name update failed
+    }
+
+    res.json({ message: "Profile updated successfully" });
+  } catch (err) {
+    console.error("Profile update error:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+const changePassword = async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: "Current and new passwords are required" });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: "New password must be at least 6 characters" });
+    }
+
+    const userDoc = await db.collection("users").doc(uid).get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const email = userDoc.data().email;
+    if (!email) {
+      return res.status(400).json({ error: "No email associated with this account" });
+    }
+
+    await auth.updateUser(uid, { password: newPassword });
+
+    res.json({ message: "Password changed successfully" });
+  } catch (err) {
+    console.error("Password change error:", err);
+    if (err.code === "auth/invalid-credential" || err.code === "auth/wrong-password") {
+      return res.status(401).json({ error: "Current password is incorrect" });
+    }
+    res.status(500).json({ error: err.message });
+  }
+};
+
+module.exports = { register, getProfile, updateProfile, changePassword };

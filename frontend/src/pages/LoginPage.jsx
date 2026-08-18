@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../services/firebase";
 import { useAuth } from "../context/AuthContext";
 import { MdSchool, MdPerson, MdAdminPanelSettings, MdVisibility, MdVisibilityOff } from "react-icons/md";
@@ -25,6 +25,14 @@ export default function LoginPage() {
   const [signedIn, setSignedIn] = useState(false);
 
   useEffect(() => {
+    const savedEmail = localStorage.getItem("slsu_remembered_email");
+    if (savedEmail) {
+      setEmail(savedEmail);
+      setRememberMe(true);
+    }
+  }, []);
+
+  useEffect(() => {
     if (!signedIn || authLoading || !role) return;
     if (role === "student") {
       navigate("/scanner");
@@ -38,7 +46,13 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email.trim(), password);
-      sessionStorage.setItem("slsu_user_email", email.trim());
+      if (rememberMe) {
+        localStorage.setItem("slsu_remembered_email", email.trim());
+        sessionStorage.removeItem("slsu_user_email");
+      } else {
+        sessionStorage.setItem("slsu_user_email", email.trim());
+        localStorage.removeItem("slsu_remembered_email");
+      }
       toast.success("Welcome back!");
       setSignedIn(true);
     } catch (err) {
@@ -50,6 +64,24 @@ export default function LoginPage() {
       toast.error(msg);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    if (!email.trim()) {
+      toast.error("Please enter your email address first");
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      toast.success("Password reset email sent! Check your inbox.");
+    } catch (err) {
+      if (err.code === "auth/user-not-found") {
+        toast.error("No account found with this email");
+      } else {
+        toast.error("Failed to send reset email. Please try again.");
+      }
     }
   };
 
@@ -134,7 +166,7 @@ export default function LoginPage() {
                 />
                 <span>Remember Me</span>
               </label>
-              <a href="#" className="login-forgot" onClick={(e) => e.preventDefault()}>Forgot Password?</a>
+              <a href="#" className="login-forgot" onClick={handleForgotPassword}>Forgot Password?</a>
             </div>
 
             <button type="submit" className="login-submit" disabled={loading}>

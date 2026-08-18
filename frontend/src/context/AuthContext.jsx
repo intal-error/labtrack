@@ -66,8 +66,12 @@ export function AuthProvider({ children }) {
     await signOut(auth);
     setRole(null);
     setUserProfile(null);
+    const savedEmail = localStorage.getItem("slsu_remembered_email");
     localStorage.clear();
     sessionStorage.clear();
+    if (savedEmail) {
+      localStorage.setItem("slsu_remembered_email", savedEmail);
+    }
   };
 
   return (

@@ -15,12 +15,12 @@ table td{padding:12px 10px;text-align:center;border-bottom:1px solid var(--borde
 table tbody tr:nth-child(even){background:#fafafa}
 table tr:hover{background-color:#f9f9f9}
 @media(max-width:768px){.table-wrapper{overflow-x:auto;display:block}table{min-width:700px}}
-body.dark .tables-page h1{color:#e6f2de}
-body.dark .table-wrapper{background:#121f17;border-color:#2c4d33}
-body.dark table th,body.dark table td{color:#e6f2de;border-color:#203827}
-body.dark table th{background:#134a27}
+body.dark .tables-page h1{color:#FFFFFF}
+body.dark .table-wrapper{background:#131313;border-color:#2a2a2a}
+body.dark table th,body.dark table td{color:#FFFFFF;border-color:#2a2a2a}
+body.dark table th{background:#1a1a1a}
 body.dark table tr:hover{background-color:rgba(255,255,255,.06)}
-body.dark .btn-report{background:#1b3b27;color:#edf6ea;border-color:#2d5a39}
+body.dark .btn-report{background:#1a1a1a;color:#FFFFFF;border-color:#2a2a2a}
 
 /* Transactions Page */
 .transactions-page{max-width:1200px;margin:0 auto}
@@ -49,7 +49,7 @@ body.dark .btn-report{background:#1b3b27;color:#edf6ea;border-color:#2d5a39}
 .transactions-tabs{display:flex;gap:4px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:4px}
 .transactions-tabs .tab-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border:none;border-radius:8px;background:transparent;color:var(--text-muted);font-size:13px;font-weight:500;cursor:pointer;transition:all .2s}
 .transactions-tabs .tab-btn:hover{color:var(--text);background:var(--bg)}
-.transactions-tabs .tab-btn.active{background:var(--green);color:#fff;box-shadow:0 2px 6px rgba(46,125,50,.3)}
+.transactions-tabs .tab-btn.active{background:var(--green);color:#000;box-shadow:0 2px 6px rgba(46,125,50,.3)}
 .transactions-tabs .tab-btn.active svg{stroke:#fff}
 .tab-count{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:10px;font-size:11px;font-weight:700;background:rgba(255,255,255,.2);color:#fff}
 .transactions-tabs .tab-btn:not(.active) .tab-count{background:var(--border);color:var(--text-muted)}
@@ -57,7 +57,7 @@ body.dark .btn-report{background:#1b3b27;color:#edf6ea;border-color:#2d5a39}
 .transactions-view-toggle{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
 .view-btn{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border:none;background:var(--bg-card);color:var(--text-muted);cursor:pointer;transition:all .2s}
 .view-btn:hover{color:var(--text);background:var(--bg)}
-.view-btn.active{background:var(--green);color:#fff}
+.view-btn.active{background:var(--green);color:#000}
 .view-btn + .view-btn{border-left:1px solid var(--border)}
 
 .transactions-sort-select,.transactions-date-filter,.transactions-course-filter{padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--bg-card);color:var(--text);cursor:pointer;transition:border .2s}
@@ -75,7 +75,7 @@ body.dark .btn-report{background:#1b3b27;color:#edf6ea;border-color:#2d5a39}
 .transaction-card.overdue-critical{border-left-color:#d32f2f}
 .transaction-card-accent{height:4px;width:100%}
 .transaction-card-accent.accent-borrowed{background:linear-gradient(90deg,#ef6c00,#ffa726)}
-.transaction-card-accent.accent-returned{background:linear-gradient(90deg,#2e7d32,#66bb6a)}
+.transaction-card-accent.accent-returned{background:linear-gradient(90deg,#2e7d32,#32D583)}
 .transaction-card-body{padding:20px}
 .transaction-card-top{display:flex;align-items:center;gap:14px;margin-bottom:16px}
 .transaction-avatar{width:48px;height:48px;border-radius:12px;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0}
@@ -96,9 +96,9 @@ body.dark .btn-report{background:#1b3b27;color:#edf6ea;border-color:#2d5a39}
 .transaction-course-tag{display:inline-block;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:600;background:rgba(46,125,50,.08);color:var(--green);margin-bottom:10px}
 .transaction-progress{margin-top:4px}
 .progress-bar{height:4px;background:var(--border);border-radius:4px;overflow:hidden;margin-bottom:4px}
-.progress-fill{height:100%;background:linear-gradient(90deg,#2e7d32,#66bb6a);border-radius:4px;transition:width .4s ease}
+.progress-fill{height:100%;background:linear-gradient(90deg,#2e7d32,#32D583);border-radius:4px;transition:width .4s ease}
 .progress-label{font-size:11px;color:var(--text-muted)}
-.btn-return{background:var(--green);color:#fff;border:none;margin-top:10px}
+.btn-return{background:var(--green);color:#000;border:none;margin-top:10px}
 .btn-return:hover{background:var(--green-dark)}
 .btn-return:disabled{opacity:.6;cursor:not-allowed}
 .btn-refresh{border:1px solid var(--border);background:var(--bg-card);color:var(--text)}
@@ -140,39 +140,39 @@ body.dark .btn-report{background:#1b3b27;color:#edf6ea;border-color:#2d5a39}
   .transactions-toolbar-right{flex-wrap:wrap;justify-content:center}
 }
 
-body.dark .transactions-header h1{color:#e6f2de}
-body.dark .transactions-subtitle{color:#8a9e88}
-body.dark .transactions-stats .stat-card{border-color:#264d35;background:#17291d}
+body.dark .transactions-header h1{color:#FFFFFF}
+body.dark .transactions-subtitle{color:#888}
+body.dark .transactions-stats .stat-card{border-color:#264d35;background:#131313}
 body.dark .transactions-stats .stat-active .stat-icon{background:linear-gradient(135deg,#1b2a3a,#263550);color:#64b5f6}
 body.dark .transactions-stats .stat-borrowed-total .stat-icon{background:linear-gradient(135deg,#3a2a1b,#4d3526);color:#ffb74d}
-body.dark .transactions-stats .stat-returned-total .stat-icon{background:linear-gradient(135deg,#1b3a2a,#264d35);color:#66bb6a}
+body.dark .transactions-stats .stat-returned-total .stat-icon{background:linear-gradient(135deg,#1b3a2a,#264d35);color:#32D583}
 body.dark .transactions-stats .stat-week .stat-icon{background:linear-gradient(135deg,#2d1b3a,#3d2650);color:#ce93d8}
-body.dark .transactions-stats .stat-number{color:#e3f1de}
-body.dark .transactions-tabs{background:#17291d;border-color:#264d35}
-body.dark .transactions-tabs .tab-btn{color:#b0c4ae}
-body.dark .transactions-tabs .tab-btn:hover{color:#e3f1de;background:#1f3527}
+body.dark .transactions-stats .stat-number{color:#FFFFFF}
+body.dark .transactions-tabs{background:#131313;border-color:#264d35}
+body.dark .transactions-tabs .tab-btn{color:#aaa}
+body.dark .transactions-tabs .tab-btn:hover{color:#FFFFFF;background:#1a1a1a}
 body.dark .transactions-tabs .tab-btn.active{background:var(--green);color:#fff}
-body.dark .transactions-tabs .tab-btn:not(.active) .tab-count{background:#264d35;color:#b0c4ae}
+body.dark .transactions-tabs .tab-btn:not(.active) .tab-count{background:#264d35;color:#aaa}
 body.dark .transactions-view-toggle{border-color:#264d35}
-body.dark .view-btn{background:#17291d;color:#8a9e88}
-body.dark .view-btn:hover{color:#e3f1de;background:#1f3527}
+body.dark .view-btn{background:#131313;color:#888}
+body.dark .view-btn:hover{color:#FFFFFF;background:#1a1a1a}
 body.dark .view-btn.active{background:var(--green);color:#fff}
 body.dark .view-btn + .view-btn{border-color:#264d35}
-body.dark .transactions-sort-select,body.dark .transactions-date-filter,body.dark .transactions-course-filter{background:#15231d;border-color:#264d35;color:#e7f1e5}
-body.dark .transactions-search input{background:#15231d;border-color:#264d35;color:#e7f1e5}
-body.dark .transaction-card{border-color:#264d35;background:#17291d}
+body.dark .transactions-sort-select,body.dark .transactions-date-filter,body.dark .transactions-course-filter{background:#0f0f0f;border-color:#264d35;color:#FFFFFF}
+body.dark .transactions-search input{background:#0f0f0f;border-color:#264d35;color:#FFFFFF}
+body.dark .transaction-card{border-color:#264d35;background:#131313}
 body.dark .transaction-card:hover{box-shadow:0 12px 28px rgba(0,0,0,.3)}
 body.dark .transaction-card.overdue-warning{border-left-color:#f57c00}
 body.dark .transaction-card.overdue-critical{border-left-color:#c62828}
-body.dark .transaction-card-details{background:#0f1a14}
-body.dark .transaction-name{color:#e3f1de}
-body.dark .transaction-course-tag{background:rgba(102,187,106,.1);color:#66bb6a}
-body.dark .btn-refresh{background:#17291d;border-color:#264d35;color:#b0c4ae}
-body.dark .transactions-table-wrapper{border-color:#264d35;background:#17291d}
-body.dark .transactions-table thead th{background:#134a27}
-body.dark .transactions-table tbody td{border-color:#203827;color:#e3f1de}
+body.dark .transaction-card-details{background:#0a0a0a}
+body.dark .transaction-name{color:#FFFFFF}
+body.dark .transaction-course-tag{background:rgba(102,187,106,.1);color:#32D583}
+body.dark .btn-refresh{background:#131313;border-color:#264d35;color:#aaa}
+body.dark .transactions-table-wrapper{border-color:#264d35;background:#131313}
+body.dark .transactions-table thead th{background:#1a1a1a}
+body.dark .transactions-table tbody td{border-color:#2a2a2a;color:#FFFFFF}
 body.dark .transactions-table tbody tr:hover{background:rgba(255,255,255,.04)}
 body.dark table tbody tr:nth-child(even){background:transparent}
 body.dark .status-borrowed{background:linear-gradient(135deg,#3a2a1b,#4d3526);color:#ffb74d}
-body.dark .status-returned{background:linear-gradient(135deg,#1b3a2a,#264d35);color:#66bb6a}
-body.dark .transactions-empty{border-color:#264d35;background:#17291d}
+body.dark .status-returned{background:linear-gradient(135deg,#1b3a2a,#264d35);color:#32D583}
+body.dark .transactions-empty{border-color:#264d35;background:#131313}

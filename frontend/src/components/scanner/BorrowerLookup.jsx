@@ -1,5 +1,5 @@
 import { db } from "../../services/firebase";
-import { doc, getDoc, getDocs, collection } from "firebase/firestore";
+import { doc, getDoc, query, where, limit, getDocs, collection } from "firebase/firestore";
 import { normalize, readScanPayload, canUseAsDocId } from "../../utils/helpers";
 
 export async function resolveUser(rawCode) {
@@ -9,11 +9,23 @@ export async function resolveUser(rawCode) {
     const snap = await getDoc(doc(db, "users", id));
     if (snap.exists()) return { id: snap.id, data: snap.data(), scanCode: raw };
   }
-  const candidates = new Set([normalize(raw), normalize(payload)]);
-  const uSnap = await getDocs(collection(db, "users"));
-  const match = uSnap.docs.find((d) => {
-    const u = d.data();
-    return [u.schoolId, u.schoolID, u.studentID, u.barcode, u.qrCode].some((v) => candidates.has(normalize(v)));
-  });
-  return match ? { id: match.id, data: match.data(), scanCode: raw } : null;
+  const candidates = [normalize(raw), normalize(payload)].filter(Boolean);
+  if (candidates.length === 0) return null;
+
+  const fields = ["schoolId", "schoolID", "studentID", "barcode", "qrCode"];
+  for (const field of fields) {
+    for (const candidate of candidates) {
+      try {
+        const q = query(collection(db, "users"), where(field, "==", candidate), limit(1));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const d = snap.docs[0];
+          return { id: d.id, data: d.data(), scanCode: raw };
+        }
+      } catch {
+        // Field may not have an index, skip
+      }
+    }
+  }
+  return null;
 }

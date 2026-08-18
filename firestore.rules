@@ -2,62 +2,103 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Helper function to check user role
+    function getRole() {
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      return userDoc.data.role;
+    }
+
+    function isAdmin() {
+      return request.auth != null && getRole() == "admin";
+    }
+
+    function isFacultyOrAdmin() {
+      return request.auth != null && (getRole() == "admin" || getRole() == "faculty");
+    }
+
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
     // Users collection
     match /users/{userId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null;
-      allow delete: if request.auth != null;
+      // Users can read their own profile; admins/faculty can read all
+      allow read: if request.auth != null && (isOwner(userId) || isFacultyOrAdmin());
+      // Users can create their own profile during registration
+      allow create: if request.auth != null && request.auth.uid == userId;
+      // Users can update their own profile; admins can update anyone
+      allow update: if request.auth != null && (isOwner(userId) || isAdmin());
+      // Only admins can delete users
+      allow delete: if isAdmin();
+
+      // Subcollections for borrowed/returned items
+      match /borrowed/{transactionId} {
+        allow read: if request.auth != null && (isOwner(userId) || isFacultyOrAdmin());
+        allow write: if request.auth != null && isFacultyOrAdmin();
+      }
+      match /returned/{transactionId} {
+        allow read: if request.auth != null && (isOwner(userId) || isFacultyOrAdmin());
+        allow write: if request.auth != null && isFacultyOrAdmin();
+      }
     }
 
-    // Admins collection (legacy accounts)
+    // Admins collection (legacy - restrict to admin only)
     match /admins/{adminId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow read, write: if isAdmin();
     }
 
-    // Catalog
+    // Catalog - anyone authenticated can read; faculty/admin can write
     match /catalog/{itemId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow create, update: if isFacultyOrAdmin();
+      allow delete: if isAdmin();
     }
 
-    // Transactions
+    // Transactions - borrowers can read their own; faculty/admin can read/write all
     match /transactions/{transactionId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow read: if request.auth != null && isFacultyOrAdmin();
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && isFacultyOrAdmin();
+      allow delete: if isAdmin();
     }
 
-    // Notifications collection
+    // Notifications - users can read their own; admins can manage all
     match /notifications/{notificationId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null;
     }
 
-    // Documents
+    // Documents - faculty/admin can manage
     match /documents/{docId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow read: if request.auth != null && isFacultyOrAdmin();
+      allow write: if isFacultyOrAdmin();
     }
 
-    // Maintenance
+    // Maintenance - faculty/admin can manage
     match /maintenance/{id} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow read: if request.auth != null && isFacultyOrAdmin();
+      allow write: if isFacultyOrAdmin();
     }
 
-    // Incidents
+    // Incidents - anyone can read; anyone can create; faculty/admin can update
     match /incidents/{id} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && isFacultyOrAdmin();
+      allow delete: if isAdmin();
     }
 
-    // Manuals
+    // Manuals - anyone authenticated can read; faculty/admin can manage
     match /manuals/{id} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow write: if isFacultyOrAdmin();
+    }
+
+    // Settings - admin only
+    match /settings/{docId} {
+      allow read, write: if isAdmin();
     }
   }
 }

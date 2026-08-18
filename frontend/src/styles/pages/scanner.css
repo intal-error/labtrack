@@ -28,6 +28,7 @@
 .scanner-btn-scan,.scanner-btn-find{display:inline-flex;align-items:center;gap:5px;padding:0 14px;min-height:44px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap;border:1px solid}
 .scanner-btn-scan{background:var(--bg-card);color:var(--green);border-color:var(--green)}
 .scanner-btn-scan:hover{background:var(--green);color:#fff}
+.scanner-btn-scan:active{color:#000}
 .scanner-btn-find{background:var(--bg-card);color:var(--dark-green);border-color:var(--border)}
 .scanner-btn-find:hover{border-color:var(--green);color:var(--green)}
 
@@ -54,7 +55,7 @@
 .scanner-transaction-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 
 .scanner-submit-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:50px;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;transition:all .25s;color:#fff}
-.scanner-submit-btn.borrowed{background:linear-gradient(135deg,var(--green),var(--green-dark))}
+.scanner-submit-btn.borrowed{background:linear-gradient(135deg,var(--green),var(--green-dark));color:#000}
 .scanner-submit-btn.returned{background:linear-gradient(135deg,#1565c0,#0d47a1)}
 .scanner-submit-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.2)}
 .scanner-submit-btn:disabled{opacity:.7;cursor:not-allowed;transform:none}
@@ -85,7 +86,7 @@
 #qr-reader{overflow:hidden;width:100%;height:300px;border-radius:10px;background:#000;position:relative}
 #qr-reader video{width:100%!important;height:100%!important;object-fit:cover!important}
 #qr-reader img[alt="Info icon"]{display:none}
-.scanner-status{min-height:22px;margin:10px 2px 8px;color:#e8f6e8;font-size:14px}
+.scanner-status{min-height:22px;margin:10px 2px 8px;color:#FFFFFF;font-size:14px}
 .scanner-stop{width:100%}
 
 /* QR Modal (used elsewhere) */
@@ -106,36 +107,36 @@
   #qr-reader{height:250px}
 }
 
-body.dark .scanner-page h1{color:#e6f2de}
-body.dark .scanner-subtitle{color:#8a9e88}
-body.dark .scanner-shell{background:#111b14;border-color:#294633}
-body.dark .scanner-mode{background:#0f1a14}
-body.dark .scanner-mode-btn{color:#8a9e88}
-body.dark .scanner-mode-btn:hover{color:#e3f1de;background:rgba(255,255,255,.04)}
+body.dark .scanner-page h1{color:#FFFFFF}
+body.dark .scanner-subtitle{color:#888}
+body.dark .scanner-shell{background:#131313;border-color:#2a2a2a}
+body.dark .scanner-mode{background:#0a0a0a}
+body.dark .scanner-mode-btn{color:#888}
+body.dark .scanner-mode-btn:hover{color:#FFFFFF;background:rgba(255,255,255,.04)}
 body.dark .scanner-mode-btn.active{background:var(--green);color:#fff}
-body.dark .scanner-step-card{border-color:#264d35;background:#17291d}
-body.dark .scanner-step-header{background:#0f1a14}
-body.dark .scanner-step-text h2{color:#e3f1de}
-body.dark .scanner-step-text p{color:#8a9e88}
-body.dark .scanner-input-wrap input{background:#15231d;border-color:#264d35;color:#e7f1e5}
-body.dark .scanner-btn-scan{background:#15231d;color:#66bb6a;border-color:#2e7d32}
-body.dark .scanner-btn-scan:hover{background:#2e7d32;color:#fff}
-body.dark .scanner-btn-find{background:#15231d;color:#8a9e88;border-color:#264d35}
-body.dark .scanner-btn-find:hover{border-color:#66bb6a;color:#66bb6a}
-body.dark .scanner-result-card{background:linear-gradient(135deg,#1b3a2a,#1f4030);border-color:#2e7d32}
-body.dark .scanner-result-info strong{color:#e3f1de}
+body.dark .scanner-step-card{border-color:#2a2a2a;background:#131313}
+body.dark .scanner-step-header{background:#0a0a0a}
+body.dark .scanner-step-text h2{color:#FFFFFF}
+body.dark .scanner-step-text p{color:#888}
+body.dark .scanner-input-wrap input{background:#0f0f0f;border-color:#2a2a2a;color:#FFFFFF}
+body.dark .scanner-btn-scan{background:#0f0f0f;color:#32D583;border-color:#2e7d32}
+body.dark .scanner-btn-scan:hover{background:#E1FB15;color:#fff}
+body.dark .scanner-btn-find{background:#0f0f0f;color:#888;border-color:#2a2a2a}
+body.dark .scanner-btn-find:hover{border-color:#32D583;color:#32D583}
+body.dark .scanner-result-card{background:linear-gradient(135deg,#1a1a1a,#1a1a1a);border-color:#2e7d32}
+body.dark .scanner-result-info strong{color:#FFFFFF}
 body.dark .scanner-result-meta span{background:rgba(255,255,255,.08)}
-body.dark .scanner-result-check{color:#66bb6a}
-body.dark .scanner-field input,.scanner-field select{background:#15231d;border-color:#264d35;color:#e7f1e5}
-body.dark .scanner-field label{color:#8a9e88}
-body.dark .scanner-transaction-card{border-color:#264d35;background:#17291d}
-body.dark .scanner-transaction-header{color:#e3f1de}
-body.dark .scanner-status-banner.success{background:#1b3a2a;color:#66bb6a;border-color:#2e7d32}
-body.dark .scanner-status-banner.error{background:#3a1b1b;color:#ef9a9a;border-color:#c62828}
-body.dark .scanner-status-banner:not(.success):not(.error){background:#3a2a1b;color:#ffb74d;border-color:#ef6c00}
-body.dark .scanner-camera-wrap{border-color:#264d35}
-body.dark .due-shortcut-btn{border-color:#264d35;color:#8a9e88}
-body.dark .due-shortcut-btn:hover{border-color:#66bb6a;color:#66bb6a;background:rgba(102,187,106,.08)}
-body.dark .due-shortcut-btn:active{background:#2e7d32;color:#fff}
-body.dark .scanner-result-card.low-stock{background:linear-gradient(135deg,#3a1b1b,#3a2a1b);border-color:#c62828}
-body.dark .scanner-result-card.warn-stock{background:linear-gradient(135deg,#3a2a1b,#3a3520);border-color:#ef6c00}
+body.dark .scanner-result-check{color:#32D583}
+body.dark .scanner-field input,.scanner-field select{background:#0f0f0f;border-color:#2a2a2a;color:#FFFFFF}
+body.dark .scanner-field label{color:#888}
+body.dark .scanner-transaction-card{border-color:#2a2a2a;background:#131313}
+body.dark .scanner-transaction-header{color:#FFFFFF}
+body.dark .scanner-status-banner.success{background:#1a1a1a;color:#32D583;border-color:#2e7d32}
+body.dark .scanner-status-banner.error{background:#1a1a1a;color:#aaa;border-color:#c62828}
+body.dark .scanner-status-banner:not(.success):not(.error){background:#1a1a1a;color:#ccc;border-color:#ef6c00}
+body.dark .scanner-camera-wrap{border-color:#2a2a2a}
+body.dark .due-shortcut-btn{border-color:#2a2a2a;color:#888}
+body.dark .due-shortcut-btn:hover{border-color:#32D583;color:#32D583;background:rgba(102,187,106,.08)}
+body.dark .due-shortcut-btn:active{background:#E1FB15;color:#fff}
+body.dark .scanner-result-card.low-stock{background:linear-gradient(135deg,#1a1a1a,#1a1a1a);border-color:#c62828}
+body.dark .scanner-result-card.warn-stock{background:linear-gradient(135deg,#1a1a1a,#1a1a1a);border-color:#ef6c00}

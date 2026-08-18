@@ -84,7 +84,7 @@ export default function ReportsTab() {
           <div className="report-summary-detail">{counts.students} students, {counts.faculty} faculty</div>
         </div>
         <div className="report-summary-card">
-          <MdInventory size={28} style={{ color: "#2e7d32" }} />
+          <MdInventory size={28} style={{ color: "#E1FB15" }} />
           <div className="report-summary-value">{catalog.length}</div>
           <div className="report-summary-label">Catalog Items</div>
           <div className="report-summary-detail">{counts.borrowed} currently borrowed</div>
@@ -111,7 +111,7 @@ export default function ReportsTab() {
               <div className="report-bar-row" key={cond}>
                 <span className="report-bar-label">{cond}</span>
                 <div className="report-bar-track">
-                  <div className="report-bar-fill" style={{ width: `${(count / catalog.length) * 100}%`, background: "#2e7d32" }} />
+                  <div className="report-bar-fill" style={{ width: `${(count / catalog.length) * 100}%`, background: "#E1FB15" }} />
                 </div>
                 <span className="report-bar-value">{count}</span>
               </div>

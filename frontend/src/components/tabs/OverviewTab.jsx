@@ -5,7 +5,7 @@ import { api } from "../../services/api";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
 
-const COLORS = ["#2e7d32", "#ff6f00", "#fbc02d", "#1976d2", "#d32f2f", "#7b1fa2"];
+const COLORS = ["#E1FB15", "#ff6f00", "#fbc02d", "#1976d2", "#d32f2f", "#7b1fa2"];
 
 const CardIcon = ({ type }) => {
   const icons = {
@@ -150,8 +150,8 @@ export default function OverviewTab() {
                   <XAxis dataKey="name" tick={{ fontSize: 13, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
                   <YAxis domain={[0, Math.ceil(maxVal * 1.2)]} allowDecimals={false} tick={{ fontSize: 12, fill: "var(--text-muted)" }} axisLine={false} tickLine={false} />
                   <Tooltip
-                    contentStyle={{ background: "#132b1d", border: "1px solid rgba(76,175,80,.2)", borderRadius: 10, color: "#e3f1de", fontSize: 13 }}
-                    cursor={{ fill: "rgba(76,175,80,.06)" }}
+                    contentStyle={{ background: "#132b1d", border: "1px solid rgba(50,213,131,.2)", borderRadius: 10, color: "#e3f1de", fontSize: 13 }}
+                    cursor={{ fill: "rgba(50,213,131,.06)" }}
                   />
                   <Bar dataKey="value" name="Count" radius={[8, 8, 0, 0]}>
                     {chartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
