@@ -40,6 +40,7 @@ export default function LoginPage() {
       setSignedIn(false);
       return;
     }
+    toast.success("Welcome back!");
     if (role === "student") {
       navigate("/scanner");
     } else {
@@ -59,7 +60,6 @@ export default function LoginPage() {
         sessionStorage.setItem("slsu_user_email", email.trim());
         localStorage.removeItem("slsu_remembered_email");
       }
-      toast.success("Welcome back!");
       setSignedIn(true);
     } catch (err) {
       let msg = "Login failed. Please try again.";
