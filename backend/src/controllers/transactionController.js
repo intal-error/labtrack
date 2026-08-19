@@ -36,13 +36,31 @@ function isOpenBorrow(t) {
   return getRemainingQuantity(t) > 0;
 }
 
+async function enrichWithProfileURL(items) {
+  const userIds = [...new Set(items.map((i) => i.userId).filter(Boolean))];
+  if (userIds.length === 0) return items;
+  const userSnaps = await Promise.all(userIds.map((id) => db.collection(USERS).doc(id).get()));
+  const profileMap = {};
+  userSnaps.forEach((snap) => {
+    if (snap.exists) {
+      const data = snap.data();
+      if (data.profileURL) profileMap[snap.id] = data.profileURL;
+    }
+  });
+  return items.map((item) => ({
+    ...item,
+    profileURL: item.profileURL || profileMap[item.userId] || "",
+  }));
+}
+
 const getBorrowed = async (req, res) => {
   try {
     const snap = await db.collection(TRANS).where("action", "==", "borrowed").get();
-    const items = snap.docs
+    let items = snap.docs
       .map((doc) => ({ id: doc.id, ...doc.data() }))
       .filter((d) => isOpenBorrow(d))
       .sort((a, b) => (toDate(b.timestamp)?.getTime() || 0) - (toDate(a.timestamp)?.getTime() || 0));
+    items = await enrichWithProfileURL(items);
     res.json(items);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -52,9 +70,30 @@ const getBorrowed = async (req, res) => {
 const getReturned = async (req, res) => {
   try {
     const snap = await db.collection(TRANS).where("action", "==", "returned").get();
-    const items = snap.docs
+    let items = snap.docs
       .map((doc) => ({ id: doc.id, ...doc.data() }))
       .sort((a, b) => (toDate(b.timestamp)?.getTime() || 0) - (toDate(a.timestamp)?.getTime() || 0));
+
+    const missingDates = items.filter((i) => !i.borrowedAt && i.originalTransactionId);
+    if (missingDates.length > 0) {
+      const borrowIds = [...new Set(missingDates.map((i) => i.originalTransactionId))];
+      const borrowSnaps = await Promise.all(borrowIds.map((id) => db.collection(TRANS).doc(id).get()));
+      const borrowMap = {};
+      borrowSnaps.forEach((s) => { if (s.exists) borrowMap[s.id] = s.data(); });
+      items = items.map((item) => {
+        if (!item.borrowedAt && item.originalTransactionId && borrowMap[item.originalTransactionId]) {
+          const borrow = borrowMap[item.originalTransactionId];
+          return {
+            ...item,
+            borrowedAt: borrow.borrowedAt || borrow.timestamp || null,
+            dueDate: item.dueDate || borrow.dueDate || null,
+          };
+        }
+        return item;
+      });
+    }
+
+    items = await enrichWithProfileURL(items);
     res.json(items);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -68,10 +107,11 @@ const getMyBorrowed = async (req, res) => {
       .where("action", "==", "borrowed")
       .where("userId", "==", uid)
       .get();
-    const items = snap.docs
+    let items = snap.docs
       .map((doc) => ({ id: doc.id, ...doc.data() }))
       .filter((d) => isOpenBorrow(d))
       .sort((a, b) => (toDate(b.timestamp)?.getTime() || 0) - (toDate(a.timestamp)?.getTime() || 0));
+    items = await enrichWithProfileURL(items);
     res.json(items);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -85,9 +125,10 @@ const getMyReturned = async (req, res) => {
       .where("action", "==", "returned")
       .where("userId", "==", uid)
       .get();
-    const items = snap.docs
+    let items = snap.docs
       .map((doc) => ({ id: doc.id, ...doc.data() }))
       .sort((a, b) => (toDate(b.timestamp)?.getTime() || 0) - (toDate(a.timestamp)?.getTime() || 0));
+    items = await enrichWithProfileURL(items);
     res.json(items);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -206,6 +247,7 @@ const recordBorrow = async (req, res) => {
         borrowedAt: new Date(),
       };
       if (borrower.email) loanData.email = borrower.email;
+      if (borrower.profileURL) loanData.profileURL = borrower.profileURL;
 
       t.set(catalogRef, {
         availableQuantity: nextAvailable,
@@ -276,6 +318,8 @@ const recordReturn = async (req, res) => {
       };
       if (borrow.email) returnData.email = borrow.email;
       if (borrow.dueDate) returnData.dueDate = borrow.dueDate;
+      if (borrow.borrowedAt) returnData.borrowedAt = borrow.borrowedAt;
+      if (borrow.timestamp) returnData.borrowedAt = borrow.borrowedAt || borrow.timestamp;
 
       t.set(catalogRef, {
         availableQuantity: nextAvailable,
@@ -365,7 +409,8 @@ const getRecentActivity = async (req, res) => {
       .sort((a, b) => (toDate(b.timestamp)?.getTime() || 0) - (toDate(a.timestamp)?.getTime() || 0))
       .slice(0, 10);
 
-    res.json(merged);
+    const enriched = await enrichWithProfileURL(merged);
+    res.json(enriched);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

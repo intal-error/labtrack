@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
+import Modal from "../ui/Modal";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
 import { MdBuild, MdAdd, MdEdit, MdDelete, MdCalendarToday, MdWarning, MdSearch, MdCheckCircle, MdSchedule, MdPlayArrow, MdAssignment } from "react-icons/md";
@@ -54,6 +55,7 @@ export default function MaintenanceTab() {
   const [editing, setEditing] = useState(null);
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [selectedItem, setSelectedItem] = useState(null);
   const [form, setForm] = useState({ catalogId: "", itemName: "", type: "preventive", description: "", status: "scheduled", scheduledDate: "", assignedTo: "" });
 
   useEffect(() => { load(); }, []);
@@ -246,7 +248,7 @@ export default function MaintenanceTab() {
           const relDate = getRelativeDate(item.scheduledDate);
           const dateStyle = getDateBorderStyle(item);
           return (
-            <div className={`maintenance-card ${dateStyle}`} key={item.id}>
+            <div className={`maintenance-card ${dateStyle}`} key={item.id} onClick={() => setSelectedItem(item)}>
               <div className="maintenance-card-header">
                 <div className="maintenance-card-title">
                   <MdBuild size={18} />
@@ -283,6 +285,65 @@ export default function MaintenanceTab() {
           );
         })}
       </div>
+
+      {selectedItem && (
+        <Modal title="Maintenance Details" onClose={() => setSelectedItem(null)}>
+          <div className="txn-detail-modal">
+            <div className="txn-detail-section">
+              <div className="txn-detail-grid">
+                <div className="txn-detail-row">
+                  <span className="txn-detail-label">Item</span>
+                  <span className="txn-detail-value">{selectedItem.itemName || "-"}</span>
+                </div>
+                <div className="txn-detail-row">
+                  <span className="txn-detail-label">Status</span>
+                  <span className="txn-detail-value" style={{ color: STATUS_COLORS[selectedItem.status] || "#666", fontWeight: 600 }}>
+                    {selectedItem.status === "in-progress" ? "In Progress" : (selectedItem.status || "-")}
+                  </span>
+                </div>
+                <div className="txn-detail-row">
+                  <span className="txn-detail-label">Type</span>
+                  <span className="txn-detail-value">{TYPE_LABELS[selectedItem.type] || selectedItem.type || "-"}</span>
+                </div>
+                <div className="txn-detail-row">
+                  <span className="txn-detail-label">Scheduled Date</span>
+                  <span className="txn-detail-value">
+                    {selectedItem.scheduledDate
+                      ? new Date(selectedItem.scheduledDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                      : "-"}
+                  </span>
+                </div>
+                <div className="txn-detail-row">
+                  <span className="txn-detail-label">Assigned To</span>
+                  <span className="txn-detail-value">{selectedItem.assignedTo || "-"}</span>
+                </div>
+                {selectedItem.description && (
+                  <div className="txn-detail-row">
+                    <span className="txn-detail-label">Description</span>
+                    <span className="txn-detail-value" style={{ textAlign: "left", maxWidth: "60%" }}>{selectedItem.description}</span>
+                  </div>
+                )}
+                <div className="txn-detail-row">
+                  <span className="txn-detail-label">Created</span>
+                  <span className="txn-detail-value">
+                    {selectedItem.createdAt
+                      ? new Date(selectedItem.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                      : "-"}
+                  </span>
+                </div>
+                {selectedItem.updatedAt && (
+                  <div className="txn-detail-row">
+                    <span className="txn-detail-label">Last Updated</span>
+                    <span className="txn-detail-value">
+                      {new Date(selectedItem.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

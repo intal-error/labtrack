@@ -370,8 +370,12 @@ export default function TransactionsPage() {
                 <div className={`transaction-card-accent ${isBorrowed ? "accent-borrowed" : "accent-returned"}`} />
                 <div className="transaction-card-body">
                   <div className="transaction-card-top">
-                    <div className="transaction-avatar" style={{ background: color }}>
-                      {getInitials(item.firstName, item.lastName)}
+                    <div className="transaction-avatar" style={item.profileURL ? { background: "transparent" } : { background: color }}>
+                      {item.profileURL ? (
+                        <img src={item.profileURL} alt={fullName} />
+                      ) : (
+                        getInitials(item.firstName, item.lastName)
+                      )}
                     </div>
                     <div className="transaction-card-info">
                       <h4 className="transaction-name">{fullName || "-"}</h4>
@@ -416,11 +420,6 @@ export default function TransactionsPage() {
                       <span className="progress-label">{item.quantity - remaining} of {item.quantity} returned</span>
                     </div>
                   )}
-                  {isBorrowed && remaining > 0 && role === "admin" && (
-                    <button className="btn btn-sm btn-return" onClick={() => handleQuickReturn(item)} disabled={isReturning}>
-                      {isReturning ? "Returning..." : "Quick Return"}
-                    </button>
-                  )}
                   <button className="btn btn-sm btn-view-info" onClick={() => handleViewInfo(item)}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
                     View Info
@@ -459,8 +458,12 @@ export default function TransactionsPage() {
                   <tr key={item.id} className={overdue?.className || ""}>
                     <td className="table-name-cell">
                       <div className="table-user">
-                        <div className="transaction-avatar-sm" style={{ background: getAvatarColor(fullName) }}>
-                          {getInitials(item.firstName, item.lastName)}
+                        <div className="transaction-avatar-sm" style={item.profileURL ? { background: "transparent" } : { background: getAvatarColor(fullName) }}>
+                          {item.profileURL ? (
+                            <img src={item.profileURL} alt={fullName} />
+                          ) : (
+                            getInitials(item.firstName, item.lastName)
+                          )}
                         </div>
                         <span>{fullName || "-"}</span>
                       </div>
@@ -489,11 +492,6 @@ export default function TransactionsPage() {
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
                           View
                         </button>
-                        {isBorrowed && role === "admin" && remaining > 0 && (
-                          <button className="btn btn-xs btn-return" onClick={() => handleQuickReturn(item)} disabled={isReturning}>
-                            {isReturning ? "..." : "Return"}
-                          </button>
-                        )}
                       </div>
                     </td>
                   </tr>
@@ -511,16 +509,22 @@ export default function TransactionsPage() {
             const isBorrowed = item.action === "borrowed" || item.status === "borrowed";
             const fullName = `${item.firstName || ""} ${item.lastName || ""}`.trim();
             const color = getAvatarColor(fullName);
-            const borrowDate = toDate(item.timestamp || item.borrowedAt);
+            const borrowDate = isBorrowed
+              ? toDate(item.timestamp || item.borrowedAt)
+              : toDate(item.borrowedAt);
             const dueDate = toDate(item.dueDate);
-            const returnDate = toDate(item.returnedAt || item.lastReturnedAt);
+            const returnDate = toDate(item.returnedAt || item.lastReturnedAt || (!isBorrowed ? item.timestamp : null));
             const remaining = isBorrowed ? getRemainingQuantity(item) : null;
 
             return (
               <div className="txn-detail-modal">
                 <div className="txn-detail-borrower">
-                  <div className="txn-detail-avatar" style={{ background: color }}>
-                    {getInitials(item.firstName, item.lastName)}
+                  <div className="txn-detail-avatar" style={item.profileURL ? { background: "transparent" } : { background: color }}>
+                    {item.profileURL ? (
+                      <img src={item.profileURL} alt={fullName} />
+                    ) : (
+                      getInitials(item.firstName, item.lastName)
+                    )}
                   </div>
                   <div className="txn-detail-borrower-info">
                     <h4>{fullName || "-"}</h4>
