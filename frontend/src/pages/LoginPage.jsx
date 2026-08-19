@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
+import { signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "firebase/auth";
 import { auth } from "../services/firebase";
 import { useAuth } from "../context/AuthContext";
 import { MdSchool, MdPerson, MdAdminPanelSettings, MdVisibility, MdVisibilityOff } from "react-icons/md";
@@ -34,12 +34,18 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!signedIn || authLoading || !role) return;
+    if (role !== selectedRole) {
+      toast.error(`This account is registered as ${role}. Please select the correct role.`);
+      signOut(auth);
+      setSignedIn(false);
+      return;
+    }
     if (role === "student") {
       navigate("/scanner");
     } else {
       navigate("/overview");
     }
-  }, [signedIn, authLoading, role, navigate]);
+  }, [signedIn, authLoading, role, selectedRole, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
