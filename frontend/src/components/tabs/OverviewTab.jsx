@@ -52,10 +52,10 @@ export default function OverviewTab() {
   useEffect(() => {
     async function load() {
       try {
-        const [countsData, chartDataRes, borrowedData] = await Promise.all([
+        const [countsData, chartDataRes, activityData] = await Promise.all([
           api.getDashboardCounts(),
           api.getChartData(),
-          api.getBorrowed(),
+          api.getRecentActivity(),
         ]);
         setCounts(countsData);
         setChartData([
@@ -64,7 +64,7 @@ export default function OverviewTab() {
           { name: "Available", value: chartDataRes.available },
           { name: "Inventory", value: chartDataRes.inventory },
         ]);
-        setRecentActivity((borrowedData || []).slice(0, 5));
+        setRecentActivity((activityData || []).slice(0, 10));
       } catch {
         toast.error("Failed to load overview");
       } finally {
@@ -168,21 +168,29 @@ export default function OverviewTab() {
             {recentActivity.length > 0 ? (
               <div className="activity-list">
                 {recentActivity.map((item, i) => (
-                  <div className="activity-item" key={item._id || i}>
-                    <div className="activity-avatar" style={{ background: COLORS[i % COLORS.length] }}>
+                  <div className="activity-item" key={item.id || i}>
+                    <div className="activity-avatar" style={{ background: item.action === "returned" ? "#22c55e" : COLORS[i % COLORS.length] }}>
                       {(item.firstName || "?")[0]}{(item.lastName || "?")[0]}
                     </div>
                     <div className="activity-info">
                       <span className="activity-name">{item.firstName} {item.lastName}</span>
-                      <span className="activity-detail">borrowed {item.itemName || "an item"}{item.quantity > 1 ? ` (x${item.quantity})` : ""}</span>
+                      <span className="activity-detail">
+                        <span className={`activity-badge ${item.action}`}>{item.action}</span>
+                        {item.itemName || "an item"}{item.quantity > 1 ? ` (x${item.quantity})` : ""}
+                      </span>
+                      {item.action === "borrowed" && item.dueDate && (
+                        <span className="activity-due">Due {new Date(item.dueDate).toLocaleDateString()}</span>
+                      )}
                     </div>
-                    <span className="activity-time">{item.dateBorrowed ? timeAgo(item.dateBorrowed) : ""}</span>
+                    <span className="activity-time">{item.timestamp ? timeAgo(item.timestamp) : ""}</span>
                   </div>
                 ))}
               </div>
             ) : (
               <div className="activity-empty">
-                <p>No recent activity</p>
+                <CardIcon type="activity" />
+                <p>No transactions yet</p>
+                <button className="activity-empty-link" onClick={() => navigate("/transactions")}>View Transactions</button>
               </div>
             )}
           </div>

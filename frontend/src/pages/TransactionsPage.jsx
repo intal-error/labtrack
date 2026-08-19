@@ -4,6 +4,7 @@ import { COURSES } from "../constants/courses";
 import { toDate, formatDate, getRemainingQuantity } from "../utils/helpers";
 import { useAuth } from "../context/AuthContext";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
+import Modal from "../components/ui/Modal";
 import toast from "react-hot-toast";
 import "../styles/pages/tables.css";
 
@@ -108,6 +109,7 @@ export default function TransactionsPage() {
   const [dateRange, setDateRange] = useState("all");
   const [viewMode, setViewMode] = useState("grid");
   const [returningId, setReturningId] = useState(null);
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
 
   const isStudent = role === "student";
 
@@ -218,6 +220,10 @@ export default function TransactionsPage() {
     } finally {
       setReturningId(null);
     }
+  }
+
+  function handleViewInfo(item) {
+    setSelectedTransaction(item);
   }
 
   if (loading) return <LoadingSpinner />;
@@ -415,6 +421,10 @@ export default function TransactionsPage() {
                       {isReturning ? "Returning..." : "Quick Return"}
                     </button>
                   )}
+                  <button className="btn btn-sm btn-view-info" onClick={() => handleViewInfo(item)}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                    View Info
+                  </button>
                 </div>
               </div>
             );
@@ -433,7 +443,7 @@ export default function TransactionsPage() {
                 <th>Date</th>
                 {activeTab === "borrowed" && <th>Due Date</th>}
                 <th>Status</th>
-                {activeTab === "borrowed" && role === "admin" && <th>Action</th>}
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -473,21 +483,93 @@ export default function TransactionsPage() {
                         </span>
                       </div>
                     </td>
-                    {isBorrowed && role === "admin" && (
-                      <td>
-                        {remaining > 0 && (
+                    <td>
+                      <div className="table-actions-cell">
+                        <button className="btn btn-xs btn-view-info" onClick={() => handleViewInfo(item)}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                          View
+                        </button>
+                        {isBorrowed && role === "admin" && remaining > 0 && (
                           <button className="btn btn-xs btn-return" onClick={() => handleQuickReturn(item)} disabled={isReturning}>
                             {isReturning ? "..." : "Return"}
                           </button>
                         )}
-                      </td>
-                    )}
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
+      )}
+
+      {selectedTransaction && (
+        <Modal title="Borrower Details" onClose={() => setSelectedTransaction(null)}>
+          {(() => {
+            const item = selectedTransaction;
+            const isBorrowed = item.action === "borrowed" || item.status === "borrowed";
+            const fullName = `${item.firstName || ""} ${item.lastName || ""}`.trim();
+            const color = getAvatarColor(fullName);
+            const borrowDate = toDate(item.timestamp || item.borrowedAt);
+            const dueDate = toDate(item.dueDate);
+            const returnDate = toDate(item.returnedAt || item.lastReturnedAt);
+            const remaining = isBorrowed ? getRemainingQuantity(item) : null;
+
+            return (
+              <div className="txn-detail-modal">
+                <div className="txn-detail-borrower">
+                  <div className="txn-detail-avatar" style={{ background: color }}>
+                    {getInitials(item.firstName, item.lastName)}
+                  </div>
+                  <div className="txn-detail-borrower-info">
+                    <h4>{fullName || "-"}</h4>
+                    <p>{item.schoolID || "-"}</p>
+                    {item.course && <span className="txn-detail-course">{item.course}</span>}
+                    {item.email && <span className="txn-detail-email">{item.email}</span>}
+                    {item.role && <span className={`txn-detail-role ${item.role}`}>{item.role}</span>}
+                  </div>
+                </div>
+
+                <div className="txn-detail-section">
+                  <h5>Transaction Details</h5>
+                  <div className="txn-detail-grid">
+                    <div className="txn-detail-row">
+                      <span className="txn-detail-label">Item</span>
+                      <span className="txn-detail-value">{item.itemName || "-"}</span>
+                    </div>
+                    <div className="txn-detail-row">
+                      <span className="txn-detail-label">Quantity</span>
+                      <span className="txn-detail-value">
+                        {isBorrowed && remaining !== null
+                          ? `${remaining} / ${item.quantity || 0}`
+                          : (item.quantity || 0)}
+                      </span>
+                    </div>
+                    <div className="txn-detail-row">
+                      <span className="txn-detail-label">Status</span>
+                      <span className={`txn-detail-value status-${isBorrowed ? "borrowed" : "returned"}`}>
+                        {isBorrowed ? "Borrowed" : (item.status || "Returned")}
+                      </span>
+                    </div>
+                    <div className="txn-detail-row">
+                      <span className="txn-detail-label">Borrowed</span>
+                      <span className="txn-detail-value">{borrowDate ? formatDate(borrowDate) : "-"}</span>
+                    </div>
+                    <div className="txn-detail-row">
+                      <span className="txn-detail-label">Due Date</span>
+                      <span className="txn-detail-value">{dueDate ? formatDate(dueDate) : "-"}</span>
+                    </div>
+                    <div className="txn-detail-row">
+                      <span className="txn-detail-label">Returned</span>
+                      <span className="txn-detail-value">{returnDate ? formatDate(returnDate) : "-"}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </Modal>
       )}
     </section>
   );

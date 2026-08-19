@@ -58,6 +58,12 @@
 .activity-time{font-size:11px;color:var(--text-muted);flex-shrink:0;white-space:nowrap}
 .activity-empty{padding:30px 0;text-align:center}
 .activity-empty p{font-size:13px;color:var(--text-muted);margin:0}
+.activity-badge{display:inline-block;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-right:4px}
+.activity-badge.borrowed{background:rgba(245,124,0,.1);color:#f57c00}
+.activity-badge.returned{background:rgba(34,197,94,.1);color:#22c55e}
+.activity-due{font-size:10px;color:var(--text-muted);opacity:.8}
+.activity-empty-link{margin-top:10px;padding:6px 14px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;transition:all .2s}
+.activity-empty-link:hover{border-color:var(--green);color:var(--green)}
 
 /* Shared Tab Styles */
 .records-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px}
@@ -568,6 +574,11 @@ body.dark .overview-action-btn.primary{background:var(--green);color:#000;border
 body.dark .activity-item{background:#0a0a0a}
 body.dark .activity-item:hover{background:#131313}
 body.dark .activity-name{color:#FFFFFF}
+body.dark .activity-badge.borrowed{background:rgba(245,124,0,.15);color:#ffb74d}
+body.dark .activity-badge.returned{background:rgba(34,197,94,.15);color:#4ade80}
+body.dark .activity-due{color:#888}
+body.dark .activity-empty-link{border-color:#2a2a2a;color:#aaa}
+body.dark .activity-empty-link:hover{border-color:var(--green);color:var(--green)}
 body.dark .chart-box{border-color:rgba(225,251,21,.1);background:linear-gradient(145deg,#131313,#1a1a1a);box-shadow:0 4px 16px rgba(0,0,0,.25)}
 body.dark .chart-box:hover{box-shadow:0 8px 28px rgba(0,0,0,.3)}
 body.dark .chart-box h3{color:#FFFFFF}

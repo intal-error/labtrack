@@ -43,6 +43,7 @@ export const api = {
   getChartData: () => request("/transactions/chart"),
   getBorrowed: () => request("/transactions/borrowed"),
   getReturned: () => request("/transactions/returned"),
+  getRecentActivity: () => request("/transactions/recent-activity"),
   getMyBorrowed: () => request("/transactions/my-borrowed"),
   getMyReturned: () => request("/transactions/my-returned"),
   recordBorrow: (data) => request("/transactions/borrow", { method: "POST", body: JSON.stringify(data) }),

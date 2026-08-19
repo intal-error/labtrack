@@ -101,6 +101,34 @@ body.dark .btn-report{background:#1a1a1a;color:#FFFFFF;border-color:#2a2a2a}
 .btn-return{background:var(--green);color:#000;border:none;margin-top:10px}
 .btn-return:hover{background:var(--green-dark)}
 .btn-return:disabled{opacity:.6;cursor:not-allowed}
+.btn-view-info{display:inline-flex;align-items:center;gap:4px;background:transparent;border:1px solid var(--border);color:var(--text-muted);margin-top:10px}
+.btn-view-info:hover{border-color:var(--green);color:var(--green)}
+.btn-xs.btn-view-info{margin-top:0;padding:4px 10px;font-size:11px}
+.transaction-card-body .btn-return,.transaction-card-body .btn-view-info{margin-top:0}
+.transaction-card-body .btn-return+.btn-view-info{margin-left:6px}
+.table-actions-cell{display:flex;align-items:center;gap:6px}
+
+.txn-detail-modal{padding:4px 0}
+.txn-detail-borrower{display:flex;align-items:center;gap:16px;padding:16px;background:var(--bg);border-radius:12px;margin-bottom:20px}
+.txn-detail-avatar{width:52px;height:52px;border-radius:14px;color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;flex-shrink:0}
+.txn-detail-borrower-info{flex:1;min-width:0}
+.txn-detail-borrower-info h4{font-size:16px;font-weight:600;color:var(--text);margin:0 0 4px 0}
+.txn-detail-borrower-info p{font-size:13px;color:var(--text-muted);margin:0 0 6px 0}
+.txn-detail-course{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;background:rgba(46,125,50,.08);color:var(--green);margin-right:6px}
+.txn-detail-email{display:inline-block;font-size:11px;color:var(--text-muted);margin-right:6px}
+.txn-detail-role{display:inline-block;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px}
+.txn-detail-role.student{background:rgba(25,118,210,.08);color:#1976d2}
+.txn-detail-role.faculty{background:rgba(106,27,154,.08);color:#6a1b9a}
+.txn-detail-role.admin{background:rgba(211,47,47,.08);color:#d32f2f}
+.txn-detail-section{margin-bottom:0}
+.txn-detail-section h5{font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:0 0 12px 0;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.txn-detail-grid{display:flex;flex-direction:column;gap:0}
+.txn-detail-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)}
+.txn-detail-row:last-child{border-bottom:none}
+.txn-detail-label{font-size:12px;color:var(--text-muted);font-weight:500}
+.txn-detail-value{font-size:13px;color:var(--text);font-weight:600;text-align:right}
+.txn-detail-value.status-borrowed{color:#ef6c00}
+.txn-detail-value.status-returned{color:#2e7d32}
 .btn-refresh{border:1px solid var(--border);background:var(--bg-card);color:var(--text)}
 .btn-refresh:hover{border-color:var(--green);color:var(--green)}
 
@@ -176,3 +204,13 @@ body.dark table tbody tr:nth-child(even){background:transparent}
 body.dark .status-borrowed{background:linear-gradient(135deg,#3a2a1b,#4d3526);color:#ffb74d}
 body.dark .status-returned{background:linear-gradient(135deg,#1b3a2a,#264d35);color:#32D583}
 body.dark .transactions-empty{border-color:#264d35;background:#131313}
+body.dark .btn-view-info{border-color:#264d35;color:#888}
+body.dark .btn-view-info:hover{border-color:var(--green);color:var(--green)}
+body.dark .txn-detail-borrower{background:#0a0a0a}
+body.dark .txn-detail-borrower-info h4{color:#FFFFFF}
+body.dark .txn-detail-borrower-info p{color:#888}
+body.dark .txn-detail-email{color:#888}
+body.dark .txn-detail-section h5{color:#888;border-color:#2a2a2a}
+body.dark .txn-detail-row{border-color:#2a2a2a}
+body.dark .txn-detail-label{color:#888}
+body.dark .txn-detail-value{color:#FFFFFF}

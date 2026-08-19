@@ -317,4 +317,49 @@ const recordReturn = async (req, res) => {
   }
 };
 
-module.exports = { getBorrowed, getReturned, getMyBorrowed, getMyReturned, getDashboardCounts, getChartData, recordBorrow, recordReturn };
+const getRecentActivity = async (req, res) => {
+  try {
+    const [borrowSnap, returnSnap] = await Promise.all([
+      db.collection(TRANS).where("action", "==", "borrowed").get(),
+      db.collection(TRANS).where("action", "==", "returned").get(),
+    ]);
+
+    const borrows = borrowSnap.docs.map((doc) => {
+      const d = doc.data();
+      return {
+        id: doc.id,
+        action: "borrowed",
+        firstName: d.firstName || "",
+        lastName: d.lastName || "",
+        itemName: d.itemName || "",
+        quantity: numberOr(d.quantity, 1),
+        timestamp: d.timestamp || d.borrowedAt || null,
+        dueDate: d.dueDate || null,
+      };
+    });
+
+    const returns = returnSnap.docs.map((doc) => {
+      const d = doc.data();
+      return {
+        id: doc.id,
+        action: "returned",
+        firstName: d.firstName || "",
+        lastName: d.lastName || "",
+        itemName: d.itemName || "",
+        quantity: numberOr(d.quantity, 1),
+        timestamp: d.timestamp || d.returnedAt || null,
+        dueDate: null,
+      };
+    });
+
+    const merged = [...borrows, ...returns]
+      .sort((a, b) => (toDate(b.timestamp)?.getTime() || 0) - (toDate(a.timestamp)?.getTime() || 0))
+      .slice(0, 10);
+
+    res.json(merged);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+module.exports = { getBorrowed, getReturned, getMyBorrowed, getMyReturned, getDashboardCounts, getChartData, recordBorrow, recordReturn, getRecentActivity };
