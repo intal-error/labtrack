@@ -49,7 +49,7 @@
 .overview-activity-header svg{width:18px;height:18px}
 
 .activity-list{display:flex;flex-direction:column;gap:12px}
-.activity-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;background:var(--bg);transition:background .2s}
+.activity-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;background:var(--bg);transition:background .2s;cursor:pointer}
 .activity-item:hover{background:var(--bg-card)}
 .activity-avatar{width:36px;height:36px;border-radius:10px;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;text-transform:uppercase}
 .activity-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}

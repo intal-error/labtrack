@@ -2,10 +2,18 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts";
 import { api } from "../../services/api";
+import Modal from "../ui/Modal";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
 
 const COLORS = ["#E1FB15", "#ff6f00", "#fbc02d", "#1976d2", "#d32f2f", "#7b1fa2"];
+const AVATAR_COLORS = ["#E1FB15", "#1565c0", "#6a1b9a", "#c62828", "#ef6c00", "#00838f", "#4e342e", "#37474f"];
+
+function getAvatarColor(name) {
+  let hash = 0;
+  for (let i = 0; i < (name || "").length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
 
 const CardIcon = ({ type }) => {
   const icons = {
@@ -48,6 +56,7 @@ export default function OverviewTab() {
   const [chartData, setChartData] = useState([]);
   const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedActivity, setSelectedActivity] = useState(null);
 
   useEffect(() => {
     async function load() {
@@ -168,7 +177,7 @@ export default function OverviewTab() {
             {recentActivity.length > 0 ? (
               <div className="activity-list">
                 {recentActivity.map((item, i) => (
-                  <div className="activity-item" key={item.id || i}>
+                  <div className="activity-item" key={item.id || i} onClick={() => setSelectedActivity(item)}>
                     <div className="activity-avatar" style={{ background: item.action === "returned" ? "#22c55e" : COLORS[i % COLORS.length] }}>
                       {(item.firstName || "?")[0]}{(item.lastName || "?")[0]}
                     </div>
@@ -196,6 +205,76 @@ export default function OverviewTab() {
           </div>
         </div>
       </div>
+
+      {selectedActivity && (
+        <Modal title="Transaction Details" onClose={() => setSelectedActivity(null)}>
+          {(() => {
+            const item = selectedActivity;
+            const isBorrowed = item.action === "borrowed";
+            const fullName = `${item.firstName || ""} ${item.lastName || ""}`.trim();
+            const color = item.action === "returned" ? "#22c55e" : getAvatarColor(fullName);
+            const initials = `${(item.firstName || "?")[0]}${(item.lastName || "?")[0]}`.toUpperCase();
+            const actionDate = item.timestamp ? new Date(item.timestamp) : null;
+            const dueDate = item.dueDate ? new Date(item.dueDate) : null;
+            const returnedDate = item.returnedAt ? new Date(item.returnedAt) : null;
+
+            return (
+              <div className="txn-detail-modal">
+                <div className="txn-detail-borrower">
+                  <div className="txn-detail-avatar" style={{ background: color }}>
+                    {initials}
+                  </div>
+                  <div className="txn-detail-borrower-info">
+                    <h4>{fullName || "-"}</h4>
+                    {item.schoolID && <p>{item.schoolID}</p>}
+                    {item.course && <span className="txn-detail-course">{item.course}</span>}
+                    {item.email && <span className="txn-detail-email">{item.email}</span>}
+                    {item.role && <span className={`txn-detail-role ${item.role}`}>{item.role}</span>}
+                  </div>
+                </div>
+
+                <div className="txn-detail-section">
+                  <h5>Transaction Details</h5>
+                  <div className="txn-detail-grid">
+                    <div className="txn-detail-row">
+                      <span className="txn-detail-label">Item</span>
+                      <span className="txn-detail-value">{item.itemName || "-"}</span>
+                    </div>
+                    <div className="txn-detail-row">
+                      <span className="txn-detail-label">Quantity</span>
+                      <span className="txn-detail-value">{item.quantity || 0}</span>
+                    </div>
+                    <div className="txn-detail-row">
+                      <span className="txn-detail-label">Status</span>
+                      <span className={`txn-detail-value status-${item.action}`}>
+                        {isBorrowed ? "Borrowed" : "Returned"}
+                      </span>
+                    </div>
+                    <div className="txn-detail-row">
+                      <span className="txn-detail-label">{isBorrowed ? "Borrowed" : "Returned"}</span>
+                      <span className="txn-detail-value">
+                        {actionDate ? actionDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "-"}
+                      </span>
+                    </div>
+                    {isBorrowed && dueDate && (
+                      <div className="txn-detail-row">
+                        <span className="txn-detail-label">Due Date</span>
+                        <span className="txn-detail-value">{dueDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                      </div>
+                    )}
+                    {!isBorrowed && returnedDate && (
+                      <div className="txn-detail-row">
+                        <span className="txn-detail-label">Returned On</span>
+                        <span className="txn-detail-value">{returnedDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </Modal>
+      )}
     </div>
   );
 }

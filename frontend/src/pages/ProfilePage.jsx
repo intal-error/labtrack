@@ -1,8 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../services/api";
 import toast from "react-hot-toast";
-import { MdPerson, MdLock, MdSave, MdVisibility, MdVisibilityOff } from "react-icons/md";
+import { MdPerson, MdLock, MdSave, MdVisibility, MdVisibilityOff, MdCameraAlt } from "react-icons/md";
 import "../styles/pages/profile.css";
 
 function getPasswordStrength(pw) {
@@ -30,13 +30,15 @@ function formatJoinDate(dateVal) {
 }
 
 export default function ProfilePage() {
-  const { userProfile, role } = useAuth();
+  const { userProfile, setUserProfile, role } = useAuth();
   const [activeTab, setActiveTab] = useState("profile");
 
   const [firstName, setFirstName] = useState(userProfile?.firstName || "");
   const [lastName, setLastName] = useState(userProfile?.lastName || "");
   const [contact, setContact] = useState(userProfile?.contact || "");
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -55,6 +57,36 @@ export default function ProfilePage() {
 
   const passwordStrength = useMemo(() => getPasswordStrength(newPassword), [newPassword]);
 
+  async function handlePhotoUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/gif"].includes(file.type)) {
+      toast.error("Only JPG, PNG, and GIF images are allowed");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image must be less than 5MB");
+      return;
+    }
+    setUploading(true);
+    try {
+      const { url } = await api.uploadImage(file);
+      await api.updateProfile({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        contact: contact.trim(),
+        profileURL: url,
+      });
+      setUserProfile({ ...userProfile, profileURL: url });
+      toast.success("Profile photo updated");
+    } catch (err) {
+      toast.error(err.message || "Failed to upload photo");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
   async function handleProfileSave(e) {
     e.preventDefault();
     if (!firstName.trim() || !lastName.trim()) {
@@ -63,7 +95,7 @@ export default function ProfilePage() {
     }
     setSaving(true);
     try {
-      await api.updateProfile({ firstName: firstName.trim(), lastName: lastName.trim(), contact: contact.trim() });
+      await api.updateProfile({ firstName: firstName.trim(), lastName: lastName.trim(), contact: contact.trim(), profileURL: userProfile?.profileURL || "" });
       toast.success("Profile updated successfully");
     } catch (err) {
       toast.error(err.message || "Failed to update profile");
@@ -116,8 +148,28 @@ export default function ProfilePage() {
       <div className="profile-card">
         <div className="profile-sidebar">
           <div className="profile-banner" />
-          <div className="profile-avatar" style={{ background: roleColor }}>
-            {initials}
+          <div className="profile-avatar" style={{ background: userProfile?.profileURL ? "transparent" : roleColor }}>
+            {userProfile?.profileURL ? (
+              <img src={userProfile.profileURL} alt={`${firstName} ${lastName}`} />
+            ) : (
+              initials
+            )}
+            <button
+              className="profile-avatar-edit"
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              title="Change photo"
+            >
+              <MdCameraAlt size={16} />
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/gif"
+              onChange={handlePhotoUpload}
+              hidden
+            />
           </div>
           <h3 className="profile-name">{firstName} {lastName}</h3>
           <span className="profile-role" style={{ background: roleColor }}>{roleLabel}</span>

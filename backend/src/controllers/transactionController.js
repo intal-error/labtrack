@@ -335,6 +335,10 @@ const getRecentActivity = async (req, res) => {
         quantity: numberOr(d.quantity, 1),
         timestamp: d.timestamp || d.borrowedAt || null,
         dueDate: d.dueDate || null,
+        schoolID: d.schoolID || "",
+        course: d.course || "",
+        email: d.email || "",
+        role: d.role || "",
       };
     });
 
@@ -348,7 +352,12 @@ const getRecentActivity = async (req, res) => {
         itemName: d.itemName || "",
         quantity: numberOr(d.quantity, 1),
         timestamp: d.timestamp || d.returnedAt || null,
-        dueDate: null,
+        returnedAt: d.returnedAt || null,
+        dueDate: d.dueDate || null,
+        schoolID: d.schoolID || "",
+        course: d.course || "",
+        email: d.email || "",
+        role: d.role || "",
       };
     });
 

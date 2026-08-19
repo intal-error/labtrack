@@ -66,7 +66,13 @@ export default function PersonaPage() {
       {result && user && (
         <div className="persona-result fade-in-up">
           <div className="persona-profile-card">
-            <div className="persona-avatar">{initials}</div>
+            <div className="persona-avatar" style={user.profileURL ? { background: "transparent" } : {}}>
+              {user.profileURL ? (
+                <img src={user.profileURL} alt={`${user.firstName} ${user.lastName}`} />
+              ) : (
+                initials
+              )}
+            </div>
             <div className="persona-profile-info">
               <h2 className="persona-name">{user.firstName} {user.lastName}</h2>
               <span className="persona-role-badge">{user.role || "Student"}</span>

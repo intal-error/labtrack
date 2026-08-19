@@ -104,6 +104,43 @@ body.dark .profile-page {
     0 0 0 4px var(--bg-card),
     0 0 0 7px var(--primary);
 }
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+.profile-avatar-edit {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(0,0,0,.6);
+  border: 2px solid var(--bg-card);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all .2s ease;
+  z-index: 3;
+}
+.profile-avatar:hover .profile-avatar-edit {
+  opacity: 1;
+  transform: scale(1);
+}
+.profile-avatar-edit:hover {
+  background: var(--primary);
+  color: #000;
+}
+.profile-avatar-edit:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
 
 /* Name & role */
 .profile-name {

@@ -32,7 +32,8 @@
 /* Profile Card */
 .persona-profile-card{display:flex;align-items:center;gap:20px;padding:24px;background:linear-gradient(145deg,var(--bg-card),rgba(255,255,255,.95));border:1px solid var(--border);border-radius:20px;box-shadow:0 4px 20px rgba(0,0,0,.06);margin-bottom:20px;position:relative;overflow:hidden}
 .persona-profile-card::before{content:"";position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,#E1FB15,#32D583,#E1FB15)}
-.persona-avatar{width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,#E1FB15,#32D583);color:#000;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800;letter-spacing:1px;box-shadow:0 4px 16px rgba(225,251,21,.3);flex-shrink:0}
+.persona-avatar{width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,#E1FB15,#32D583);color:#000;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800;letter-spacing:1px;box-shadow:0 4px 16px rgba(225,251,21,.3);flex-shrink:0;overflow:hidden}
+.persona-avatar img{width:100%;height:100%;object-fit:cover;border-radius:20px}
 .persona-profile-info{flex:1}
 .persona-name{font-size:1.4rem;font-weight:800;color:var(--text);margin:0 0 6px;letter-spacing:-.3px}
 .persona-role-badge{display:inline-block;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:600;background:linear-gradient(135deg,#e8f5e9,#c8e6c9);color:#2e7d32}

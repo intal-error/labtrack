@@ -141,8 +141,12 @@ export default function DashboardLayout() {
         </div>
 
         <div className="sidebar-user">
-          <div className="sidebar-user-avatar" style={{ background: ROLE_COLORS[role] || "#32D583" }}>
-            {userInitials}
+          <div className="sidebar-user-avatar" style={{ background: userProfile?.profileURL ? "transparent" : (ROLE_COLORS[role] || "#32D583") }}>
+            {userProfile?.profileURL ? (
+              <img src={userProfile.profileURL} alt={displayName} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "12px" }} />
+            ) : (
+              userInitials
+            )}
           </div>
           {!collapsed && (
             <div className="sidebar-user-info">

@@ -98,7 +98,7 @@ const getProfile = async (req, res) => {
 const updateProfile = async (req, res) => {
   try {
     const uid = req.user.uid;
-    const { firstName, lastName, contact } = req.body;
+    const { firstName, lastName, contact, profileURL } = req.body;
 
     if (!firstName || !lastName) {
       return res.status(400).json({ error: "First name and last name are required" });
@@ -108,6 +108,7 @@ const updateProfile = async (req, res) => {
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       contact: (contact || "").trim(),
+      ...(profileURL !== undefined && { profileURL }),
       updatedAt: new Date(),
     };
 
