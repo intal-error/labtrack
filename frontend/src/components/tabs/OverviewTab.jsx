@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts";
 import { api } from "../../services/api";
 import Modal from "../ui/Modal";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
 
-const COLORS = ["#E1FB15", "#ff6f00", "#fbc02d", "#1976d2", "#d32f2f", "#7b1fa2"];
-const AVATAR_COLORS = ["#E1FB15", "#1565c0", "#6a1b9a", "#c62828", "#ef6c00", "#00838f", "#4e342e", "#37474f"];
+const COLORS = ["#2E7D32", "#ff6f00", "#fbc02d", "#1976d2", "#d32f2f", "#7b1fa2"];
+const AVATAR_COLORS = ["#2E7D32", "#1565c0", "#6a1b9a", "#c62828", "#ef6c00", "#00838f", "#4e342e", "#37474f"];
 
 function getAvatarColor(name) {
   let hash = 0;
@@ -52,6 +53,8 @@ function timeAgo(dateStr) {
 
 export default function OverviewTab() {
   const navigate = useNavigate();
+  const { role } = useAuth();
+  const isAdmin = role === "admin";
   const [counts, setCounts] = useState({ borrowed: 0, returned: 0, students: 0, faculty: 0, users: 0 });
   const [chartData, setChartData] = useState([]);
   const [recentActivity, setRecentActivity] = useState([]);
@@ -122,30 +125,34 @@ export default function OverviewTab() {
           <div className="overview-card-label">Returned Items</div>
           <small>This period</small>
         </div>
-        <div className="overview-card blue">
-          <div className="overview-card-icon"><CardIcon type="students" /></div>
-          <span>{counts.students}</span>
-          <div className="overview-card-label">Students</div>
-          <small>Registered</small>
-        </div>
-        <div className="overview-card purple">
-          <div className="overview-card-icon"><CardIcon type="faculty" /></div>
-          <span>{counts.faculty}</span>
-          <div className="overview-card-label">Faculty</div>
-          <small>Active</small>
-        </div>
-        <div className="overview-card red">
-          <div className="overview-card-icon"><CardIcon type="pending" /></div>
-          <span>{chartData.find((d) => d.name === "Inventory")?.value || 0}</span>
-          <div className="overview-card-label">Pending Items</div>
-          <small>Need attention</small>
-        </div>
-        <div className="overview-card teal">
-          <div className="overview-card-icon"><CardIcon type="total" /></div>
-          <span>{counts.users}</span>
-          <div className="overview-card-label">Total Users</div>
-          <small>All accounts</small>
-        </div>
+        {isAdmin && (
+          <>
+            <div className="overview-card blue">
+              <div className="overview-card-icon"><CardIcon type="students" /></div>
+              <span>{counts.students}</span>
+              <div className="overview-card-label">Students</div>
+              <small>Registered</small>
+            </div>
+            <div className="overview-card purple">
+              <div className="overview-card-icon"><CardIcon type="faculty" /></div>
+              <span>{counts.faculty}</span>
+              <div className="overview-card-label">Faculty</div>
+              <small>Active</small>
+            </div>
+            <div className="overview-card red">
+              <div className="overview-card-icon"><CardIcon type="pending" /></div>
+              <span>{chartData.find((d) => d.name === "Inventory")?.value || 0}</span>
+              <div className="overview-card-label">Pending Items</div>
+              <small>Need attention</small>
+            </div>
+            <div className="overview-card teal">
+              <div className="overview-card-icon"><CardIcon type="total" /></div>
+              <span>{counts.users}</span>
+              <div className="overview-card-label">Total Users</div>
+              <small>All accounts</small>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="overview-bottom-row">
@@ -178,8 +185,12 @@ export default function OverviewTab() {
               <div className="activity-list">
                 {recentActivity.map((item, i) => (
                   <div className="activity-item" key={item.id || i} onClick={() => setSelectedActivity(item)}>
-                    <div className="activity-avatar" style={{ background: item.action === "returned" ? "#22c55e" : COLORS[i % COLORS.length] }}>
-                      {(item.firstName || "?")[0]}{(item.lastName || "?")[0]}
+                    <div className="activity-avatar" style={{ background: item.profileURL ? "transparent" : (item.action === "returned" ? "#22c55e" : COLORS[i % COLORS.length]) }}>
+                      {item.profileURL ? (
+                        <img src={item.profileURL} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "10px" }} />
+                      ) : (
+                        `${(item.firstName || "?")[0]}${(item.lastName || "?")[0]}`
+                      )}
                     </div>
                     <div className="activity-info">
                       <span className="activity-name">{item.firstName} {item.lastName}</span>
@@ -221,8 +232,12 @@ export default function OverviewTab() {
             return (
               <div className="txn-detail-modal">
                 <div className="txn-detail-borrower">
-                  <div className="txn-detail-avatar" style={{ background: color }}>
-                    {initials}
+                  <div className="txn-detail-avatar" style={{ background: item.profileURL ? "transparent" : color }}>
+                    {item.profileURL ? (
+                      <img src={item.profileURL} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "10px" }} />
+                    ) : (
+                      initials
+                    )}
                   </div>
                   <div className="txn-detail-borrower-info">
                     <h4>{fullName || "-"}</h4>

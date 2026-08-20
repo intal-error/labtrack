@@ -75,7 +75,7 @@ body.dark .btn-report{background:#1a1a1a;color:#FFFFFF;border-color:#2a2a2a}
 .transaction-card.overdue-critical{border-left-color:#d32f2f}
 .transaction-card-accent{height:4px;width:100%}
 .transaction-card-accent.accent-borrowed{background:linear-gradient(90deg,#ef6c00,#ffa726)}
-.transaction-card-accent.accent-returned{background:linear-gradient(90deg,#2e7d32,#32D583)}
+.transaction-card-accent.accent-returned{background:linear-gradient(90deg,#2e7d32,var(--green-light))}
 .transaction-card-body{padding:20px}
 .transaction-card-top{display:flex;align-items:center;gap:14px;margin-bottom:16px}
 .transaction-avatar{width:48px;height:48px;border-radius:12px;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0;overflow:hidden}
@@ -97,7 +97,7 @@ body.dark .btn-report{background:#1a1a1a;color:#FFFFFF;border-color:#2a2a2a}
 .transaction-course-tag{display:inline-block;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:600;background:rgba(46,125,50,.08);color:var(--green);margin-bottom:10px}
 .transaction-progress{margin-top:4px}
 .progress-bar{height:4px;background:var(--border);border-radius:4px;overflow:hidden;margin-bottom:4px}
-.progress-fill{height:100%;background:linear-gradient(90deg,#2e7d32,#32D583);border-radius:4px;transition:width .4s ease}
+.progress-fill{height:100%;background:linear-gradient(90deg,#2e7d32,var(--green-light));border-radius:4px;transition:width .4s ease}
 .progress-label{font-size:11px;color:var(--text-muted)}
 .btn-return{background:var(--green);color:#000;border:none;margin-top:10px}
 .btn-return:hover{background:var(--green-dark)}
@@ -176,7 +176,7 @@ body.dark .transactions-subtitle{color:#888}
 body.dark .transactions-stats .stat-card{border-color:#264d35;background:#131313}
 body.dark .transactions-stats .stat-active .stat-icon{background:linear-gradient(135deg,#1b2a3a,#263550);color:#64b5f6}
 body.dark .transactions-stats .stat-borrowed-total .stat-icon{background:linear-gradient(135deg,#3a2a1b,#4d3526);color:#ffb74d}
-body.dark .transactions-stats .stat-returned-total .stat-icon{background:linear-gradient(135deg,#1b3a2a,#264d35);color:#32D583}
+body.dark .transactions-stats .stat-returned-total .stat-icon{background:linear-gradient(135deg,#1b3a2a,#264d35);color:var(--green-light)}
 body.dark .transactions-stats .stat-week .stat-icon{background:linear-gradient(135deg,#2d1b3a,#3d2650);color:#ce93d8}
 body.dark .transactions-stats .stat-number{color:#FFFFFF}
 body.dark .transactions-tabs{background:#131313;border-color:#264d35}
@@ -197,7 +197,7 @@ body.dark .transaction-card.overdue-warning{border-left-color:#f57c00}
 body.dark .transaction-card.overdue-critical{border-left-color:#c62828}
 body.dark .transaction-card-details{background:#0a0a0a}
 body.dark .transaction-name{color:#FFFFFF}
-body.dark .transaction-course-tag{background:rgba(102,187,106,.1);color:#32D583}
+body.dark .transaction-course-tag{background:rgba(102,187,106,.1);color:var(--green-light)}
 body.dark .btn-refresh{background:#131313;border-color:#264d35;color:#aaa}
 body.dark .transactions-table-wrapper{border-color:#264d35;background:#131313}
 body.dark .transactions-table thead th{background:#1a1a1a}
@@ -205,7 +205,7 @@ body.dark .transactions-table tbody td{border-color:#2a2a2a;color:#FFFFFF}
 body.dark .transactions-table tbody tr:hover{background:rgba(255,255,255,.04)}
 body.dark table tbody tr:nth-child(even){background:transparent}
 body.dark .status-borrowed{background:linear-gradient(135deg,#3a2a1b,#4d3526);color:#ffb74d}
-body.dark .status-returned{background:linear-gradient(135deg,#1b3a2a,#264d35);color:#32D583}
+body.dark .status-returned{background:linear-gradient(135deg,#1b3a2a,#264d35);color:var(--green-light)}
 body.dark .transactions-empty{border-color:#264d35;background:#131313}
 body.dark .btn-view-info{border-color:#264d35;color:#888}
 body.dark .btn-view-info:hover{border-color:var(--green);color:var(--green)}

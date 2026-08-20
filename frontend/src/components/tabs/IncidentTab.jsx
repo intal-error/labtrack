@@ -5,8 +5,8 @@ import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
 import { MdWarning, MdAdd, MdEdit, MdDelete, MdSearch, MdInfo, MdOutlineWarning } from "react-icons/md";
 
-const SEVERITY_COLORS = { low: "#32D583", medium: "#f57c00", high: "#d32f2f", critical: "#b71c1c" };
-const STATUS_COLORS = { open: "#d32f2f", investigating: "#f57c00", resolved: "#32D583" };
+const SEVERITY_COLORS = { low: "#43A047", medium: "#f57c00", high: "#d32f2f", critical: "#b71c1c" };
+const STATUS_COLORS = { open: "#d32f2f", investigating: "#f57c00", resolved: "#43A047" };
 const TYPE_LABELS = { damage: "Damage", accident: "Accident", irregularity: "Irregularity", other: "Other" };
 const STATUS_TABS = ["All", "Open", "Investigating", "Resolved"];
 

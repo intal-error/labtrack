@@ -33,7 +33,7 @@
   cursor:pointer;transition:all .22s;
 }
 .login-role-card:hover{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.3)}
-.login-role-card.active{background:rgba(46,125,50,.25);border-color:#4caf50}
+.login-role-card.active{background:rgba(245,124,0,.25);border-color:var(--amber)}
 .login-role-card .role-icon{font-size:26px;margin-bottom:4px;color:#fff;display:flex;justify-content:center}
 .login-role-card .role-label{font-size:12px;font-weight:600;color:#fff;margin-bottom:2px}
 .login-role-card .role-desc{font-size:10px;color:rgba(255,255,255,.55)}
@@ -48,18 +48,18 @@
 .login-password-toggle:hover{color:#fff}
 .login-extras{display:flex;justify-content:space-between;align-items:center;font-size:.85rem}
 .login-remember{display:flex;align-items:center;gap:8px;color:rgba(255,255,255,.85);cursor:pointer}
-.login-remember input{width:16px;height:16px;accent-color:#2e7d32;cursor:pointer}
+.login-remember input{width:16px;height:16px;accent-color:var(--amber);cursor:pointer}
 .login-forgot{color:rgba(255,255,255,.85);text-decoration:none;font-weight:600;transition:color .2s}
 .login-forgot:hover{color:#fff;text-decoration:underline}
-.login-submit{width:100%;padding:14px;border:none;border-radius:11px;background:linear-gradient(135deg,#2e7d32,#43a047);color:#fff;font-size:1.02rem;font-weight:700;cursor:pointer;transition:all .25s;letter-spacing:.4px;box-shadow:0 6px 18px rgba(0,120,60,.4)}
-.login-submit:hover{background:linear-gradient(135deg,#1b5e20,#2e7d32);transform:translateY(-2px);box-shadow:0 8px 22px rgba(0,120,60,.5)}
+.login-submit{width:100%;padding:14px;border:none;border-radius:11px;background:linear-gradient(135deg,#2E7D32,#43A047);color:#fff;font-size:1.02rem;font-weight:700;cursor:pointer;transition:all .25s;letter-spacing:.4px;box-shadow:0 6px 18px rgba(27,94,32,.4)}
+.login-submit:hover{background:linear-gradient(135deg,#1B5E20,#2E7D32);transform:translateY(-2px);box-shadow:0 8px 22px rgba(27,94,32,.5)}
 .login-submit:disabled{opacity:.65;cursor:not-allowed;transform:none}
 @keyframes fadeInLogin{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
 
 /* Register link */
 .login-register-link{text-align:center;color:rgba(255,255,255,.75);font-size:.9rem;margin-top:16px}
 .login-register-link a{color:#fff;font-weight:600;text-decoration:none;transition:color .2s}
-.login-register-link a:hover{text-decoration:underline;color:#4caf50}
+.login-register-link a:hover{text-decoration:underline;color:var(--amber)}
 
 /* Responsive */
 @media(max-width:900px){

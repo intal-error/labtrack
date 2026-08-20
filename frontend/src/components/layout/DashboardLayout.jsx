@@ -141,7 +141,7 @@ export default function DashboardLayout() {
         </div>
 
         <div className="sidebar-user">
-          <div className="sidebar-user-avatar" style={{ background: userProfile?.profileURL ? "transparent" : (ROLE_COLORS[role] || "#32D583") }}>
+          <div className="sidebar-user-avatar" style={{ background: userProfile?.profileURL ? "transparent" : (ROLE_COLORS[role] || "#F57C00") }}>
             {userProfile?.profileURL ? (
               <img src={userProfile.profileURL} alt={displayName} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "12px" }} />
             ) : (
@@ -151,7 +151,7 @@ export default function DashboardLayout() {
           {!collapsed && (
             <div className="sidebar-user-info">
               <div className="sidebar-user-name">{displayName}</div>
-              <span className="sidebar-user-role" style={{ background: `${ROLE_COLORS[role] || "#32D583"}20`, color: ROLE_COLORS[role] || "#32D583" }}>
+              <span className="sidebar-user-role" style={{ background: `${ROLE_COLORS[role] || "#F57C00"}20`, color: ROLE_COLORS[role] || "#F57C00" }}>
                 {ROLE_LABELS[role] || role}
               </span>
             </div>

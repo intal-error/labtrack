@@ -37,7 +37,7 @@
   font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;
 }
 .register-tab:hover{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.3);color:#fff}
-.register-tab.active{background:rgba(225,251,21,.2);border-color:#E1FB15;color:#fff}
+.register-tab.active{background:rgba(46,125,50,.2);border-color:var(--green);color:#fff}
 
 /* Form */
 .register-card form{display:flex;flex-direction:column;gap:14px}
@@ -49,7 +49,7 @@
   border-radius:10px;font-size:14px;color:#fff;transition:all .22s;
 }
 .register-field input::placeholder{color:rgba(255,255,255,.5)}
-.register-field input:focus,.register-field select:focus{outline:none;border-color:rgba(255,255,255,.6);background:rgba(255,255,255,.2);box-shadow:0 0 0 3px rgba(225,251,21,.15)}
+.register-field input:focus,.register-field select:focus{outline:none;border-color:rgba(255,255,255,.6);background:rgba(255,255,255,.2);box-shadow:0 0 0 3px rgba(46,125,50,.15)}
 .register-field select option{background:#1a1a1a;color:#fff}
 
 /* Password */
@@ -65,17 +65,17 @@
 /* Submit */
 .register-submit{
   width:100%;padding:14px;border:none;border-radius:11px;
-  background:linear-gradient(135deg,#E1FB15,#32D583);color:#000;
+  background:linear-gradient(135deg,var(--green),var(--green-light));color:#000;
   font-size:1.02rem;font-weight:700;cursor:pointer;transition:all .25s;
-  letter-spacing:.4px;box-shadow:0 6px 18px rgba(225,251,21,.3);margin-top:4px;
+  letter-spacing:.4px;box-shadow:0 6px 18px rgba(46,125,50,.3);margin-top:4px;
 }
-.register-submit:hover{background:linear-gradient(135deg,#32D583,#E1FB15);transform:translateY(-2px);box-shadow:0 8px 22px rgba(225,251,21,.4)}
+.register-submit:hover{background:linear-gradient(135deg,var(--green-light),var(--green));transform:translateY(-2px);box-shadow:0 8px 22px rgba(46,125,50,.4)}
 .register-submit:disabled{opacity:.65;cursor:not-allowed;transform:none}
 
 /* Login link */
 .register-login-link{text-align:center;color:rgba(255,255,255,.75);font-size:.9rem;margin-top:18px}
 .register-login-link a{color:#fff;font-weight:600;text-decoration:none;transition:color .2s}
-.register-login-link a:hover{text-decoration:underline;color:#E1FB15}
+.register-login-link a:hover{text-decoration:underline;color:var(--green)}
 
 /* Responsive */
 @media(max-width:900px){

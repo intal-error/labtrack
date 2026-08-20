@@ -9,7 +9,7 @@ import { MdBuild, MdAdd, MdEdit, MdDelete, MdCalendarToday, MdWarning, MdSearch,
 const STATUS_COLORS = {
   scheduled: "#1976d2",
   "in-progress": "#f57c00",
-  completed: "#32D583",
+  completed: "#43A047",
 };
 
 const TYPE_LABELS = { preventive: "Preventive", corrective: "Corrective" };

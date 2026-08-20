@@ -119,24 +119,24 @@ body.dark .scanner-step-header{background:#0a0a0a}
 body.dark .scanner-step-text h2{color:#FFFFFF}
 body.dark .scanner-step-text p{color:#888}
 body.dark .scanner-input-wrap input{background:#0f0f0f;border-color:#2a2a2a;color:#FFFFFF}
-body.dark .scanner-btn-scan{background:#0f0f0f;color:#32D583;border-color:#2e7d32}
-body.dark .scanner-btn-scan:hover{background:#E1FB15;color:#fff}
+body.dark .scanner-btn-scan{background:#0f0f0f;color:var(--green-light);border-color:#2e7d32}
+body.dark .scanner-btn-scan:hover{background:var(--green);color:#fff}
 body.dark .scanner-btn-find{background:#0f0f0f;color:#888;border-color:#2a2a2a}
-body.dark .scanner-btn-find:hover{border-color:#32D583;color:#32D583}
+body.dark .scanner-btn-find:hover{border-color:var(--green-light);color:var(--green-light)}
 body.dark .scanner-result-card{background:linear-gradient(135deg,#1a1a1a,#1a1a1a);border-color:#2e7d32}
 body.dark .scanner-result-info strong{color:#FFFFFF}
 body.dark .scanner-result-meta span{background:rgba(255,255,255,.08)}
-body.dark .scanner-result-check{color:#32D583}
+body.dark .scanner-result-check{color:var(--green-light)}
 body.dark .scanner-field input,.scanner-field select{background:#0f0f0f;border-color:#2a2a2a;color:#FFFFFF}
 body.dark .scanner-field label{color:#888}
 body.dark .scanner-transaction-card{border-color:#2a2a2a;background:#131313}
 body.dark .scanner-transaction-header{color:#FFFFFF}
-body.dark .scanner-status-banner.success{background:#1a1a1a;color:#32D583;border-color:#2e7d32}
+body.dark .scanner-status-banner.success{background:#1a1a1a;color:var(--green-light);border-color:#2e7d32}
 body.dark .scanner-status-banner.error{background:#1a1a1a;color:#aaa;border-color:#c62828}
 body.dark .scanner-status-banner:not(.success):not(.error){background:#1a1a1a;color:#ccc;border-color:#ef6c00}
 body.dark .scanner-camera-wrap{border-color:#2a2a2a}
 body.dark .due-shortcut-btn{border-color:#2a2a2a;color:#888}
-body.dark .due-shortcut-btn:hover{border-color:#32D583;color:#32D583;background:rgba(102,187,106,.08)}
-body.dark .due-shortcut-btn:active{background:#E1FB15;color:#fff}
+body.dark .due-shortcut-btn:hover{border-color:var(--green-light);color:var(--green-light);background:rgba(102,187,106,.08)}
+body.dark .due-shortcut-btn:active{background:var(--green);color:#fff}
 body.dark .scanner-result-card.low-stock{background:linear-gradient(135deg,#1a1a1a,#1a1a1a);border-color:#c62828}
 body.dark .scanner-result-card.warn-stock{background:linear-gradient(135deg,#1a1a1a,#1a1a1a);border-color:#ef6c00}

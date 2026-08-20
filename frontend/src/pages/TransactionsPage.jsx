@@ -8,7 +8,7 @@ import Modal from "../components/ui/Modal";
 import toast from "react-hot-toast";
 import "../styles/pages/tables.css";
 
-const AVATAR_COLORS = ["#E1FB15", "#1565c0", "#6a1b9a", "#c62828", "#ef6c00", "#00838f", "#4e342e", "#37474f"];
+const AVATAR_COLORS = ["#2E7D32", "#1565c0", "#6a1b9a", "#c62828", "#ef6c00", "#00838f", "#4e342e", "#37474f"];
 
 function getAvatarColor(name) {
   let hash = 0;

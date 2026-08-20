@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "firebase/auth";
-import { auth } from "../services/firebase";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "../services/firebase";
 import { useAuth } from "../context/AuthContext";
 import { MdSchool, MdPerson, MdAdminPanelSettings, MdVisibility, MdVisibilityOff } from "react-icons/md";
 import toast from "react-hot-toast";
@@ -52,7 +53,35 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
+      const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
+
+      let userRole = null;
+      try {
+        const userDoc = await getDoc(doc(db, "users", userCredential.user.uid));
+        if (userDoc.exists()) {
+          userRole = (userDoc.data().role || "").toLowerCase() || null;
+        } else {
+          const adminDoc = await getDoc(doc(db, "admins", userCredential.user.uid));
+          if (adminDoc.exists()) {
+            userRole = "admin";
+          }
+        }
+      } catch {
+        await signOut(auth);
+        toast.error("Failed to verify your account. Please try again.");
+        return;
+      }
+
+      if (userRole !== selectedRole) {
+        toast.error(
+          userRole
+            ? `This account is registered as ${userRole}. Please select the correct role.`
+            : "No account found for this role. Please select the correct role."
+        );
+        await signOut(auth);
+        return;
+      }
+
       if (rememberMe) {
         localStorage.setItem("slsu_remembered_email", email.trim());
         sessionStorage.removeItem("slsu_user_email");

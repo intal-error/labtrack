@@ -4,7 +4,7 @@
   margin: 0 auto;
   padding: 28px 20px;
   --primary: var(--green);
-  --primary-light: rgba(225,251,21,.08);
+  --primary-light: rgba(46,125,50,.08);
   --hover: rgba(0,0,0,.04);
   --text-secondary: #555;
   animation: profFadeIn .4s ease;
@@ -65,7 +65,7 @@ body.dark .profile-page {
   width: calc(100% + 48px);
   margin: 0 -24px;
   height: 110px;
-  background: linear-gradient(135deg, #E1FB15 0%, #32D583 50%, #131313 100%);
+  background: linear-gradient(135deg, var(--green) 0%, var(--green-light) 50%, #131313 100%);
   position: relative;
   overflow: hidden;
 }
@@ -290,12 +290,12 @@ body.dark .profile-page {
   transition: all .2s ease;
 }
 .profile-field input:hover:not(.disabled) {
-  border-color: #E1FB15;
+  border-color: var(--green);
 }
 .profile-field input:focus {
   outline: none;
-  border-color: #E1FB15;
-  box-shadow: 0 0 0 3px rgba(225,251,21,.12);
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(46,125,50,.12);
 }
 .profile-field input.disabled {
   background: var(--hover);
@@ -362,8 +362,8 @@ body.dark .profile-page {
 }
 .password-strength-fill.weak        { width: 25%;  background: var(--red); }
 .password-strength-fill.fair        { width: 50%;  background: var(--orange); }
-.password-strength-fill.strong      { width: 75%;  background: #E1FB15; }
-.password-strength-fill.very-strong { width: 100%; background: #32D583; }
+.password-strength-fill.strong      { width: 75%;  background: var(--green); }
+.password-strength-fill.very-strong { width: 100%; background: var(--green-light); }
 .password-strength-text {
   font-size: .7rem;
   font-weight: 600;
@@ -371,8 +371,8 @@ body.dark .profile-page {
 }
 .password-strength-text.weak        { color: var(--red); }
 .password-strength-text.fair        { color: var(--orange); }
-.password-strength-text.strong      { color: #E1FB15; }
-.password-strength-text.very-strong { color: #32D583; }
+.password-strength-text.strong      { color: var(--green); }
+.password-strength-text.very-strong { color: var(--green-light); }
 
 /* ── Save Button ───────────────────────────────────── */
 .profile-form .btn {
@@ -388,11 +388,11 @@ body.dark .profile-page {
 }
 .profile-form .btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 14px rgba(225,251,21,.3);
+  box-shadow: 0 4px 14px rgba(46,125,50,.3);
 }
 .profile-form .btn:active:not(:disabled) {
   transform: translateY(0);
-  box-shadow: 0 2px 6px rgba(225,251,21,.2);
+  box-shadow: 0 2px 6px rgba(46,125,50,.2);
 }
 .profile-form .btn:disabled {
   opacity: .6;

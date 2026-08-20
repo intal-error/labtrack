@@ -45,9 +45,9 @@ function IndexRedirect() {
 }
 
 function GuestRoute({ children }) {
-  const { user, loading } = useAuth();
+  const { user, role, loading } = useAuth();
   if (loading) return <div className="loading-screen"><div className="spinner-lg" /></div>;
-  if (user) return <Navigate to="/overview" replace />;
+  if (user && role) return <Navigate to={role === "student" ? "/usage-logs" : "/overview"} replace />;
   return children;
 }
 
@@ -88,7 +88,7 @@ function App() {
             <Route path="/register" element={<GuestRoute><RegisterPage /></GuestRoute>} />
             <Route path="/" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
               <Route index element={<IndexRedirect />} />
-              <Route path="overview" element={<OverviewTab />} />
+              <Route path="overview" element={<RoleRoute allowed={["faculty", "admin"]}><OverviewTab /></RoleRoute>} />
 
               <Route path="notifications" element={<NotificationsTab />} />
               <Route path="settings" element={<RoleRoute allowed={["admin"]}><SettingsTab /></RoleRoute>} />

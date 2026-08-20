@@ -59,7 +59,7 @@ export default function DocumentsTab() {
   function fileIcon(type) {
     switch (type) {
       case "pdf": return <MdPictureAsPdf size={36} color="#d32f2f" />;
-      case "xlsx": case "xls": return <MdTableChart size={36} color="#E1FB15" />;
+      case "xlsx": case "xls": return <MdTableChart size={36} color="#2E7D32" />;
       default: return <MdDescription size={36} color="#1976d2" />;
     }
   }
@@ -75,7 +75,7 @@ export default function DocumentsTab() {
   function categoryBadgeColor(category) {
     switch (category) {
       case "Manuals": return { background: "rgba(25,118,210,.08)", color: "#1976d2" };
-      case "Templates": return { background: "rgba(225,251,21,.08)", color: "#E1FB15" };
+      case "Templates": return { background: "rgba(46,125,50,.08)", color: "#2E7D32" };
       case "Guidelines": return { background: "rgba(245,124,0,.08)", color: "#f57c00" };
       case "Forms": return { background: "rgba(106,27,154,.08)", color: "#6a1b9a" };
       case "Reports": return { background: "rgba(211,47,47,.08)", color: "#d32f2f" };
