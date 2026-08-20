@@ -187,8 +187,12 @@ const recordBorrow = async (req, res) => {
     if (borrower.userId) {
       userRef = db.collection(USERS).doc(borrower.userId);
     } else if (borrower.schoolID) {
-      const userSnap = await db.collection(USERS)
+      let userSnap = await db.collection(USERS)
         .where("schoolId", "==", borrower.schoolID).limit(1).get();
+      if (userSnap.empty) {
+        userSnap = await db.collection(USERS)
+          .where("employeeId", "==", borrower.schoolID).limit(1).get();
+      }
       if (!userSnap.empty) {
         resolvedUser = { id: userSnap.docs[0].id, ...userSnap.docs[0].data() };
         userRef = userSnap.docs[0].ref;

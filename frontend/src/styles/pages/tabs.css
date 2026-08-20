@@ -1,4 +1,4 @@
-.tab-content{text-align:left;padding:20px 24px}
+.tab-content{text-align:left;padding:0 0 20px}
 
 /* Overview Tab */
 .overview-greeting-card{
@@ -164,6 +164,7 @@
   display:flex;align-items:flex-start;gap:16px;
   transition:all .25s cubic-bezier(.4,0,.2,1);
   position:relative;overflow:hidden;box-shadow:var(--card-shadow);
+  cursor:pointer;
 }
 .notif-card::before{
   content:"";position:absolute;left:0;top:0;bottom:0;width:4px;
@@ -210,6 +211,22 @@
   background:transparent;border:1px solid var(--border);color:var(--text-muted);
 }
 .notif-action-btn.dismiss:hover{border-color:#d32f2f;color:#d32f2f;background:rgba(211,47,47,.04)}
+
+.notif-detail{display:flex;flex-direction:column;gap:20px}
+.notif-detail-header{display:flex;align-items:center;gap:14px}
+.notif-detail-icon{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.notif-detail-header h3{font-size:16px;font-weight:600;color:var(--text);margin:0 0 6px 0}
+.notif-detail-message{padding:16px;background:var(--bg);border-radius:10px;border:1px solid var(--border)}
+.notif-detail-message p{font-size:14px;color:var(--text);margin:0;line-height:1.6}
+.notif-detail-meta{display:flex;flex-direction:column;gap:0;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.notif-detail-row{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid var(--border)}
+.notif-detail-row:last-child{border-bottom:none}
+.notif-detail-label{font-size:12px;color:var(--text-muted);font-weight:500}
+.notif-detail-value{font-size:13px;color:var(--text);font-weight:600}
+.notif-detail-value.status-read{color:var(--green)}
+.notif-detail-value.status-unread{color:#f57c00}
+.notif-detail-actions{display:flex;gap:10px;flex-wrap:wrap}
+.notif-detail-actions .btn{display:inline-flex;align-items:center;gap:6px}
 
 /* Settings Tab */
 .settings-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;flex-wrap:wrap;gap:12px}
@@ -687,6 +704,12 @@ body.dark .notif-card-body p{color:#888}
 body.dark .notif-card-time{color:#888}
 body.dark .notif-action-btn.dismiss{border-color:rgba(255,255,255,.1);color:#888}
 body.dark .notif-action-btn.dismiss:hover{border-color:#d32f2f;color:#aaa}
+body.dark .notif-detail-message{background:#0a0a0a;border-color:rgba(255,255,255,.1)}
+body.dark .notif-detail-message p{color:#FFFFFF}
+body.dark .notif-detail-meta{border-color:rgba(255,255,255,.1)}
+body.dark .notif-detail-row{border-color:rgba(255,255,255,.1)}
+body.dark .notif-detail-label{color:#888}
+body.dark .notif-detail-value{color:#FFFFFF}
 body.dark .settings-section{border-color:rgba(255,255,255,.1)}
 body.dark .settings-section label{border-color:rgba(255,255,255,.1)}
 body.dark .settings-saved-label{border-color:rgba(255,255,255,.1);background:#131313;color:#888}

@@ -1,5 +1,5 @@
 /* Admin Page */
-.admin-page{max-width:800px;margin:0 auto;padding:20px 16px}
+.admin-page{max-width:800px;margin:0 auto;padding:0 16px 20px}
 
 /* Header */
 .admin-header{display:flex;align-items:center;gap:16px;margin-bottom:28px}

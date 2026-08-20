@@ -20,6 +20,7 @@ export default function CatalogPage() {
   const [imageOverlay, setImageOverlay] = useState(null);
   const [form, setForm] = useState({ itemName: "", category: "", course: "", quantity: "", condition: "", status: "Available", imageUrl: "", barcode: "" });
   const [uploading, setUploading] = useState(false);
+  const [viewMode, setViewMode] = useState("grid");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -201,19 +202,33 @@ export default function CatalogPage() {
             <option value="number">1-200 (Numeric)</option>
           </select>
         </div>
+        <div className="catalog-view-toggle">
+          <button className={`view-btn ${viewMode === "grid" ? "active" : ""}`} onClick={() => setViewMode("grid")} title="Grid view">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          </button>
+          <button className={`view-btn ${viewMode === "list" ? "active" : ""}`} onClick={() => setViewMode("list")} title="List view">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          </button>
+        </div>
       </div>
 
       {filteredItems.length === 0 ? (
         <div className="catalog-empty">
           <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
           <h3>No items found</h3>
-          <p>Try adjusting your filter or create a new item</p>
-          <button className="btn btn-green" onClick={() => setShowCreate(true)}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
-            Create Item
-          </button>
+          {filter === "Borrowed" ? (
+            <p>No borrowed items found</p>
+          ) : (
+            <>
+              <p>Try adjusting your filter or create a new item</p>
+              <button className="btn btn-green" onClick={() => setShowCreate(true)}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
+                Create Item
+              </button>
+            </>
+          )}
         </div>
-      ) : (
+      ) : viewMode === "grid" ? (
         <div className="catalog-grid">
           {filteredItems.map((item) => {
             const avail = getAvailableQuantity(item);
@@ -264,6 +279,60 @@ export default function CatalogPage() {
             );
           })}
         </div>
+      ) : (
+        <div className="catalog-table-wrapper">
+          <table className="catalog-table">
+            <thead>
+              <tr>
+                <th>Item Name</th>
+                <th>Category</th>
+                <th>Course</th>
+                <th>Condition</th>
+                <th>Quantity</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredItems.map((item) => {
+                const avail = getAvailableQuantity(item);
+                const total = Math.max(0, numOr(item.quantity));
+                return (
+                  <tr key={item.id}>
+                    <td className="table-name-cell">
+                      <div className="table-item-name">
+                        {item.imageUrl ? (
+                          <img src={item.imageUrl} alt="" className="table-item-thumb" onClick={() => setImageOverlay(item.imageUrl)} />
+                        ) : (
+                          <div className="table-item-thumb-placeholder">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                          </div>
+                        )}
+                        <span>{item.itemName || "-"}</span>
+                      </div>
+                    </td>
+                    <td>{item.category ? <span className="category-pill">{item.category}</span> : "-"}</td>
+                    <td>{item.course || "-"}</td>
+                    <td>{item.condition ? <span className={`condition-badge ${conditionClass(item.condition)}`}>{item.condition}</span> : "-"}</td>
+                    <td>{Number.isFinite(Number(item.availableQuantity)) ? `${avail} / ${total}` : total}</td>
+                    <td><span className={`card-status-badge ${item.status === "Available" ? "status-available" : "status-borrowed"}`}>{item.status || "Available"}</span></td>
+                    <td className="table-actions-cell">
+                      <button className="card-btn card-btn-qr" onClick={() => showQrModal(item.id, item.itemName)} title="QR Code">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                      </button>
+                      <button className="card-btn card-btn-edit" onClick={() => setShowUpdate({ ...item })} title="Update">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      </button>
+                      <button className="card-btn card-btn-delete" onClick={() => handleDelete(item.id)} title="Delete">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {showCreate && (
@@ -284,10 +353,6 @@ export default function CatalogPage() {
             <select value={form.condition} onChange={(e) => setForm({ ...form, condition: e.target.value })} required>
               <option value="" disabled>Select Condition</option>
               {["Excellent", "Good", "Fair", "Damaged", "For Repair", "Missing"].map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-              <option value="Available">Available</option>
-              <option value="Borrowed">Borrowed</option>
             </select>
             <div className="image-upload-row">
               <input type="url" placeholder="Image URL" value={form.imageUrl} readOnly required />

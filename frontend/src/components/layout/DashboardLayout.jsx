@@ -71,12 +71,7 @@ export default function DashboardLayout() {
 
   async function fetchUnreadCount() {
     try {
-      let data;
-      if (role === "admin") {
-        data = await api.getNotifications();
-      } else {
-        data = await api.getMyNotifications();
-      }
+      const data = await api.getMyNotifications();
       const unread = data.filter((n) => !n.read).length;
       setUnreadCount(unread);
     } catch {

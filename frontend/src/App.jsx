@@ -94,7 +94,7 @@ function App() {
               <Route path="settings" element={<RoleRoute allowed={["admin"]}><SettingsTab /></RoleRoute>} />
               <Route path="members" element={<RoleRoute allowed={["admin"]}><MembersTab /></RoleRoute>} />
               <Route path="documents" element={<DocumentsTab />} />
-              <Route path="scanner" element={<ScannerPage />} />
+              <Route path="scanner" element={<RoleRoute allowed={["admin", "faculty", "student"]}><ScannerPage /></RoleRoute>} />
               <Route path="transactions" element={<TransactionsPage />} />
               <Route path="borrowed" element={<Navigate to="/transactions" replace />} />
               <Route path="returned" element={<Navigate to="/transactions" replace />} />

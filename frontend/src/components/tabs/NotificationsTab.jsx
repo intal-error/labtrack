@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../../services/api";
-import { useAuth } from "../../context/AuthContext";
+import Modal from "../ui/Modal";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
-import { MdWarning, MdInfo, MdCheckCircle, MdError, MdNotificationsOff, MdFilterList } from "react-icons/md";
+import { MdWarning, MdInfo, MdCheckCircle, MdError, MdNotificationsOff, MdOpenInNew } from "react-icons/md";
 
 const TYPE_CONFIG = {
   alert: { icon: <MdError size={22} />, label: "Alert", color: "#d32f2f", bg: "linear-gradient(135deg,#ffebee,#ffcdd2)" },
@@ -13,27 +14,27 @@ const TYPE_CONFIG = {
   info: { icon: <MdInfo size={22} />, label: "Info", color: "#1565c0", bg: "linear-gradient(135deg,#e3f2fd,#bbdefb)" },
 };
 
+function formatFullDate(date) {
+  if (!date) return "";
+  const d = typeof date?.toDate === "function" ? date.toDate() : new Date(date);
+  return d.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
 export default function NotificationsTab() {
-  const { role } = useAuth();
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
+  const [selectedNotif, setSelectedNotif] = useState(null);
 
   useEffect(() => { loadNotifications(); }, []);
 
   async function loadNotifications() {
     try {
-      let data;
-      if (role === "admin") {
-        data = await api.getNotifications();
-      } else {
-        data = await api.getMyNotifications();
-      }
+      const data = await api.getMyNotifications();
       setNotifications(data);
     } catch {
-      setNotifications([
-        { id: "1", type: "info", title: "System Update", message: "New laboratory catalog items have been added.", read: false, createdAt: new Date().toISOString() },
-      ]);
+      setNotifications([]);
     } finally {
       setLoading(false);
     }
@@ -44,6 +45,7 @@ export default function NotificationsTab() {
       await api.dismissNotification(id);
     } catch { /* ignore */ }
     setNotifications((prev) => prev.filter((n) => n.id !== id));
+    setSelectedNotif((prev) => (prev?.id === id ? null : prev));
     toast.success("Notification dismissed");
   }
 
@@ -51,6 +53,7 @@ export default function NotificationsTab() {
     try {
       await api.markNotificationRead(id);
       setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
+      setSelectedNotif((prev) => (prev?.id === id ? { ...prev, read: true } : prev));
     } catch { /* ignore */ }
   }
 
@@ -121,7 +124,7 @@ export default function NotificationsTab() {
         ) : filtered.map((n) => {
           const config = TYPE_CONFIG[n.type] || TYPE_CONFIG.info;
           return (
-            <div className={`notif-card ${n.read ? "read" : "unread"}`} key={n.id}>
+            <div className={`notif-card ${n.read ? "read" : "unread"}`} key={n.id} onClick={() => setSelectedNotif(n)}>
               <div className="notif-card-icon" style={{ background: config.bg, color: config.color }}>
                 {config.icon}
               </div>
@@ -137,11 +140,11 @@ export default function NotificationsTab() {
               </div>
               <div className="notif-card-actions">
                 {!n.read && (
-                  <button className="notif-action-btn read" onClick={() => markRead(n.id)}>
+                  <button className="notif-action-btn read" onClick={(e) => { e.stopPropagation(); markRead(n.id); }}>
                     <MdCheckCircle size={14} /> Read
                   </button>
                 )}
-                <button className="notif-action-btn dismiss" onClick={() => dismissNotification(n.id)}>
+                <button className="notif-action-btn dismiss" onClick={(e) => { e.stopPropagation(); dismissNotification(n.id); }}>
                   Dismiss
                 </button>
               </div>
@@ -149,6 +152,54 @@ export default function NotificationsTab() {
           );
         })}
       </div>
+
+      {selectedNotif && (
+        <Modal title="Notification Details" onClose={() => setSelectedNotif(null)}>
+          <div className="notif-detail">
+            <div className="notif-detail-header">
+              <div className="notif-detail-icon" style={{ background: (TYPE_CONFIG[selectedNotif.type] || TYPE_CONFIG.info).bg, color: (TYPE_CONFIG[selectedNotif.type] || TYPE_CONFIG.info).color }}>
+                {(TYPE_CONFIG[selectedNotif.type] || TYPE_CONFIG.info).icon}
+              </div>
+              <div>
+                <h3>{selectedNotif.title}</h3>
+                <span className="notif-type-badge" style={{ background: `${(TYPE_CONFIG[selectedNotif.type] || TYPE_CONFIG.info).color}15`, color: (TYPE_CONFIG[selectedNotif.type] || TYPE_CONFIG.info).color }}>
+                  {(TYPE_CONFIG[selectedNotif.type] || TYPE_CONFIG.info).label}
+                </span>
+              </div>
+            </div>
+            <div className="notif-detail-message">
+              <p>{selectedNotif.message}</p>
+            </div>
+            <div className="notif-detail-meta">
+              <div className="notif-detail-row">
+                <span className="notif-detail-label">Date</span>
+                <span className="notif-detail-value">{formatFullDate(selectedNotif.createdAt)}</span>
+              </div>
+              <div className="notif-detail-row">
+                <span className="notif-detail-label">Status</span>
+                <span className={`notif-detail-value ${selectedNotif.read ? "status-read" : "status-unread"}`}>
+                  {selectedNotif.read ? "Read" : "Unread"}
+                </span>
+              </div>
+            </div>
+            <div className="notif-detail-actions">
+              {!selectedNotif.read && (
+                <button className="btn btn-green" onClick={() => markRead(selectedNotif.id)}>
+                  <MdCheckCircle size={14} /> Mark as read
+                </button>
+              )}
+              {selectedNotif.link && (
+                <button className="btn btn-primary" onClick={() => { navigate(selectedNotif.link); setSelectedNotif(null); }}>
+                  <MdOpenInNew size={14} /> View Details
+                </button>
+              )}
+              <button className="btn btn-orange" onClick={() => dismissNotification(selectedNotif.id)}>
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-.about-page{padding:20px}
+.about-page{padding:0 0 20px}
 .about-split{display:flex;height:calc(100vh - 100px);width:100%;border-radius:12px;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,.15)}
 .about-left{flex:.6;position:relative;background:var(--green);display:flex;align-items:center;justify-content:center;overflow:hidden}
 .about-left .overlay-image{position:absolute;inset:0;z-index:1}

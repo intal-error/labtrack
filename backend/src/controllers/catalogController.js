@@ -39,6 +39,31 @@ const create = async (req, res) => {
       available: data.status === "Available" && quantity > 0,
       createdAt: new Date(),
     });
+
+    try {
+      const usersSnap = await db.collection("users").get();
+      const notifPromises = usersSnap.docs
+        .filter((doc) => {
+          const role = doc.data().role;
+          return role === "student" || role === "faculty";
+        })
+        .map((doc) =>
+          db.collection("notifications").add({
+            targetUserId: doc.id,
+            type: "info",
+            title: "New Catalog Item Available",
+            message: `A new item "${data.itemName}" has been added to the catalog and is now available for borrowing.`,
+            read: false,
+            dismissedBy: [],
+            link: "/catalog",
+            createdAt: new Date(),
+          })
+        );
+      await Promise.all(notifPromises);
+    } catch {
+      // Non-critical: item was created successfully, skip notification
+    }
+
     res.status(201).json({ id: docRef.id, message: "Item created" });
   } catch (err) {
     res.status(500).json({ error: err.message });

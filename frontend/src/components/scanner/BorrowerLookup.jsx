@@ -9,10 +9,13 @@ export async function resolveUser(rawCode) {
     const snap = await getDoc(doc(db, "users", id));
     if (snap.exists()) return { id: snap.id, data: snap.data(), scanCode: raw };
   }
-  const candidates = [normalize(raw), normalize(payload)].filter(Boolean);
+
+  const trimmed = [raw, payload].map((v) => String(v || "").trim()).filter(Boolean);
+  const normalized = trimmed.map((v) => normalize(v));
+  const candidates = [...new Set([...trimmed, ...normalized])].filter(Boolean);
   if (candidates.length === 0) return null;
 
-  const fields = ["schoolId", "schoolID", "studentID", "barcode", "qrCode"];
+  const fields = ["schoolId", "employeeId", "schoolID", "studentID", "barcode", "qrCode"];
   for (const field of fields) {
     for (const candidate of candidates) {
       try {
@@ -22,8 +25,8 @@ export async function resolveUser(rawCode) {
           const d = snap.docs[0];
           return { id: d.id, data: d.data(), scanCode: raw };
         }
-      } catch {
-        // Field may not have an index, skip
+      } catch (err) {
+        console.warn(`BorrowerLookup: query on field "${field}" failed:`, err.message);
       }
     }
   }

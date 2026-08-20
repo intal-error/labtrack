@@ -8,12 +8,12 @@ const checkOverdueTransactions = async () => {
   try {
     const snap = await db.collection(TRANS)
       .where("action", "==", "borrowed")
-      .where("status", "!=", "returned")
       .get();
     const now = new Date();
 
     for (const doc of snap.docs) {
       const d = doc.data();
+      if (d.status === "returned") continue;
       if (d.reminderSent) continue;
 
       const ts = d.timestamp?.toDate?.() || (d.timestamp?.seconds ? new Date(d.timestamp.seconds * 1000) : null);
@@ -32,11 +32,12 @@ const checkOverdueTransactions = async () => {
           if (d.userId) {
             const existing = await db.collection(NOTIF)
               .where("targetUserId", "==", d.userId)
-              .where("type", "==", "overdue")
-              .where("title", "==", "Overdue Return")
-              .limit(1)
               .get();
-            if (existing.empty) {
+            const hasNotif = existing.docs.some((nd) => {
+              const data = nd.data();
+              return data.type === "overdue" && data.title === "Overdue Return";
+            });
+            if (!hasNotif) {
               await db.collection(NOTIF).add({
                 targetUserId: d.userId,
                 type: "overdue",
