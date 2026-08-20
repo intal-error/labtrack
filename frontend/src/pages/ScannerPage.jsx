@@ -6,6 +6,7 @@ import { toDate, numOr, getAvailableQuantity, isOpenBorrow, normalize } from "..
 import { resolveUser } from "../components/scanner/BorrowerLookup";
 import { resolveItem } from "../components/scanner/ItemLookup";
 import ScannerCamera from "../components/scanner/ScannerCamera";
+import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 import "../styles/pages/scanner.css";
 
@@ -18,6 +19,7 @@ function defaultDueDate() {
 }
 
 export default function ScannerPage() {
+  const { userProfile } = useAuth();
   const [action, setAction] = useState("borrowed");
   const [schoolId, setSchoolId] = useState("");
   const [itemCode, setItemCode] = useState("");
@@ -25,6 +27,11 @@ export default function ScannerPage() {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("student");
+  const [course, setCourse] = useState("");
+  const [year, setYear] = useState("");
+  const [contact, setContact] = useState("");
+  const [department, setDepartment] = useState("");
+  const [position, setPosition] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [dueDate, setDueDate] = useState("");
   const [selectedItem, setSelectedItem] = useState(null);
@@ -46,6 +53,36 @@ export default function ScannerPage() {
     if (action === "returned") setDueDate("");
     else if (!dueDate) setDueDate(defaultDueDate());
   }, [action]);
+
+  // Auto-fill borrower from logged-in user
+  useEffect(() => {
+    if (userProfile) {
+      const d = userProfile;
+      setSchoolId(d.schoolId || d.schoolID || d.studentID || d.employeeId || "");
+      setFirstName(d.firstName || d.firstname || "");
+      setLastName(d.lastName || d.lastname || "");
+      setEmail(d.email || "");
+      setRole(d.role === "faculty" ? "faculty" : "student");
+      setCourse(d.course || "");
+      setYear(d.year || "");
+      setContact(d.contact || d.contactNumber || "");
+      setDepartment(d.department || "");
+      setPosition(d.position || "");
+      setSelectedUser(userProfile);
+      setBorrowerResult({
+        name: `${d.firstName || d.firstname || ""} ${d.lastName || d.lastname || ""}`.trim(),
+        schoolID: d.schoolId || d.schoolID || d.studentID || d.employeeId,
+        role: d.role,
+        course: d.course,
+        year: d.year,
+        department: d.department,
+        position: d.position,
+        contact: d.contact || d.contactNumber,
+        email: d.email,
+        profileURL: d.profileURL,
+      });
+    }
+  }, [userProfile]);
 
   const scrollToStep2 = () => {
     setTimeout(() => {
@@ -139,10 +176,36 @@ export default function ScannerPage() {
   };
 
   const resetForm = () => {
-    setSchoolId(""); setItemCode(""); setFirstName(""); setLastName(""); setEmail(""); setQuantity(1);
-    setSelectedItem(null); setSelectedUser(null); setBorrowerResult(null); setItemResult(null);
+    setItemCode("");
+    setSelectedItem(null); setItemResult(null);
     setTxStatus(""); setTxStatusType("");
     setDueDate(defaultDueDate());
+    // Keep borrower info if user is logged in
+    if (userProfile) {
+      setSchoolId(userProfile.schoolId || userProfile.schoolID || userProfile.studentID || userProfile.employeeId || "");
+      setFirstName(userProfile.firstName || userProfile.firstname || "");
+      setLastName(userProfile.lastName || userProfile.lastname || "");
+      setEmail(userProfile.email || "");
+      setRole(userProfile.role === "faculty" ? "faculty" : "student");
+      setCourse(userProfile.course || "");
+      setYear(userProfile.year || "");
+      setContact(userProfile.contact || userProfile.contactNumber || "");
+      setDepartment(userProfile.department || "");
+      setPosition(userProfile.position || "");
+      setSelectedUser(userProfile);
+      setBorrowerResult({
+        name: `${userProfile.firstName || userProfile.firstname || ""} ${userProfile.lastName || userProfile.lastname || ""}`.trim(),
+        schoolID: userProfile.schoolId || userProfile.schoolID || userProfile.studentID || userProfile.employeeId,
+        role: userProfile.role,
+        course: userProfile.course,
+        year: userProfile.year,
+        department: userProfile.department,
+        position: userProfile.position,
+        contact: userProfile.contact || userProfile.contactNumber,
+        email: userProfile.email,
+        profileURL: userProfile.profileURL,
+      });
+    }
   };
 
   const isBorrow = action === "borrowed";
@@ -181,63 +244,72 @@ export default function ScannerPage() {
               <div className="scanner-step-badge">1</div>
               <div className="scanner-step-text">
                 <h2>{isBorrow ? "Borrower" : "Returner"}</h2>
-                <p>Scan or enter school ID</p>
+                <p>{borrowerResult ? "Account verified from login session" : "Scan or enter school ID"}</p>
               </div>
             </div>
             <div className="scanner-step-body">
-              <div className="scanner-input-row">
-                <div className="scanner-input-wrap">
-                  <svg className="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
-                  <input type="text" placeholder="School ID" value={schoolId} onChange={(e) => { setSchoolId(e.target.value); setSelectedUser(null); setBorrowerResult(null); }} />
-                </div>
-                <button type="button" className="scanner-btn-scan" onClick={() => setCameraTarget("borrower")}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                  Scan
-                </button>
-                <button type="button" className="scanner-btn-find" onClick={lookupBorrower}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                  Find
-                </button>
-              </div>
-
-              {borrowerResult && (
-                <div className="scanner-result-card">
-                  <div className="scanner-result-icon borrower">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                  </div>
-                  <div className="scanner-result-info">
-                    <strong>{borrowerResult.name}</strong>
-                    <div className="scanner-result-meta">
-                      {borrowerResult.schoolID && <span>ID: {borrowerResult.schoolID}</span>}
-                      {borrowerResult.role && <span>{borrowerResult.role}</span>}
-                      {borrowerResult.course && <span>{borrowerResult.course}</span>}
+              {borrowerResult ? (
+                <div className="scanner-user-profile">
+                  <div className="scanner-user-profile-header">
+                    {borrowerResult.profileURL ? (
+                      <img src={borrowerResult.profileURL} alt="" className="scanner-user-avatar" />
+                    ) : (
+                      <div className="scanner-user-avatar-placeholder">
+                        {(borrowerResult.name || "U")[0]?.toUpperCase()}
+                      </div>
+                    )}
+                    <div className="scanner-user-profile-info">
+                      <div className="scanner-user-name">{borrowerResult.name}</div>
+                      <div className="scanner-user-id">{borrowerResult.schoolID}</div>
+                      <div className={`scanner-user-role ${borrowerResult.role}`}>
+                        {borrowerResult.role === "faculty" ? "Faculty" : "Student"}
+                      </div>
+                    </div>
+                    <div className="scanner-user-verified">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>
                     </div>
                   </div>
-                  <svg className="scanner-result-check" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>
+                  <div className="scanner-user-details">
+                    {borrowerResult.email && (
+                      <div className="scanner-user-detail">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                        <span>{borrowerResult.email}</span>
+                      </div>
+                    )}
+                    {borrowerResult.course && (
+                      <div className="scanner-user-detail">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                        <span>{borrowerResult.course}{borrowerResult.year ? ` - ${borrowerResult.year}` : ""}</span>
+                      </div>
+                    )}
+                    {borrowerResult.department && (
+                      <div className="scanner-user-detail">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                        <span>{borrowerResult.department}{borrowerResult.position ? ` - ${borrowerResult.position}` : ""}</span>
+                      </div>
+                    )}
+                    {borrowerResult.contact && (
+                      <div className="scanner-user-detail">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                        <span>{borrowerResult.contact}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
-
-              {isBorrow && (
-                <div className="scanner-fields-grid">
-                  <div className="scanner-field">
-                    <label>First Name</label>
-                    <input type="text" placeholder="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+              ) : (
+                <div className="scanner-input-row">
+                  <div className="scanner-input-wrap">
+                    <svg className="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+                    <input type="text" placeholder="School ID" value={schoolId} onChange={(e) => { setSchoolId(e.target.value); setSelectedUser(null); setBorrowerResult(null); }} />
                   </div>
-                  <div className="scanner-field">
-                    <label>Last Name</label>
-                    <input type="text" placeholder="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
-                  </div>
-                  <div className="scanner-field full-width">
-                    <label>Email</label>
-                    <input type="email" placeholder="Email (optional)" value={email} onChange={(e) => setEmail(e.target.value)} />
-                  </div>
-                  <div className="scanner-field">
-                    <label>Role</label>
-                    <select value={role} onChange={(e) => setRole(e.target.value)}>
-                      <option value="student">Student</option>
-                      <option value="faculty">Faculty</option>
-                    </select>
-                  </div>
+                  <button type="button" className="scanner-btn-scan" onClick={() => setCameraTarget("borrower")}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                    Scan
+                  </button>
+                  <button type="button" className="scanner-btn-find" onClick={lookupBorrower}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                    Find
+                  </button>
                 </div>
               )}
             </div>
