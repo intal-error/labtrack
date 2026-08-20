@@ -8,14 +8,14 @@
 .about-logo{width:120px;height:auto;margin-bottom:15px;filter:drop-shadow(0 2px 5px rgba(0,0,0,.4))}
 .system-title{font-size:1.9rem;font-weight:700;line-height:1.4;text-shadow:0 2px 6px rgba(0,0,0,.4)}
 .about-right{flex:.4;background:linear-gradient(180deg,#fdfdfd,#f0f5f0);display:flex;justify-content:center;align-items:center;padding:40px}
-.about-text{max-width:500px;background:rgba(255,255,255,.9);border:1px solid var(--border);border-radius:16px;padding:35px 30px;box-shadow:0 8px 30px rgba(0,0,0,.1)}
+.about-text{max-width:500px;background:rgba(255,255,255,.9);border:1.5px solid var(--border);border-radius:16px;padding:35px 30px;box-shadow:var(--card-shadow)}
 .about-text h2{color:var(--dark-green);margin-bottom:20px;font-size:1.8rem;font-weight:700}
 .about-text p{color:#333;line-height:1.7;font-size:1rem;margin-bottom:15px}
 @media(max-width:900px){.about-split{flex-direction:column;height:auto}.about-left{flex:none;height:220px}.about-right{flex:none;padding:30px 20px}.about-text{padding:25px 20px}.system-title{font-size:1.5rem}.about-text h2{font-size:1.4rem}.about-text p{font-size:.95rem}}
 body.dark .about-left{background:#0a0a0a}
 body.dark .about-left::after{background:linear-gradient(180deg,rgba(0,0,0,.9),rgba(0,0,0,.7),rgba(0,0,0,.95))}
 body.dark .about-right{background:#0a0a0a}
-body.dark .about-text{background:#131313;border-color:#2a2a2a}
+body.dark .about-text{background:#131313;border-color:rgba(255,255,255,.1)}
 body.dark .about-text h2{color:#FFFFFF}
 body.dark .about-text p{color:#cccccc}
 body.dark .system-title,body.dark .about-left-content{color:#FFFFFF}

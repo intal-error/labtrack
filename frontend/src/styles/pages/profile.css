@@ -40,9 +40,9 @@ body.dark .profile-page {
   grid-template-columns: 270px 1fr;
   background: var(--bg-card);
   border-radius: 18px;
-  border: 1px solid var(--border);
+  border: 1.5px solid var(--border);
   overflow: hidden;
-  box-shadow: 0 4px 24px rgba(0,0,0,.06);
+  box-shadow: var(--card-shadow);
   transition: box-shadow .3s;
 }
 .profile-card:hover {

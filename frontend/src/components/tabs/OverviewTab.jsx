@@ -92,9 +92,13 @@ export default function OverviewTab() {
 
   return (
     <div className="tab-content">
-      <div className="overview-greeting">
-        <h2>{getGreeting()}</h2>
-        <p>{formatDate()}</p>
+      <div className="overview-greeting-card">
+        <div className="overview-greeting-content">
+          <div className="overview-greeting-text">
+            <h2>{getGreeting()}</h2>
+            <p>{formatDate()}</p>
+          </div>
+        </div>
       </div>
 
       <div className="overview-actions">

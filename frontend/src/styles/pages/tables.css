@@ -4,7 +4,7 @@
 .tables-course-filter{padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg-card);color:var(--text);cursor:pointer;min-width:160px}
 .tables-course-filter:focus{outline:none;border-color:var(--green);box-shadow:0 0 3px rgba(46,125,50,.3)}
 .tables-page .btn-report{display:inline-block}
-.table-wrapper{width:100%;max-width:1200px;background:var(--bg-card);border-radius:12px;margin:0 auto 30px;padding:0;overflow-y:auto;max-height:calc(100vh - 300px);box-sizing:border-box;scrollbar-width:thin;scrollbar-color:var(--green) #f0f0f0;box-shadow:0 2px 6px rgba(0,0,0,.1)}
+.table-wrapper{width:100%;max-width:1200px;background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;margin:0 auto 30px;padding:0;overflow-y:auto;max-height:calc(100vh - 300px);box-sizing:border-box;scrollbar-width:thin;scrollbar-color:var(--green) #f0f0f0;box-shadow:var(--card-shadow)}
 .table-wrapper::-webkit-scrollbar{width:8px}
 .table-wrapper::-webkit-scrollbar-thumb{background:var(--green);border-radius:10px}
 table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:14px;background:var(--bg-card)}
@@ -16,7 +16,7 @@ table tbody tr:nth-child(even){background:#fafafa}
 table tr:hover{background-color:#f9f9f9}
 @media(max-width:768px){.table-wrapper{overflow-x:auto;display:block}table{min-width:700px}}
 body.dark .tables-page h1{color:#FFFFFF}
-body.dark .table-wrapper{background:#131313;border-color:#2a2a2a}
+body.dark .table-wrapper{background:#131313;border-color:rgba(255,255,255,.1)}
 body.dark table th,body.dark table td{color:#FFFFFF;border-color:#2a2a2a}
 body.dark table th{background:#1a1a1a}
 body.dark table tr:hover{background-color:rgba(255,255,255,.06)}
@@ -31,7 +31,7 @@ body.dark .btn-report{background:#1a1a1a;color:#FFFFFF;border-color:#2a2a2a}
 .transactions-header .btn{display:flex;align-items:center;gap:6px}
 
 .transactions-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
-.transactions-stats .stat-card{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:18px 20px;display:flex;align-items:center;gap:14px;transition:all .25s;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+.transactions-stats .stat-card{background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;padding:18px 20px;display:flex;align-items:center;gap:14px;transition:all .25s;box-shadow:var(--card-shadow)}
 .transactions-stats .stat-card:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,.1)}
 .transactions-stats .stat-icon{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .transactions-stats .stat-active .stat-icon{background:linear-gradient(135deg,#e3f2fd,#bbdefb);color:#1565c0}
@@ -69,7 +69,7 @@ body.dark .btn-report{background:#1a1a1a;color:#FFFFFF;border-color:#2a2a2a}
 .transactions-search input:focus{outline:none;border-color:var(--green);box-shadow:0 0 3px rgba(46,125,50,.3)}
 
 .transactions-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:20px}
-.transaction-card{background:var(--bg-card);border:1px solid var(--border);border-radius:14px;overflow:hidden;transition:all .3s;box-shadow:0 2px 8px rgba(0,0,0,.06);border-left:3px solid transparent}
+.transaction-card{background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;overflow:hidden;transition:all .3s;box-shadow:var(--card-shadow);border-left:3px solid transparent}
 .transaction-card:hover{transform:translateY(-4px);box-shadow:0 12px 28px rgba(0,0,0,.12)}
 .transaction-card.overdue-warning{border-left-color:#f57c00}
 .transaction-card.overdue-critical{border-left-color:#d32f2f}
@@ -134,7 +134,7 @@ body.dark .btn-report{background:#1a1a1a;color:#FFFFFF;border-color:#2a2a2a}
 .btn-refresh{border:1px solid var(--border);background:var(--bg-card);color:var(--text)}
 .btn-refresh:hover{border-color:var(--green);color:var(--green)}
 
-.transactions-table-wrapper{background:var(--bg-card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.transactions-table-wrapper{background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:var(--card-shadow)}
 .transactions-table{width:100%;border-collapse:collapse;font-size:13px}
 .transactions-table thead th{background:var(--dark-green);color:#fff;text-transform:uppercase;font-weight:700;font-size:11px;text-align:left;padding:12px 14px;border:none}
 .transactions-table tbody td{padding:10px 14px;border-bottom:1px solid var(--border);text-align:left;color:var(--text)}
@@ -150,7 +150,7 @@ body.dark .btn-report{background:#1a1a1a;color:#FFFFFF;border-color:#2a2a2a}
 .table-status-cell{display:flex;align-items:center;gap:4px}
 .btn-xs{padding:4px 10px;font-size:11px}
 
-.transactions-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;text-align:center;background:var(--bg-card);border:1px solid var(--border);border-radius:14px}
+.transactions-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;text-align:center;background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;box-shadow:var(--card-shadow)}
 .transactions-empty svg{color:var(--text-muted);opacity:.3;margin-bottom:16px}
 .transactions-empty h3{font-size:16px;color:var(--text);margin:0 0 6px 0}
 .transactions-empty p{font-size:13px;color:var(--text-muted);margin:0}
@@ -173,7 +173,7 @@ body.dark .btn-report{background:#1a1a1a;color:#FFFFFF;border-color:#2a2a2a}
 
 body.dark .transactions-header h1{color:#FFFFFF}
 body.dark .transactions-subtitle{color:#888}
-body.dark .transactions-stats .stat-card{border-color:#264d35;background:#131313}
+body.dark .transactions-stats .stat-card{border-color:rgba(255,255,255,.1);background:#131313}
 body.dark .transactions-stats .stat-active .stat-icon{background:linear-gradient(135deg,#1b2a3a,#263550);color:#64b5f6}
 body.dark .transactions-stats .stat-borrowed-total .stat-icon{background:linear-gradient(135deg,#3a2a1b,#4d3526);color:#ffb74d}
 body.dark .transactions-stats .stat-returned-total .stat-icon{background:linear-gradient(135deg,#1b3a2a,#264d35);color:var(--green-light)}
@@ -191,7 +191,7 @@ body.dark .view-btn.active{background:var(--green);color:#fff}
 body.dark .view-btn + .view-btn{border-color:#264d35}
 body.dark .transactions-sort-select,body.dark .transactions-date-filter,body.dark .transactions-course-filter{background:#0f0f0f;border-color:#264d35;color:#FFFFFF}
 body.dark .transactions-search input{background:#0f0f0f;border-color:#264d35;color:#FFFFFF}
-body.dark .transaction-card{border-color:#264d35;background:#131313}
+body.dark .transaction-card{border-color:rgba(255,255,255,.1);background:#131313}
 body.dark .transaction-card:hover{box-shadow:0 12px 28px rgba(0,0,0,.3)}
 body.dark .transaction-card.overdue-warning{border-left-color:#f57c00}
 body.dark .transaction-card.overdue-critical{border-left-color:#c62828}
@@ -199,14 +199,14 @@ body.dark .transaction-card-details{background:#0a0a0a}
 body.dark .transaction-name{color:#FFFFFF}
 body.dark .transaction-course-tag{background:rgba(102,187,106,.1);color:var(--green-light)}
 body.dark .btn-refresh{background:#131313;border-color:#264d35;color:#aaa}
-body.dark .transactions-table-wrapper{border-color:#264d35;background:#131313}
+body.dark .transactions-table-wrapper{border-color:rgba(255,255,255,.1);background:#131313}
 body.dark .transactions-table thead th{background:#1a1a1a}
 body.dark .transactions-table tbody td{border-color:#2a2a2a;color:#FFFFFF}
 body.dark .transactions-table tbody tr:hover{background:rgba(255,255,255,.04)}
 body.dark table tbody tr:nth-child(even){background:transparent}
 body.dark .status-borrowed{background:linear-gradient(135deg,#3a2a1b,#4d3526);color:#ffb74d}
 body.dark .status-returned{background:linear-gradient(135deg,#1b3a2a,#264d35);color:var(--green-light)}
-body.dark .transactions-empty{border-color:#264d35;background:#131313}
+body.dark .transactions-empty{border-color:rgba(255,255,255,.1);background:#131313}
 body.dark .btn-view-info{border-color:#264d35;color:#888}
 body.dark .btn-view-info:hover{border-color:var(--green);color:var(--green)}
 body.dark .txn-detail-borrower{background:#0a0a0a}
