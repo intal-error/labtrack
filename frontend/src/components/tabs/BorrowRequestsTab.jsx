@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import Modal from "../ui/Modal";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
+import "../../styles/pages/catalog.css";
 import { MdAssignment, MdSearch, MdCheckCircle, MdCancel, MdSchedule, MdPerson, MdInventory } from "react-icons/md";
 
 const STATUS_COLORS = {
@@ -43,6 +44,7 @@ export default function BorrowRequestsTab() {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [reviewNotes, setReviewNotes] = useState("");
   const [processing, setProcessing] = useState(null);
+  const [viewMode, setViewMode] = useState("grid");
 
   useEffect(() => { load(); }, []);
 
@@ -147,62 +149,107 @@ export default function BorrowRequestsTab() {
             </button>
           ))}
         </div>
-        <div className="maintenance-search">
-          <MdSearch size={16} />
-          <input type="text" placeholder="Search name, item, ID..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        <div className="maintenance-toolbar-right">
+          <div className="maintenance-search">
+            <MdSearch size={16} />
+            <input type="text" placeholder="Search name, item, ID..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <div className="catalog-view-toggle">
+            <button className={`view-btn ${viewMode === "grid" ? "active" : ""}`} onClick={() => setViewMode("grid")} title="Grid view">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            </button>
+            <button className={`view-btn ${viewMode === "list" ? "active" : ""}`} onClick={() => setViewMode("list")} title="List view">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="maintenance-list">
-        {filtered.length === 0 ? (
-          <div className="maintenance-empty">
-            <MdAssignment size={48} />
-            <h3>{search || filter !== "all" ? "No matching requests" : "No borrow requests"}</h3>
-            <p>Requests from students will appear here.</p>
-          </div>
-        ) : filtered.map((req) => (
-          <div className="maintenance-card" key={req.id} onClick={() => setSelectedRequest(req)}>
-            <div className="maintenance-card-header">
-              <div className="maintenance-card-title">
-                <MdPerson size={18} />
-                <span>{req.firstName} {req.lastName}</span>
+      {filtered.length === 0 ? (
+        <div className="maintenance-empty">
+          <MdAssignment size={48} />
+          <h3>{search || filter !== "all" ? "No matching requests" : "No borrow requests"}</h3>
+          <p>Requests from students will appear here.</p>
+        </div>
+      ) : viewMode === "grid" ? (
+        <div className="maintenance-list">
+          {filtered.map((req) => (
+            <div className="maintenance-card" key={req.id} onClick={() => setSelectedRequest(req)}>
+              <div className="maintenance-card-header">
+                <div className="maintenance-card-title">
+                  <MdPerson size={18} />
+                  <span>{req.firstName} {req.lastName}</span>
+                </div>
+                <div className="maintenance-card-badges">
+                  <span className="badge" style={{ background: `${STATUS_COLORS[req.status] || "#666"}20`, color: STATUS_COLORS[req.status] || "#666" }}>
+                    {STATUS_LABELS[req.status] || req.status}
+                  </span>
+                </div>
               </div>
-              <div className="maintenance-card-badges">
-                <span className="badge" style={{ background: `${STATUS_COLORS[req.status] || "#666"}20`, color: STATUS_COLORS[req.status] || "#666" }}>
-                  {STATUS_LABELS[req.status] || req.status}
-                </span>
+              <div className="maintenance-card-body">
+                <div className="maintenance-meta">
+                  <span className="maintenance-type-badge preventive">
+                    <MdInventory size={14} /> {req.itemName}
+                  </span>
+                  <span className="maintenance-date-badge">
+                    Qty: {req.quantity}
+                  </span>
+                  <span className="maintenance-assigned">
+                    <MdSchedule size={14} /> {timeAgo(req.createdAt)}
+                  </span>
+                </div>
+                {req.purpose && <p className="maintenance-desc">Purpose: {req.purpose}</p>}
+                <div className="maintenance-meta">
+                  <span className="maintenance-date-badge">
+                    Due: {req.dueDate ? new Date(req.dueDate?.toDate?.() || req.dueDate).toLocaleDateString() : "-"}
+                  </span>
+                  {req.course && <span className="maintenance-assigned">{req.course}</span>}
+                </div>
               </div>
+              {req.status === "pending" && (role === "admin" || role === "faculty") && (
+                <div className="maintenance-card-actions">
+                  <button className="btn btn-sm btn-primary" onClick={(e) => { e.stopPropagation(); setSelectedRequest(req); }}>
+                    <MdCheckCircle size={14} /> Review
+                  </button>
+                </div>
+              )}
             </div>
-            <div className="maintenance-card-body">
-              <div className="maintenance-meta">
-                <span className="maintenance-type-badge preventive">
-                  <MdInventory size={14} /> {req.itemName}
-                </span>
-                <span className="maintenance-date-badge">
-                  Qty: {req.quantity}
-                </span>
-                <span className="maintenance-assigned">
-                  <MdSchedule size={14} /> {timeAgo(req.createdAt)}
-                </span>
-              </div>
-              {req.purpose && <p className="maintenance-desc">Purpose: {req.purpose}</p>}
-              <div className="maintenance-meta">
-                <span className="maintenance-date-badge">
-                  Due: {req.dueDate ? new Date(req.dueDate?.toDate?.() || req.dueDate).toLocaleDateString() : "-"}
-                </span>
-                {req.course && <span className="maintenance-assigned">{req.course}</span>}
-              </div>
-            </div>
-            {req.status === "pending" && (role === "admin" || role === "faculty") && (
-              <div className="maintenance-card-actions">
-                <button className="btn btn-sm btn-primary" onClick={(e) => { e.stopPropagation(); setSelectedRequest(req); }}>
-                  <MdCheckCircle size={14} /> Review
-                </button>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div className="catalog-table-wrapper">
+          <table className="catalog-table">
+            <thead>
+              <tr>
+                <th>Borrower</th>
+                <th>School ID</th>
+                <th>Item</th>
+                <th>Qty</th>
+                <th>Due Date</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((req) => (
+                <tr key={req.id} onClick={() => setSelectedRequest(req)} style={{ cursor: "pointer" }}>
+                  <td>{req.firstName} {req.lastName}</td>
+                  <td>{req.schoolID || "-"}</td>
+                  <td>{req.itemName}</td>
+                  <td>{req.quantity}</td>
+                  <td>{req.dueDate ? new Date(req.dueDate?.toDate?.() || req.dueDate).toLocaleDateString() : "-"}</td>
+                  <td><span className="badge" style={{ background: `${STATUS_COLORS[req.status] || "#666"}20`, color: STATUS_COLORS[req.status] || "#666" }}>{STATUS_LABELS[req.status] || req.status}</span></td>
+                  <td>
+                    {req.status === "pending" && (role === "admin" || role === "faculty") && (
+                      <button className="btn btn-sm btn-primary" onClick={(e) => { e.stopPropagation(); setSelectedRequest(req); }}>Review</button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {selectedRequest && (
         <Modal title="Borrow Request Details" onClose={() => { setSelectedRequest(null); setReviewNotes(""); }}>

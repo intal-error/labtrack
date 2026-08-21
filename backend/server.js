@@ -39,14 +39,14 @@ app.use("/api/catalog", verifyToken, catalogRoutes);
 app.use("/api/transactions", verifyToken, transactionRoutes);
 app.use("/api/users", verifyToken, userRoutes);
 app.use("/api/notifications", verifyToken, notificationsRoutes);
-app.use("/api/documents", verifyToken, documentsRoutes);
-app.use("/api/reports", verifyToken, reportRoutes);
+app.use("/api/documents", verifyToken, authorize("admin", "faculty"), documentsRoutes);
+app.use("/api/reports", verifyToken, authorize("admin", "faculty"), reportRoutes);
 app.use("/api/upload", verifyToken, uploadRoutes);
-app.use("/api/maintenance", verifyToken, maintenanceRoutes);
+app.use("/api/maintenance", verifyToken, authorize("admin", "faculty"), maintenanceRoutes);
 app.use("/api/incidents", verifyToken, incidentRoutes);
 app.use("/api/manuals", verifyToken, manualRoutes);
 app.use("/api/fines", verifyToken, finesRoutes);
-app.use("/api/backup", verifyToken, backupRoutes);
+app.use("/api/backup", verifyToken, authorize("admin"), backupRoutes);
 app.use("/api/borrow-requests", verifyToken, borrowRequestRoutes);
 
 // Admin-only routes

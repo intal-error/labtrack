@@ -3,7 +3,7 @@ import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
-import { MdWarning, MdAdd, MdEdit, MdDelete, MdSearch, MdInfo, MdOutlineWarning } from "react-icons/md";
+import { MdWarning, MdAdd, MdEdit, MdDelete, MdSearch, MdInfo, MdOutlineWarning, MdCameraAlt, MdFilterList, MdClose } from "react-icons/md";
 
 const SEVERITY_COLORS = { low: "#43A047", medium: "#f57c00", high: "#d32f2f", critical: "#b71c1c" };
 const STATUS_COLORS = { open: "#d32f2f", investigating: "#f57c00", resolved: "#43A047" };
@@ -32,7 +32,7 @@ function timeAgo(date) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-const EMPTY_FORM = { catalogId: "", title: "", description: "", type: "irregularity", severity: "medium" };
+const EMPTY_FORM = { catalogId: "", title: "", description: "", type: "irregularity", severity: "medium", photos: [] };
 
 export default function IncidentTab() {
   const { role, userProfile, user } = useAuth();
@@ -45,8 +45,15 @@ export default function IncidentTab() {
   const [filterStatus, setFilterStatus] = useState("All");
   const [filterSeverity, setFilterSeverity] = useState("All");
   const [form, setForm] = useState(EMPTY_FORM);
+  const [selectedIncident, setSelectedIncident] = useState(null);
+  const [filterMy, setFilterMy] = useState(false);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [resolutionNote, setResolutionNote] = useState("");
+  const [imageOverlay, setImageOverlay] = useState(null);
 
-  const canCreate = role === "admin" || role === "faculty";
+  const canCreate = true;
 
   useEffect(() => { load(); }, []);
 
@@ -76,8 +83,12 @@ export default function IncidentTab() {
       inc.reporterName?.toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === "All" || inc.status === filterStatus.toLowerCase();
     const matchSeverity = filterSeverity === "All" || inc.severity === filterSeverity.toLowerCase();
-    return matchSearch && matchStatus && matchSeverity;
-  }), [incidents, search, filterStatus, filterSeverity]);
+    const matchMy = !filterMy || inc.reportedBy === user?.uid;
+    const incDate = inc.createdAt?.toDate ? inc.createdAt.toDate() : new Date(inc.createdAt);
+    const matchFrom = !dateFrom || incDate >= new Date(dateFrom);
+    const matchTo = !dateTo || incDate <= new Date(dateTo + "T23:59:59");
+    return matchSearch && matchStatus && matchSeverity && matchMy && matchFrom && matchTo;
+  }), [incidents, search, filterStatus, filterSeverity, filterMy, dateFrom, dateTo, user]);
 
   function openAdd() {
     setForm(EMPTY_FORM);
@@ -92,6 +103,7 @@ export default function IncidentTab() {
       description: inc.description || "",
       type: inc.type || "irregularity",
       severity: inc.severity || "medium",
+      photos: inc.photos || [],
     });
     setEditing(inc);
     setShowForm(true);
@@ -140,6 +152,38 @@ export default function IncidentTab() {
       load();
     } catch {
       toast.error("Failed to delete");
+    }
+  }
+
+  async function handlePhotoUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (form.photos.length >= 3) { toast.error("Max 3 photos allowed"); return; }
+    setUploading(true);
+    try {
+      const { url } = await api.uploadImage(file);
+      setForm((f) => ({ ...f, photos: [...f.photos, url] }));
+      toast.success("Photo added!");
+    } catch {
+      toast.error("Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function removePhoto(index) {
+    setForm((f) => ({ ...f, photos: f.photos.filter((_, i) => i !== index) }));
+  }
+
+  async function handleResolve() {
+    try {
+      await api.updateIncident(selectedIncident.id, { status: "resolved", resolutionNote });
+      toast.success("Incident resolved");
+      setSelectedIncident(null);
+      setResolutionNote("");
+      load();
+    } catch {
+      toast.error("Failed to resolve");
     }
   }
 
@@ -192,8 +236,19 @@ export default function IncidentTab() {
               {s}
             </button>
           ))}
+          <button className={`incident-filter-btn incident-my-btn ${filterMy ? "active" : ""}`} onClick={() => setFilterMy(!filterMy)}>
+            <MdFilterList size={14} /> My Reports
+          </button>
         </div>
         <div className="incident-toolbar-right">
+          <div className="incident-date-range">
+            <label>From</label>
+            <input type="date" className="incident-date-filter" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+          </div>
+          <div className="incident-date-range">
+            <label>To</label>
+            <input type="date" className="incident-date-filter" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+          </div>
           <select className="incident-severity-filter" value={filterSeverity} onChange={(e) => setFilterSeverity(e.target.value)}>
             <option value="All">All Severity</option>
             <option value="Low">Low</option>
@@ -248,6 +303,23 @@ export default function IncidentTab() {
                 <label>Description</label>
                 <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={4} required placeholder="Describe the incident in detail..." />
               </div>
+              <div className="form-group">
+                <label>Evidence Photos (optional, max 3)</label>
+                <div className="incident-photo-upload-area">
+                  {form.photos.map((url, i) => (
+                    <div className="incident-photo-thumb" key={i}>
+                      <img src={url} alt={`Evidence ${i + 1}`} />
+                      <button type="button" className="incident-photo-remove" onClick={() => removePhoto(i)}><MdClose size={14} /></button>
+                    </div>
+                  ))}
+                  {form.photos.length < 3 && (
+                    <label className="incident-photo-add">
+                      <MdCameraAlt size={18} /> {uploading ? "Uploading..." : "Add Photo"}
+                      <input type="file" accept="image/*" onChange={handlePhotoUpload} hidden disabled={uploading} />
+                    </label>
+                  )}
+                </div>
+              </div>
               <div className="form-actions">
                 <button type="button" className="btn btn-outline" onClick={() => { setShowForm(false); setEditing(null); }}>Cancel</button>
                 <button type="submit" className="btn btn-primary">{editing ? "Update" : "Submit Report"}</button>
@@ -265,7 +337,8 @@ export default function IncidentTab() {
             <p>{search || filterStatus !== "All" || filterSeverity !== "All" ? "Try adjusting your search or filters" : canCreate ? "Click 'Report Incident' to submit your first report" : "No incidents have been reported yet"}</p>
           </div>
         ) : filtered.map((inc) => (
-          <div className={`incident-card incident-severity-${inc.severity}`} key={inc.id}>
+          <div className={`incident-card incident-severity-${inc.severity}`} key={inc.id}
+               onClick={() => setSelectedIncident(inc)} style={{ cursor: "pointer" }}>
             <div className="incident-card-header">
               <div className="incident-card-title">
                 <MdWarning size={18} style={{ color: SEVERITY_COLORS[inc.severity] }} />
@@ -280,34 +353,95 @@ export default function IncidentTab() {
                 </span>
               </div>
             </div>
-            <div className="incident-card-body">
-              <div className="incident-meta">
-                <span>Type: {TYPE_LABELS[inc.type] || inc.type}</span>
-                {inc.itemName && <span>Item: {inc.itemName}</span>}
-                <span>Reported by: {inc.reporterName} ({inc.reporterRole})</span>
-                {inc.createdAt && <span>{timeAgo(inc.createdAt)}</span>}
+              <div className="incident-card-body">
+                <div className="incident-meta">
+                  <span>Type: {TYPE_LABELS[inc.type] || inc.type}</span>
+                  {inc.itemName && <span>Item: {inc.itemName}</span>}
+                  <span>Reported by: {inc.reporterName} ({inc.reporterRole})</span>
+                  {inc.photos?.length > 0 && <span className="incident-photo-count"><MdCameraAlt size={12} /> {inc.photos.length} photo{inc.photos.length > 1 ? "s" : ""}</span>}
+                  {inc.createdAt && <span>{timeAgo(inc.createdAt)}</span>}
+                </div>
+                <p className="incident-desc">{inc.description?.length > 120 ? inc.description.slice(0, 120) + "..." : inc.description}</p>
               </div>
-              <p className="incident-desc">{inc.description}</p>
-            </div>
-            {role === "admin" && (
-              <div className="incident-card-actions">
-                <button className="btn btn-sm btn-outline" onClick={() => openEdit(inc)}><MdEdit size={14} /> Edit</button>
-                {inc.status === "open" && (
-                  <button className="btn btn-sm btn-outline" onClick={() => updateStatus(inc.id, "investigating")}>
-                    <MdInfo size={14} /> Mark Investigating
-                  </button>
-                )}
-                {inc.status !== "resolved" && (
-                  <button className="btn btn-sm btn-primary" onClick={() => updateStatus(inc.id, "resolved")}>
-                    <MdInfo size={14} /> Mark Resolved
-                  </button>
-                )}
-                <button className="btn btn-sm btn-danger" onClick={() => handleDelete(inc.id)}><MdDelete size={14} /></button>
-              </div>
-            )}
           </div>
         ))}
       </div>
+
+      {selectedIncident && (
+        <div className="modal-overlay" onClick={() => { setSelectedIncident(null); setResolutionNote(""); }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3>{selectedIncident.title}</h3>
+            <div className="incident-detail-badges">
+              <span className="badge" style={{ background: `${SEVERITY_COLORS[selectedIncident.severity]}20`, color: SEVERITY_COLORS[selectedIncident.severity] }}>
+                {selectedIncident.severity}
+              </span>
+              <span className="badge" style={{ background: `${STATUS_COLORS[selectedIncident.status]}20`, color: STATUS_COLORS[selectedIncident.status] }}>
+                {selectedIncident.status}
+              </span>
+            </div>
+            {selectedIncident.photos?.length > 0 && (
+              <div className="incident-detail-photos">
+                <div className="incident-photos-grid">
+                  {selectedIncident.photos.map((url, i) => (
+                    <img key={i} src={url} alt={`Evidence ${i + 1}`} onClick={() => setImageOverlay(url)} style={{ cursor: "pointer" }} />
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="incident-detail-info">
+              <p><strong>Type:</strong> {TYPE_LABELS[selectedIncident.type] || selectedIncident.type}</p>
+              {selectedIncident.itemName && <p><strong>Related Item:</strong> {selectedIncident.itemName}</p>}
+              <p><strong>Reported by:</strong> {selectedIncident.reporterName} ({selectedIncident.reporterRole})</p>
+              {selectedIncident.createdAt && <p><strong>Date:</strong> {timeAgo(selectedIncident.createdAt)}</p>}
+            </div>
+            <div className="incident-detail-desc">
+              <strong>Description:</strong>
+              <p>{selectedIncident.description}</p>
+            </div>
+            {selectedIncident.resolutionNote && (
+              <div className="incident-detail-resolution">
+                <strong>Resolution Note:</strong>
+                <p>{selectedIncident.resolutionNote}</p>
+              </div>
+            )}
+            {(role === "admin" || role === "faculty") && (
+              <div className="incident-detail-actions">
+                {selectedIncident.status === "open" && (
+                  <button className="btn btn-outline" onClick={async () => { await updateStatus(selectedIncident.id, "investigating"); setSelectedIncident(null); }}>
+                    <MdInfo size={14} /> Mark Investigating
+                  </button>
+                )}
+                {selectedIncident.status !== "resolved" && (
+                  <>
+                    <div className="incident-resolve-row">
+                      <input type="text" className="incident-resolution-input" value={resolutionNote} onChange={(e) => setResolutionNote(e.target.value)} placeholder="Resolution note (optional)" />
+                      <button className="btn btn-primary" onClick={handleResolve}><MdInfo size={14} /> Resolve</button>
+                    </div>
+                  </>
+                )}
+                {role === "admin" && (
+                  <>
+                    <button className="btn btn-outline" onClick={() => { setSelectedIncident(null); openEdit(selectedIncident); }}><MdEdit size={14} /> Edit</button>
+                    <button className="btn btn-danger" onClick={async () => { await handleDelete(selectedIncident.id); setSelectedIncident(null); }}><MdDelete size={14} /> Delete</button>
+                  </>
+                )}
+              </div>
+            )}
+            <div className="form-actions">
+              <button className="btn btn-outline" onClick={() => { setSelectedIncident(null); setResolutionNote(""); }}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {imageOverlay && (
+        <div className="incident-image-overlay" onClick={() => setImageOverlay(null)}>
+          <div className="incident-image-overlay-content">
+            <img src={imageOverlay} alt="Full view" />
+            <button className="btn-close" onClick={() => setImageOverlay(null)}>&times;</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

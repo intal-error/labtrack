@@ -141,6 +141,10 @@ const createRequest = async (req, res) => {
 
 const approveRequest = async (req, res) => {
   try {
+    if (!["admin", "faculty"].includes(req.user.role)) {
+      return res.status(403).json({ error: "Insufficient permissions" });
+    }
+
     const { id } = req.params;
     const { reviewNotes } = req.body;
     const reviewerId = req.user.uid;
@@ -246,6 +250,10 @@ const approveRequest = async (req, res) => {
 
 const rejectRequest = async (req, res) => {
   try {
+    if (!["admin", "faculty"].includes(req.user.role)) {
+      return res.status(403).json({ error: "Insufficient permissions" });
+    }
+
     const { id } = req.params;
     const { reviewNotes } = req.body;
     const reviewerId = req.user.uid;

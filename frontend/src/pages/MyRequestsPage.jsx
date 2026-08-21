@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import Modal from "../components/ui/Modal";
 import toast from "react-hot-toast";
 import "../styles/pages/tables.css";
+import "../styles/pages/catalog.css";
 
 const STATUS_COLORS = {
   pending: "#f57c00",
@@ -39,6 +40,7 @@ export default function MyRequestsPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
   const [selectedRequest, setSelectedRequest] = useState(null);
+  const [viewMode, setViewMode] = useState("grid");
 
   useEffect(() => { load(); }, []);
 
@@ -119,6 +121,14 @@ export default function MyRequestsPage() {
             ))}
           </div>
         </div>
+        <div className="catalog-view-toggle">
+          <button className={`view-btn ${viewMode === "grid" ? "active" : ""}`} onClick={() => setViewMode("grid")} title="Grid view">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          </button>
+          <button className={`view-btn ${viewMode === "list" ? "active" : ""}`} onClick={() => setViewMode("list")} title="List view">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          </button>
+        </div>
       </div>
 
       {filtered.length === 0 ? (
@@ -130,7 +140,7 @@ export default function MyRequestsPage() {
           <h3>No requests found</h3>
           <p>Submit a borrow request from the scanner page.</p>
         </div>
-      ) : (
+      ) : viewMode === "grid" ? (
         <div className="transactions-grid">
           {filtered.map((req) => (
             <div className="transaction-card" key={req.id}>
@@ -171,6 +181,37 @@ export default function MyRequestsPage() {
               </div>
             </div>
           ))}
+        </div>
+      ) : (
+        <div className="catalog-table-wrapper">
+          <table className="catalog-table">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Qty</th>
+                <th>Due Date</th>
+                <th>Submitted</th>
+                <th>Purpose</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((req) => (
+                <tr key={req.id} onClick={() => setSelectedRequest(req)} style={{ cursor: "pointer" }}>
+                  <td>{req.itemName}</td>
+                  <td>{req.quantity}</td>
+                  <td>{req.dueDate ? new Date(req.dueDate?.toDate?.() || req.dueDate).toLocaleDateString() : "-"}</td>
+                  <td>{timeAgo(req.createdAt)}</td>
+                  <td>{req.purpose || "-"}</td>
+                  <td><span className="badge" style={{ background: `${STATUS_COLORS[req.status]}20`, color: STATUS_COLORS[req.status] }}>{STATUS_LABELS[req.status]}</span></td>
+                  <td>
+                    <button className="btn btn-sm btn-view-info" onClick={(e) => { e.stopPropagation(); setSelectedRequest(req); }}>View</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 

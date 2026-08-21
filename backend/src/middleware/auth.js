@@ -1,4 +1,4 @@
-const { auth } = require("../config/firebase");
+const { auth, db } = require("../config/firebase");
 
 const verifyToken = async (req, res, next) => {
   const header = req.headers.authorization;
@@ -17,8 +17,27 @@ const verifyToken = async (req, res, next) => {
 };
 
 const authorize = (...allowedRoles) => {
-  return (req, res, next) => {
-    if (!req.user?.role || !allowedRoles.includes(req.user.role)) {
+  return async (req, res, next) => {
+    let role = req.user?.role;
+
+    if (!role && req.user?.uid) {
+      try {
+        const userDoc = await db.collection("users").doc(req.user.uid).get();
+        if (userDoc.exists) {
+          role = userDoc.data().role;
+        } else {
+          const adminDoc = await db.collection("admins").doc(req.user.uid).get();
+          if (adminDoc.exists) {
+            role = "admin";
+          }
+        }
+        if (role) req.user.role = role;
+      } catch (err) {
+        console.error("Failed to look up user role:", err.message);
+      }
+    }
+
+    if (!role || !allowedRoles.includes(role)) {
       return res.status(403).json({ error: "Insufficient permissions" });
     }
     next();

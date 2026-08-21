@@ -4,13 +4,22 @@ import { useAuth } from "../../context/AuthContext";
 import Modal from "../ui/Modal";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
-import { MdBuild, MdAdd, MdEdit, MdDelete, MdCalendarToday, MdWarning, MdSearch, MdCheckCircle, MdSchedule, MdPlayArrow, MdAssignment } from "react-icons/md";
+import { MdBuild, MdAdd, MdEdit, MdDelete, MdCalendarToday, MdWarning, MdSearch, MdCheckCircle, MdSchedule, MdPlayArrow, MdAssignment, MdCameraAlt, MdImage } from "react-icons/md";
 
 const STATUS_COLORS = {
   scheduled: "#1976d2",
   "in-progress": "#f57c00",
   completed: "#43A047",
 };
+
+const PRIORITY_COLORS = {
+  low: "#43A047",
+  medium: "#f57c00",
+  high: "#d32f2f",
+  critical: "#b71c1c",
+};
+
+const PRIORITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
 
 const TYPE_LABELS = { preventive: "Preventive", corrective: "Corrective" };
 
@@ -56,7 +65,8 @@ export default function MaintenanceTab() {
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [selectedItem, setSelectedItem] = useState(null);
-  const [form, setForm] = useState({ catalogId: "", itemName: "", type: "preventive", description: "", status: "scheduled", scheduledDate: "", assignedTo: "" });
+  const [uploading, setUploading] = useState(false);
+  const [form, setForm] = useState({ catalogId: "", itemName: "", type: "preventive", description: "", status: "scheduled", scheduledDate: "", assignedTo: "", priority: "medium", photoURL: "" });
 
   useEffect(() => { load(); }, []);
 
@@ -73,7 +83,7 @@ export default function MaintenanceTab() {
   }
 
   function openCreate() {
-    setForm({ catalogId: "", itemName: "", type: "preventive", description: "", status: "scheduled", scheduledDate: "", assignedTo: "" });
+    setForm({ catalogId: "", itemName: "", type: "preventive", description: "", status: "scheduled", scheduledDate: "", assignedTo: "", priority: "medium", photoURL: "" });
     setEditing(null);
     setShowForm(true);
   }
@@ -87,6 +97,8 @@ export default function MaintenanceTab() {
       status: item.status || "scheduled",
       scheduledDate: item.scheduledDate ? new Date(item.scheduledDate).toISOString().split("T")[0] : "",
       assignedTo: item.assignedTo || "",
+      priority: item.priority || "medium",
+      photoURL: item.photoURL || "",
     });
     setEditing(item.id);
     setShowForm(true);
@@ -126,12 +138,43 @@ export default function MaintenanceTab() {
     }
   }
 
+  async function handlePhotoUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const { url } = await api.uploadImage(file);
+      setForm((f) => ({ ...f, photoURL: url }));
+      toast.success("Photo uploaded!");
+    } catch {
+      toast.error("Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function updateStatus(id, status) {
+    try {
+      await api.updateMaintenance(id, { status });
+      toast.success("Status updated");
+      setSelectedItem(null);
+      load();
+    } catch {
+      toast.error("Failed to update");
+    }
+  }
+
   const stats = useMemo(() => {
     const total = items.length;
     const scheduled = items.filter((i) => i.status === "scheduled").length;
     const inProgress = items.filter((i) => i.status === "in-progress").length;
     const completed = items.filter((i) => i.status === "completed").length;
-    return { total, scheduled, "in-progress": inProgress, completed };
+    const overdue = items.filter((i) => {
+      if (i.status === "completed" || !i.scheduledDate) return false;
+      const rel = getRelativeDate(i.scheduledDate);
+      return rel?.className === "date-overdue";
+    }).length;
+    return { total, scheduled, "in-progress": inProgress, completed, overdue };
   }, [items]);
 
   const filtered = useMemo(() => {
@@ -147,6 +190,16 @@ export default function MaintenanceTab() {
         (i.description || "").toLowerCase().includes(q)
       );
     }
+    result.sort((a, b) => {
+      if (a.status === "completed" && b.status !== "completed") return 1;
+      if (a.status !== "completed" && b.status === "completed") return -1;
+      const aDate = a.scheduledDate ? new Date(a.scheduledDate).getTime() : Infinity;
+      const bDate = b.scheduledDate ? new Date(b.scheduledDate).getTime() : Infinity;
+      if (aDate !== bDate) return aDate - bDate;
+      const aPri = PRIORITY_ORDER[a.priority] ?? 2;
+      const bPri = PRIORITY_ORDER[b.priority] ?? 2;
+      return aPri - bPri;
+    });
     return result;
   }, [items, filter, search]);
 
@@ -166,7 +219,12 @@ export default function MaintenanceTab() {
           <div className={`maintenance-stat-card ${filter === key ? "active" : ""}`} key={key} onClick={() => setFilter(filter === key ? "all" : key)}>
             <div className={`maintenance-stat-icon ${key}`}>{STAT_ICONS[key]}</div>
             <div className="maintenance-stat-info">
-              <span className="maintenance-stat-number">{stats[key]}</span>
+              <span className="maintenance-stat-number">
+                {stats[key]}
+                {key === "total" && stats.overdue > 0 && (
+                  <span className="maintenance-overdue-badge">{stats.overdue} overdue</span>
+                )}
+              </span>
               <span className="maintenance-stat-label">{key === "in-progress" ? "In Progress" : key.charAt(0).toUpperCase() + key.slice(1)}</span>
             </div>
           </div>
@@ -208,6 +266,17 @@ export default function MaintenanceTab() {
                   </select>
                 </div>
                 <div className="form-group">
+                  <label>Priority</label>
+                  <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
                   <label>Status</label>
                   <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
                     <option value="scheduled">Scheduled</option>
@@ -215,10 +284,10 @@ export default function MaintenanceTab() {
                     <option value="completed">Completed</option>
                   </select>
                 </div>
-              </div>
-              <div className="form-group">
-                <label>Scheduled Date</label>
-                <input type="date" value={form.scheduledDate} onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })} />
+                <div className="form-group">
+                  <label>Scheduled Date</label>
+                  <input type="date" value={form.scheduledDate} onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })} />
+                </div>
               </div>
               <div className="form-group">
                 <label>Description</label>
@@ -227,6 +296,22 @@ export default function MaintenanceTab() {
               <div className="form-group">
                 <label>Assigned To</label>
                 <input type="text" value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })} placeholder="Technician name" />
+              </div>
+              <div className="form-group">
+                <label>Photo (optional)</label>
+                <div className="maintenance-photo-upload">
+                  {form.photoURL ? (
+                    <div className="maintenance-photo-preview">
+                      <img src={form.photoURL} alt="Maintenance" />
+                      <button type="button" className="btn btn-sm btn-danger" onClick={() => setForm((f) => ({ ...f, photoURL: "" }))}>Remove</button>
+                    </div>
+                  ) : (
+                    <label className="maintenance-photo-btn">
+                      <MdCameraAlt size={18} /> {uploading ? "Uploading..." : "Add Photo"}
+                      <input type="file" accept="image/*" onChange={handlePhotoUpload} hidden disabled={uploading} />
+                    </label>
+                  )}
+                </div>
               </div>
               <div className="form-actions">
                 <button type="button" className="btn btn-outline" onClick={() => setShowForm(false)}>Cancel</button>
@@ -249,12 +334,20 @@ export default function MaintenanceTab() {
           const dateStyle = getDateBorderStyle(item);
           return (
             <div className={`maintenance-card ${dateStyle}`} key={item.id} onClick={() => setSelectedItem(item)}>
+              {item.photoURL && (
+                <div className="maintenance-card-photo">
+                  <img src={item.photoURL} alt={item.itemName} />
+                </div>
+              )}
               <div className="maintenance-card-header">
                 <div className="maintenance-card-title">
                   <MdBuild size={18} />
                   <span>{item.itemName}</span>
                 </div>
                 <div className="maintenance-card-badges">
+                  <span className="maintenance-priority-badge" style={{ background: `${PRIORITY_COLORS[item.priority] || PRIORITY_COLORS.medium}20`, color: PRIORITY_COLORS[item.priority] || PRIORITY_COLORS.medium }}>
+                    {item.priority || "medium"}
+                  </span>
                   <span className="badge" style={{ background: `${STATUS_COLORS[item.status] || "#666"}20`, color: STATUS_COLORS[item.status] || "#666" }}>
                     {item.status === "in-progress" ? "In Progress" : item.status}
                   </span>
@@ -275,12 +368,6 @@ export default function MaintenanceTab() {
                 </div>
                 {item.description && <p className="maintenance-desc">{item.description}</p>}
               </div>
-              {role === "admin" && (
-                <div className="maintenance-card-actions">
-                  <button className="btn btn-sm btn-outline" onClick={() => openEdit(item)}><MdEdit size={14} /> Edit</button>
-                  <button className="btn btn-sm btn-danger" onClick={() => handleDelete(item.id)}><MdDelete size={14} /> Delete</button>
-                </div>
-              )}
             </div>
           );
         })}
@@ -288,6 +375,11 @@ export default function MaintenanceTab() {
 
       {selectedItem && (
         <Modal title="Maintenance Details" onClose={() => setSelectedItem(null)}>
+          {selectedItem.photoURL && (
+            <div className="maintenance-detail-photo">
+              <img src={selectedItem.photoURL} alt={selectedItem.itemName} />
+            </div>
+          )}
           <div className="txn-detail-modal">
             <div className="txn-detail-section">
               <div className="txn-detail-grid">
@@ -299,6 +391,14 @@ export default function MaintenanceTab() {
                   <span className="txn-detail-label">Status</span>
                   <span className="txn-detail-value" style={{ color: STATUS_COLORS[selectedItem.status] || "#666", fontWeight: 600 }}>
                     {selectedItem.status === "in-progress" ? "In Progress" : (selectedItem.status || "-")}
+                  </span>
+                </div>
+                <div className="txn-detail-row">
+                  <span className="txn-detail-label">Priority</span>
+                  <span className="txn-detail-value">
+                    <span className="maintenance-priority-badge" style={{ background: `${PRIORITY_COLORS[selectedItem.priority] || PRIORITY_COLORS.medium}20`, color: PRIORITY_COLORS[selectedItem.priority] || PRIORITY_COLORS.medium }}>
+                      {selectedItem.priority || "medium"}
+                    </span>
                   </span>
                 </div>
                 <div className="txn-detail-row">
@@ -342,6 +442,22 @@ export default function MaintenanceTab() {
               </div>
             </div>
           </div>
+          {role === "admin" && (
+            <div className="maintenance-detail-actions">
+              {selectedItem.status === "scheduled" && (
+                <button className="btn btn-primary" onClick={() => updateStatus(selectedItem.id, "in-progress")}>
+                  <MdPlayArrow size={14} /> Start
+                </button>
+              )}
+              {selectedItem.status === "in-progress" && (
+                <button className="btn btn-primary" onClick={() => updateStatus(selectedItem.id, "completed")}>
+                  <MdCheckCircle size={14} /> Complete
+                </button>
+              )}
+              <button className="btn btn-outline" onClick={() => { setSelectedItem(null); openEdit(selectedItem); }}><MdEdit size={14} /> Edit</button>
+              <button className="btn btn-danger" onClick={async () => { await handleDelete(selectedItem.id); setSelectedItem(null); }}><MdDelete size={14} /> Delete</button>
+            </div>
+          )}
         </Modal>
       )}
     </div>

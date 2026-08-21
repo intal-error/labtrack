@@ -47,6 +47,10 @@ const getByUser = async (req, res) => {
 
 const create = async (req, res) => {
   try {
+    if (!["admin", "faculty"].includes(req.user.role)) {
+      return res.status(403).json({ error: "Insufficient permissions" });
+    }
+
     const data = {
       ...req.body,
       read: false,
