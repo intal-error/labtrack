@@ -88,7 +88,7 @@
 .overview-activity-header{display:inline-flex;align-items:center;gap:8px}
 .overview-activity-header svg{width:20px;height:20px;color:var(--green)}
 
-.activity-list{display:flex;flex-direction:column;gap:8px}
+.activity-list{display:flex;flex-direction:column;gap:8px;max-height:420px;overflow-y:auto;padding-right:4px}
 .activity-item{
   display:flex;align-items:center;gap:10px;padding:10px 8px;
   transition:all .2s;cursor:pointer;border-radius:10px;

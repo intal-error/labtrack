@@ -366,7 +366,7 @@ export default function TransactionsPage() {
             const isReturning = returningId === item.id;
 
             return (
-              <div className={`transaction-card ${overdue?.className || ""}`} key={item.id}>
+              <div className={`transaction-card ${overdue?.className || ""}`} key={item.id} onClick={() => handleViewInfo(item)} style={{cursor:"pointer"}}>
                 <div className={`transaction-card-accent ${isBorrowed ? "accent-borrowed" : "accent-returned"}`} />
                 <div className="transaction-card-body">
                   <div className="transaction-card-top">
@@ -420,10 +420,6 @@ export default function TransactionsPage() {
                       <span className="progress-label">{item.quantity - remaining} of {item.quantity} returned</span>
                     </div>
                   )}
-                  <button className="btn btn-sm btn-view-info" onClick={() => handleViewInfo(item)}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                    View Info
-                  </button>
                 </div>
               </div>
             );
@@ -442,7 +438,6 @@ export default function TransactionsPage() {
                 <th>Date</th>
                 {activeTab === "borrowed" && <th>Due Date</th>}
                 <th>Status</th>
-                <th>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -455,7 +450,7 @@ export default function TransactionsPage() {
                 const isReturning = returningId === item.id;
 
                 return (
-                  <tr key={item.id} className={overdue?.className || ""}>
+                  <tr key={item.id} className={overdue?.className || ""} onClick={() => handleViewInfo(item)} style={{cursor:"pointer"}}>
                     <td className="table-name-cell">
                       <div className="table-user">
                         <div className="transaction-avatar-sm" style={item.profileURL ? { background: "transparent" } : { background: getAvatarColor(fullName) }}>
@@ -484,14 +479,6 @@ export default function TransactionsPage() {
                         <span className={`transaction-status-badge-sm ${isBorrowed ? "status-borrowed" : "status-returned"}`}>
                           {isBorrowed ? "Borrowed" : (item.status || "Returned")}
                         </span>
-                      </div>
-                    </td>
-                    <td>
-                      <div className="table-actions-cell">
-                        <button className="btn btn-xs btn-view-info" onClick={() => handleViewInfo(item)}>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                          View
-                        </button>
                       </div>
                     </td>
                   </tr>
