@@ -39,8 +39,16 @@ export default function ScannerPage() {
   const [txStatus, setTxStatus] = useState("");
   const [txStatusType, setTxStatusType] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [purpose, setPurpose] = useState("");
+  const [borrowPhotoURL, setBorrowPhotoURL] = useState("");
+  const [returnPhotoURL, setReturnPhotoURL] = useState("");
+  const [conditionOnBorrow, setConditionOnBorrow] = useState("Good");
+  const [conditionOnReturn, setConditionOnReturn] = useState("Good");
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   const step2Ref = useRef(null);
+  const borrowPhotoRef = useRef(null);
+  const returnPhotoRef = useRef(null);
 
   useEffect(() => {
     setDueDate(defaultDueDate());
@@ -124,6 +132,22 @@ export default function ScannerPage() {
     setCameraTarget(null);
   };
 
+  const handlePhotoUpload = async (e, type) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const result = await api.uploadConditionPhoto(file);
+      if (type === "borrow") setBorrowPhotoURL(result.url);
+      else setReturnPhotoURL(result.url);
+      toast.success("Photo uploaded");
+    } catch (err) {
+      toast.error("Failed to upload photo");
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setCameraTarget(null);
@@ -139,12 +163,27 @@ export default function ScannerPage() {
       if (action === "borrowed") {
         const due = new Date(dueDate);
         if (isNaN(due.getTime()) || due.getTime() <= Date.now()) throw new Error("Choose a future due date");
-        await api.recordBorrow({
-          itemId: selectedItem.id,
-          borrower: { schoolID: schoolId.trim(), firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim(), role, userId: selectedUser?.id },
-          quantity: qty,
-          dueDate: due.toISOString(),
-        });
+
+        const isStudentBorrow = !isAdmin && userProfile?.role === "student";
+        if (isStudentBorrow) {
+          await api.createBorrowRequest({
+            itemId: selectedItem.id,
+            quantity: qty,
+            dueDate: due.toISOString(),
+            purpose: purpose.trim(),
+          });
+          toast.success("Borrow request submitted! Awaiting approval.");
+        } else {
+          await api.recordBorrow({
+            itemId: selectedItem.id,
+            borrower: { schoolID: schoolId.trim(), firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim(), role, userId: selectedUser?.id },
+            quantity: qty,
+            dueDate: due.toISOString(),
+            borrowPhotoURL,
+            conditionOnBorrow,
+          });
+          toast.success("Borrow recorded!");
+        }
       } else {
         const borrowSnap = await getDocs(query(collection(db, "transactions"), where("action", "==", "borrowed")));
         const normalizedSid = normalize(schoolId);
@@ -155,9 +194,9 @@ export default function ScannerPage() {
           .filter(({ data }) => (data.catalogId || data.itemId) === selectedItem.id)
           .sort((a, b) => (toDate(b.data.timestamp)?.getTime() || 0) - (toDate(a.data.timestamp)?.getTime() || 0))[0];
         if (!match) throw new Error("No active loan found");
-        await api.recordReturn({ borrowId: match.id, itemId: selectedItem.id, schoolID: schoolId.trim(), quantity: qty });
+        await api.recordReturn({ borrowId: match.id, itemId: selectedItem.id, schoolID: schoolId.trim(), quantity: qty, returnPhotoURL, conditionOnReturn });
+        toast.success("Return recorded!");
       }
-      toast.success(action === "borrowed" ? "Borrow recorded!" : "Return recorded!");
       resetForm();
     } catch (err) {
       toast.error(err.message || "Transaction failed");
@@ -172,6 +211,9 @@ export default function ScannerPage() {
     setSelectedItem(null); setItemResult(null);
     setTxStatus(""); setTxStatusType("");
     setDueDate(defaultDueDate());
+    setPurpose("");
+    setBorrowPhotoURL(""); setReturnPhotoURL("");
+    setConditionOnBorrow("Good"); setConditionOnReturn("Good");
     if (!isAdmin && userProfile) {
       setSchoolId(userProfile.schoolId || userProfile.schoolID || userProfile.studentID || userProfile.employeeId || "");
       setFirstName(userProfile.firstName || userProfile.firstname || "");
@@ -414,22 +456,72 @@ export default function ScannerPage() {
               )}
             </div>
             {isBorrow && (
-              <div className="scanner-due-shortcuts">
-                <span className="due-shortcut-label">Quick due date:</span>
-                <div className="due-shortcut-btns">
-                  {[{ label: "1 day", days: 1 }, { label: "3 days", days: 3 }, { label: "7 days", days: 7 }, { label: "2 weeks", days: 14 }].map(({ label, days }) => (
-                    <button key={days} type="button" className="due-shortcut-btn" onClick={() => {
-                      const d = new Date();
-                      d.setDate(d.getDate() + days);
-                      d.setHours(17, 0, 0, 0);
-                      const offset = d.getTimezoneOffset() * 60000;
-                      setDueDate(new Date(d.getTime() - offset).toISOString().slice(0, 16));
-                    }}>
-                      {label}
-                    </button>
-                  ))}
+              <>
+                <div className="scanner-due-shortcuts">
+                  <span className="due-shortcut-label">Quick due date:</span>
+                  <div className="due-shortcut-btns">
+                    {[{ label: "1 day", days: 1 }, { label: "3 days", days: 3 }, { label: "7 days", days: 7 }, { label: "2 weeks", days: 14 }].map(({ label, days }) => (
+                      <button key={days} type="button" className="due-shortcut-btn" onClick={() => {
+                        const d = new Date();
+                        d.setDate(d.getDate() + days);
+                        d.setHours(17, 0, 0, 0);
+                        const offset = d.getTimezoneOffset() * 60000;
+                        setDueDate(new Date(d.getTime() - offset).toISOString().slice(0, 16));
+                      }}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+                {!isAdmin && userProfile?.role === "student" && (
+                  <div className="scanner-field" style={{ marginTop: 12 }}>
+                    <label>Purpose of Borrowing</label>
+                    <input type="text" placeholder="e.g. Lab experiment, thesis project..." value={purpose} onChange={(e) => setPurpose(e.target.value)} />
+                  </div>
+                )}
+              </>
+            )}
+            {isBorrow && (isAdmin || userProfile?.role === "faculty") && (
+              <div className="scanner-field" style={{ marginTop: 12 }}>
+                <label>Condition on Borrow</label>
+                <select value={conditionOnBorrow} onChange={(e) => setConditionOnBorrow(e.target.value)}>
+                  <option value="Excellent">Excellent</option>
+                  <option value="Good">Good</option>
+                  <option value="Fair">Fair</option>
+                  <option value="Damaged">Damaged</option>
+                </select>
               </div>
+            )}
+            {isBorrow && (isAdmin || userProfile?.role === "faculty") && (
+              <div className="scanner-field" style={{ marginTop: 12 }}>
+                <label>Condition Photo (Borrow)</label>
+                <input type="file" accept="image/*" capture="environment" ref={borrowPhotoRef} onChange={(e) => handlePhotoUpload(e, "borrow")} style={{ display: "none" }} />
+                <button type="button" className="btn btn-outline btn-sm" onClick={() => borrowPhotoRef.current?.click()} disabled={uploadingPhoto}>
+                  {uploadingPhoto ? "Uploading..." : borrowPhotoURL ? "Photo Captured ✓" : "Capture Photo"}
+                </button>
+                {borrowPhotoURL && <img src={borrowPhotoURL} alt="Borrow condition" style={{ marginTop: 8, maxWidth: 200, borderRadius: 8 }} />}
+              </div>
+            )}
+            {!isBorrow && (
+              <>
+                <div className="scanner-field" style={{ marginTop: 12 }}>
+                  <label>Condition on Return</label>
+                  <select value={conditionOnReturn} onChange={(e) => setConditionOnReturn(e.target.value)}>
+                    <option value="Excellent">Excellent</option>
+                    <option value="Good">Good</option>
+                    <option value="Fair">Fair</option>
+                    <option value="Damaged">Damaged</option>
+                  </select>
+                </div>
+                <div className="scanner-field" style={{ marginTop: 12 }}>
+                  <label>Condition Photo (Return)</label>
+                  <input type="file" accept="image/*" capture="environment" ref={returnPhotoRef} onChange={(e) => handlePhotoUpload(e, "return")} style={{ display: "none" }} />
+                  <button type="button" className="btn btn-outline btn-sm" onClick={() => returnPhotoRef.current?.click()} disabled={uploadingPhoto}>
+                    {uploadingPhoto ? "Uploading..." : returnPhotoURL ? "Photo Captured ✓" : "Capture Photo"}
+                  </button>
+                  {returnPhotoURL && <img src={returnPhotoURL} alt="Return condition" style={{ marginTop: 8, maxWidth: 200, borderRadius: 8 }} />}
+                </div>
+              </>
             )}
           </div>
 
@@ -446,7 +538,7 @@ export default function ScannerPage() {
                 ) : (
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20,6 9,17 4,12"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
                 )}
-                {isBorrow ? "Record Borrow" : "Record Return"}
+                {isBorrow ? ((!isAdmin && userProfile?.role === "student") ? "Submit Request" : "Record Borrow") : "Record Return"}
               </>
             )}
           </button>

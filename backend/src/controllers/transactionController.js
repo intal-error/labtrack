@@ -178,7 +178,7 @@ const getChartData = async (req, res) => {
 
 const recordBorrow = async (req, res) => {
   try {
-    const { itemId, borrower, quantity, dueDate } = req.body;
+    const { itemId, borrower, quantity, dueDate, borrowPhotoURL, conditionOnBorrow } = req.body;
     const catalogRef = db.collection(CATALOG).doc(itemId);
     const borrowRef = db.collection(TRANS).doc();
 
@@ -252,11 +252,14 @@ const recordBorrow = async (req, res) => {
       };
       if (borrower.email) loanData.email = borrower.email;
       if (borrower.profileURL) loanData.profileURL = borrower.profileURL;
+      if (borrowPhotoURL) loanData.borrowPhotoURL = borrowPhotoURL;
+      if (conditionOnBorrow) loanData.conditionOnBorrow = conditionOnBorrow;
 
+      const totalQty = Math.max(numberOr(current.quantity), nextAvailable);
       t.set(catalogRef, {
         availableQuantity: nextAvailable,
         available: nextAvailable > 0,
-        status: nextAvailable > 0 ? "Available" : "Borrowed",
+        status: nextAvailable < totalQty ? "Borrowed" : "Available",
         updatedAt: new Date(),
       }, { merge: true });
       t.set(userRef, userData, { merge: true });
@@ -282,7 +285,7 @@ const recordBorrow = async (req, res) => {
 
 const recordReturn = async (req, res) => {
   try {
-    const { borrowId, itemId, schoolID, quantity } = req.body;
+    const { borrowId, itemId, schoolID, quantity, returnPhotoURL, conditionOnReturn } = req.body;
     const catalogRef = db.collection(CATALOG).doc(itemId);
     const borrowRef = db.collection(TRANS).doc(borrowId);
     const returnRef = db.collection(TRANS).doc();
@@ -324,11 +327,15 @@ const recordReturn = async (req, res) => {
       if (borrow.dueDate) returnData.dueDate = borrow.dueDate;
       if (borrow.borrowedAt) returnData.borrowedAt = borrow.borrowedAt;
       if (borrow.timestamp) returnData.borrowedAt = borrow.borrowedAt || borrow.timestamp;
+      if (returnPhotoURL) returnData.returnPhotoURL = returnPhotoURL;
+      if (conditionOnReturn) returnData.conditionOnReturn = conditionOnReturn;
+      if (borrow.borrowPhotoURL) returnData.borrowPhotoURL = borrow.borrowPhotoURL;
+      if (borrow.conditionOnBorrow) returnData.conditionOnBorrow = borrow.conditionOnBorrow;
 
       t.set(catalogRef, {
         availableQuantity: nextAvailable,
         available: nextAvailable > 0,
-        status: nextAvailable > 0 ? "Available" : "Borrowed",
+        status: nextAvailable < totalQty ? "Borrowed" : "Available",
         updatedAt: new Date(),
       }, { merge: true });
       t.set(borrowRef, {

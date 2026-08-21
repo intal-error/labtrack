@@ -12,6 +12,8 @@ const DEFAULTS = {
   sessionTimeout: 30,
   maxLoginAttempts: 5,
   defaultRole: "Faculty",
+  finePerDay: 5,
+  fineRestrictionThreshold: 50,
 };
 
 const getSettings = async (req, res) => {
@@ -34,6 +36,7 @@ const updateSettings = async (req, res) => {
       "emailNotifications", "autoBackup", "maintenanceMode",
       "allowStudentRegistration", "requirePasswordChange",
       "sessionTimeout", "maxLoginAttempts", "defaultRole",
+      "finePerDay", "fineRestrictionThreshold",
     ];
     const updates = {};
     for (const key of allowed) {

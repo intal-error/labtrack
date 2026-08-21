@@ -568,8 +568,40 @@ export default function TransactionsPage() {
                       <span className="txn-detail-label">Returned</span>
                       <span className="txn-detail-value">{returnDate ? formatDate(returnDate) : "-"}</span>
                     </div>
+                    {item.conditionOnBorrow && (
+                      <div className="txn-detail-row">
+                        <span className="txn-detail-label">Condition (Borrow)</span>
+                        <span className="txn-detail-value">{item.conditionOnBorrow}</span>
+                      </div>
+                    )}
+                    {item.conditionOnReturn && (
+                      <div className="txn-detail-row">
+                        <span className="txn-detail-label">Condition (Return)</span>
+                        <span className="txn-detail-value">{item.conditionOnReturn}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
+
+                {(item.borrowPhotoURL || item.returnPhotoURL) && (
+                  <div className="txn-detail-section">
+                    <h5>Condition Photos</h5>
+                    <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                      {item.borrowPhotoURL && (
+                        <div style={{ textAlign: "center" }}>
+                          <img src={item.borrowPhotoURL} alt="Borrow condition" style={{ maxWidth: 200, borderRadius: 8, border: "1px solid var(--border)" }} />
+                          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>At Borrow</div>
+                        </div>
+                      )}
+                      {item.returnPhotoURL && (
+                        <div style={{ textAlign: "center" }}>
+                          <img src={item.returnPhotoURL} alt="Return condition" style={{ maxWidth: 200, borderRadius: 8, border: "1px solid var(--border)" }} />
+                          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>At Return</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })()}

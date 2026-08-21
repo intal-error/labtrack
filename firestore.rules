@@ -96,6 +96,27 @@ service cloud.firestore {
       allow write: if isFacultyOrAdmin();
     }
 
+    // Fines - anyone can read their own; admin can manage all
+    match /fines/{id} {
+      allow read: if request.auth != null && isFacultyOrAdmin();
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && isFacultyOrAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Borrow Requests - anyone can create/read own; faculty/admin can manage
+    match /borrowRequests/{id} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && isFacultyOrAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Backups - admin only
+    match /backups/{id} {
+      allow read, write: if isAdmin();
+    }
+
     // Settings - admin only
     match /settings/{docId} {
       allow read, write: if isAdmin();

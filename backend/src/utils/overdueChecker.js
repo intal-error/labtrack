@@ -1,5 +1,6 @@
 const { db } = require("../config/firebase");
 const { sendOverdueEmail } = require("./emailService");
+const { createFineForOverdue } = require("../controllers/finesController");
 
 const TRANS = "transactions";
 const NOTIF = "notifications";
@@ -55,6 +56,9 @@ const checkOverdueTransactions = async () => {
             { reminderSent: true, reminderSentAt: new Date() },
             { merge: true }
           );
+
+          await createFineForOverdue(doc.id);
+
           console.log(`Overdue reminder sent to ${email}`);
         } catch (e) {
           console.error(`Failed to send reminder to ${email}:`, e.message);

@@ -23,6 +23,9 @@ import IncidentTab from "./components/tabs/IncidentTab";
 import ManualsTab from "./components/tabs/ManualsTab";
 import UsageLogsTab from "./components/tabs/UsageLogsTab";
 import ReportsTab from "./components/tabs/ReportsTab";
+import FinesTab from "./components/tabs/FinesTab";
+import BorrowRequestsTab from "./components/tabs/BorrowRequestsTab";
+import MyRequestsPage from "./pages/MyRequestsPage";
 import ProfilePage from "./pages/ProfilePage";
 
 function ProtectedRoute({ children }) {
@@ -106,6 +109,9 @@ function App() {
               <Route path="manuals" element={<ManualsTab />} />
               <Route path="usage-logs" element={<RoleRoute allowed={["student"]}><UsageLogsTab /></RoleRoute>} />
               <Route path="reports" element={<RoleRoute allowed={["admin"]}><ReportsTab /></RoleRoute>} />
+              <Route path="fines" element={<RoleRoute allowed={["admin", "faculty"]}><FinesTab /></RoleRoute>} />
+              <Route path="borrow-requests" element={<RoleRoute allowed={["admin", "faculty"]}><BorrowRequestsTab /></RoleRoute>} />
+              <Route path="my-requests" element={<MyRequestsPage />} />
               <Route path="profile" element={<ProfilePage />} />
               <Route path="about" element={<AboutPage />} />
             </Route>

@@ -179,4 +179,58 @@ export const api = {
   updateManual: (id, data) => request(`/manuals/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteManual: (id) => request(`/manuals/${id}`, { method: "DELETE" }),
 
+  // Fines
+  getFines: () => request("/fines"),
+  getMyFines: () => request("/fines/my"),
+  checkRestriction: (userId) => request(`/fines/check-restriction/${userId}`),
+  payFine: (id) => request(`/fines/${id}/pay`, { method: "PUT" }),
+  waiveFine: (id, reason) => request(`/fines/${id}/waive`, { method: "PUT", body: JSON.stringify({ reason }) }),
+
+  // Borrow Requests
+  getBorrowRequests: () => request("/borrow-requests"),
+  getMyBorrowRequests: () => request("/borrow-requests/my"),
+  createBorrowRequest: (data) => request("/borrow-requests", { method: "POST", body: JSON.stringify(data) }),
+  approveBorrowRequest: (id, reviewNotes) => request(`/borrow-requests/${id}/approve`, { method: "PUT", body: JSON.stringify({ reviewNotes }) }),
+  rejectBorrowRequest: (id, reviewNotes) => request(`/borrow-requests/${id}/reject`, { method: "PUT", body: JSON.stringify({ reviewNotes }) }),
+  cancelBorrowRequest: (id) => request(`/borrow-requests/${id}/cancel`, { method: "PUT" }),
+
+  // Backup
+  exportBackup: () => request("/backup/export", { method: "POST" }),
+  downloadBackup: async () => {
+    let headers = {};
+    if (auth.currentUser) {
+      try {
+        const token = await getIdToken(auth.currentUser);
+        headers["Authorization"] = `Bearer ${token}`;
+      } catch {}
+    }
+    const res = await fetch(`${API_URL}/backup/download`, { headers });
+    if (!res.ok) throw new Error("Download failed");
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `labtrack_backup_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  },
+  importBackup: (backupData, overwrite) => request("/backup/import", { method: "POST", body: JSON.stringify({ backupData, overwrite }) }),
+  getBackupHistory: () => request("/backup/history"),
+
+  // Condition Photo Upload
+  uploadConditionPhoto: async (file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    let headers = {};
+    if (auth.currentUser) {
+      try {
+        const token = await getIdToken(auth.currentUser);
+        headers["Authorization"] = `Bearer ${token}`;
+      } catch {}
+    }
+    const res = await fetch(`${API_URL}/upload/condition-photo`, { method: "POST", headers, body: formData });
+    if (!res.ok) throw new Error("Upload failed");
+    return res.json();
+  },
+
 };

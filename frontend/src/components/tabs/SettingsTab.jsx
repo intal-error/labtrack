@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { api } from "../../services/api";
 import { useTheme } from "../../context/ThemeContext";
 import toast from "react-hot-toast";
 import {
   MdDarkMode, MdNotifications, MdSecurity, MdPeople,
-  MdSave, MdRestartAlt, MdWarning
+  MdSave, MdRestartAlt, MdWarning, MdAttachMoney, MdBackup
 } from "react-icons/md";
 import "../../styles/pages/tabs.css";
 
@@ -17,6 +17,8 @@ const DEFAULTS = {
   sessionTimeout: 30,
   maxLoginAttempts: 5,
   defaultRole: "Faculty",
+  finePerDay: 5,
+  fineRestrictionThreshold: 50,
 };
 
 const SETTING_META = {
@@ -64,6 +66,12 @@ export default function SettingsTab() {
   const [confirmModal, setConfirmModal] = useState(null);
   const [settings, setSettings] = useState(DEFAULTS);
   const [savedSettings, setSavedSettings] = useState(DEFAULTS);
+  const [backing, setBacking] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [backupHistory, setBackupHistory] = useState([]);
+  const [showImportConfirm, setShowImportConfirm] = useState(false);
+  const [importData, setImportData] = useState(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     async function load() {
@@ -78,9 +86,15 @@ export default function SettingsTab() {
           sessionTimeout: data.sessionTimeout ?? DEFAULTS.sessionTimeout,
           maxLoginAttempts: data.maxLoginAttempts ?? DEFAULTS.maxLoginAttempts,
           defaultRole: data.defaultRole ?? DEFAULTS.defaultRole,
+          finePerDay: data.finePerDay ?? DEFAULTS.finePerDay,
+          fineRestrictionThreshold: data.fineRestrictionThreshold ?? DEFAULTS.fineRestrictionThreshold,
         };
         setSettings(loaded);
         setSavedSettings(loaded);
+        try {
+          const history = await api.getBackupHistory();
+          setBackupHistory(history || []);
+        } catch {}
       } catch {
         toast.error("Failed to load settings");
       } finally {
@@ -130,6 +144,57 @@ export default function SettingsTab() {
       toast.error("Failed to save settings");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleBackup() {
+    setBacking(true);
+    try {
+      await api.downloadBackup();
+      toast.success("Backup downloaded successfully");
+      try {
+        const history = await api.getBackupHistory();
+        setBackupHistory(history || []);
+      } catch {}
+    } catch (err) {
+      toast.error(err.message || "Backup failed");
+    } finally {
+      setBacking(false);
+    }
+  }
+
+  function handleImportSelect(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (!data.collections) {
+          toast.error("Invalid backup file format");
+          return;
+        }
+        setImportData(data);
+        setShowImportConfirm(true);
+      } catch {
+        toast.error("Failed to parse backup file");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }
+
+  async function handleImportConfirm(overwrite) {
+    setImporting(true);
+    try {
+      const result = await api.importBackup(importData, overwrite);
+      toast.success(`Imported ${result.imported} documents${result.skipped > 0 ? ` (${result.skipped} skipped)` : ""}`);
+      setShowImportConfirm(false);
+      setImportData(null);
+    } catch (err) {
+      toast.error(err.message || "Import failed");
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -257,6 +322,74 @@ export default function SettingsTab() {
             </select>
           </label>
         </div>
+
+        <div className="settings-section">
+          <div className="settings-section-header">
+            <MdAttachMoney size={20} />
+            <h3>Fine Management</h3>
+          </div>
+          <label className="settings-row settings-row-select">
+            <div className="settings-row-info">
+              <span className="settings-row-label">Fine Per Day</span>
+              <span className="settings-row-desc">Amount charged per day for overdue items (PHP)</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ color: "var(--text-muted)" }}>₱</span>
+              <input type="number" min="0" value={settings.finePerDay} onChange={(e) => handleChange("finePerDay", Number(e.target.value))} style={{ width: 80, padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)" }} />
+            </div>
+          </label>
+          <label className="settings-row settings-row-select">
+            <div className="settings-row-info">
+              <span className="settings-row-label">Restriction Threshold</span>
+              <span className="settings-row-desc">Block borrowing when unpaid fines reach this amount (PHP)</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ color: "var(--text-muted)" }}>₱</span>
+              <input type="number" min="0" value={settings.fineRestrictionThreshold} onChange={(e) => handleChange("fineRestrictionThreshold", Number(e.target.value))} style={{ width: 80, padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)" }} />
+            </div>
+          </label>
+        </div>
+
+        <div className="settings-section">
+          <div className="settings-section-header">
+            <MdBackup size={20} />
+            <h3>Backup & Recovery</h3>
+          </div>
+          <div className="settings-row">
+            <div className="settings-row-info">
+              <span className="settings-row-label">Export Backup</span>
+              <span className="settings-row-desc">Download a full backup of all system data as JSON</span>
+            </div>
+            <button className="btn btn-outline btn-sm" onClick={handleBackup} disabled={backing}>
+              {backing ? "Exporting..." : "Export Now"}
+            </button>
+          </div>
+          <div className="settings-row">
+            <div className="settings-row-info">
+              <span className="settings-row-label">Import Backup</span>
+              <span className="settings-row-desc">Restore data from a previously exported backup file</span>
+            </div>
+            <div>
+              <input type="file" accept=".json" ref={fileInputRef} onChange={handleImportSelect} style={{ display: "none" }} />
+              <button className="btn btn-outline btn-sm" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+                {importing ? "Importing..." : "Import"}
+              </button>
+            </div>
+          </div>
+          {backupHistory.length > 0 && (
+            <div className="settings-row" style={{ flexDirection: "column", alignItems: "flex-start", gap: 8 }}>
+              <span className="settings-row-label">Recent Backups</span>
+              <div style={{ fontSize: 13, color: "var(--text-muted)", maxHeight: 120, overflow: "auto", width: "100%" }}>
+                {backupHistory.slice(0, 5).map((b) => (
+                  <div key={b.id} style={{ padding: "4px 0", borderBottom: "1px solid var(--border)" }}>
+                    {new Date(b.createdAt?.toDate?.() || b.createdAt).toLocaleString()} — {b.totalDocuments || 0} docs
+                    {b.type === "import" && <span style={{ color: "#f57c00" }}> (import)</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {isDirty && (
@@ -293,6 +426,33 @@ export default function SettingsTab() {
               </button>
               <button className="btn btn-green" onClick={confirmCriticalAction}>
                 Yes, Enable
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showImportConfirm && importData && (
+        <div className="modal-overlay" onClick={() => { setShowImportConfirm(false); setImportData(null); }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="settings-confirm-header">
+              <MdWarning size={32} color="#1976d2" />
+              <h3>Import Backup?</h3>
+            </div>
+            <p className="settings-confirm-message">
+              This will import data from backup created on {new Date(importData.createdAt).toLocaleString()}.
+              <br /><br />
+              <strong>{importData.totalDocuments || 0} documents</strong> across {Object.keys(importData.collections || {}).length} collections.
+            </p>
+            <div className="form-actions">
+              <button className="btn btn-outline" onClick={() => { setShowImportConfirm(false); setImportData(null); }}>
+                Cancel
+              </button>
+              <button className="btn btn-outline" onClick={() => handleImportConfirm(false)} disabled={importing}>
+                {importing ? "Importing..." : "Import (Skip Existing)"}
+              </button>
+              <button className="btn btn-green" onClick={() => handleImportConfirm(true)} disabled={importing}>
+                {importing ? "Importing..." : "Import (Overwrite)"}
               </button>
             </div>
           </div>
