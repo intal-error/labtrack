@@ -4,7 +4,8 @@ import { useAuth } from "../../context/AuthContext";
 import Modal from "../ui/Modal";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
-import { MdBuild, MdAdd, MdEdit, MdDelete, MdCalendarToday, MdWarning, MdSearch, MdCheckCircle, MdSchedule, MdPlayArrow, MdAssignment, MdCameraAlt, MdImage } from "react-icons/md";
+import "../../styles/pages/catalog.css";
+import { MdBuild, MdAdd, MdEdit, MdDelete, MdCalendarToday, MdWarning, MdSearch, MdCheckCircle, MdSchedule, MdPlayArrow, MdAssignment, MdCameraAlt, MdImage, MdGridOn, MdList } from "react-icons/md";
 
 const STATUS_COLORS = {
   scheduled: "#1976d2",
@@ -65,6 +66,7 @@ export default function MaintenanceTab() {
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [selectedItem, setSelectedItem] = useState(null);
+  const [viewMode, setViewMode] = useState("list");
   const [uploading, setUploading] = useState(false);
   const [form, setForm] = useState({ catalogId: "", itemName: "", type: "preventive", description: "", status: "scheduled", scheduledDate: "", assignedTo: "", priority: "medium", photoURL: "" });
 
@@ -239,9 +241,19 @@ export default function MaintenanceTab() {
             </button>
           ))}
         </div>
-        <div className="maintenance-search">
-          <MdSearch size={16} />
-          <input type="text" placeholder="Search items, technician..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        <div className="maintenance-toolbar-right">
+          <div className="maintenance-search">
+            <MdSearch size={16} />
+            <input type="text" placeholder="Search items, technician..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <div className="catalog-view-toggle">
+            <button className={`view-btn ${viewMode === "grid" ? "active" : ""}`} onClick={() => setViewMode("grid")} title="Grid view">
+              <MdGridOn size={16} />
+            </button>
+            <button className={`view-btn ${viewMode === "list" ? "active" : ""}`} onClick={() => setViewMode("list")} title="List view">
+              <MdList size={16} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -322,56 +334,98 @@ export default function MaintenanceTab() {
         </div>
       )}
 
-      <div className="maintenance-list">
-        {filtered.length === 0 ? (
-          <div className="maintenance-empty">
-            <MdBuild size={48} />
-            <h3>{search || filter !== "all" ? "No matching records" : "No maintenance scheduled"}</h3>
-            <p>{search || filter !== "all" ? "Try adjusting your search or filter" : "Click 'Schedule Maintenance' to create your first record"}</p>
-          </div>
-        ) : filtered.map((item) => {
-          const relDate = getRelativeDate(item.scheduledDate);
-          const dateStyle = getDateBorderStyle(item);
-          return (
-            <div className={`maintenance-card ${dateStyle}`} key={item.id} onClick={() => setSelectedItem(item)}>
-              {item.photoURL && (
-                <div className="maintenance-card-photo">
-                  <img src={item.photoURL} alt={item.itemName} />
-                </div>
-              )}
-              <div className="maintenance-card-header">
-                <div className="maintenance-card-title">
-                  <MdBuild size={18} />
-                  <span>{item.itemName}</span>
-                </div>
-                <div className="maintenance-card-badges">
-                  <span className="maintenance-priority-badge" style={{ background: `${PRIORITY_COLORS[item.priority] || PRIORITY_COLORS.medium}20`, color: PRIORITY_COLORS[item.priority] || PRIORITY_COLORS.medium }}>
-                    {item.priority || "medium"}
-                  </span>
-                  <span className="badge" style={{ background: `${STATUS_COLORS[item.status] || "#666"}20`, color: STATUS_COLORS[item.status] || "#666" }}>
-                    {item.status === "in-progress" ? "In Progress" : item.status}
-                  </span>
-                </div>
-              </div>
-              <div className="maintenance-card-body">
-                <div className="maintenance-meta">
-                  <span className={`maintenance-type-badge ${item.type}`}>
-                    <MdWarning size={14} /> {TYPE_LABELS[item.type] || item.type}
-                  </span>
-                  {item.scheduledDate && (
-                    <span className={`maintenance-date-badge ${relDate?.className || ""}`}>
-                      <MdCalendarToday size={14} /> {new Date(item.scheduledDate).toLocaleDateString()}
-                      {relDate && item.status !== "completed" && <span className="relative-date">{relDate.text}</span>}
+      {stats.overdue > 0 && (
+        <div className="borrow-overdue-banner">
+          <span className="overdue-pulse" />
+          <strong>{stats.overdue}</strong> maintenance task{stats.overdue > 1 ? "s" : ""} overdue
+        </div>
+      )}
+
+      {filtered.length === 0 ? (
+        <div className="maintenance-empty">
+          <MdBuild size={48} />
+          <h3>{search || filter !== "all" ? "No matching records" : "No maintenance scheduled"}</h3>
+          <p>{search || filter !== "all" ? "Try adjusting your search or filter" : "Click 'Schedule Maintenance' to create your first record"}</p>
+        </div>
+      ) : viewMode === "grid" ? (
+        <div className="catalog-grid">
+          {filtered.map((item) => {
+            const relDate = getRelativeDate(item.scheduledDate);
+            return (
+              <div className="catalog-card" key={item.id} onClick={() => setSelectedItem(item)}>
+                {item.photoURL && (
+                  <div className="catalog-card-image">
+                    <img src={item.photoURL} alt={item.itemName} />
+                  </div>
+                )}
+                <div className="catalog-card-body">
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <h4 className="catalog-card-title" style={{ margin: 0 }}>{item.itemName}</h4>
+                    <span className="maintenance-priority-badge" style={{ background: `${PRIORITY_COLORS[item.priority] || PRIORITY_COLORS.medium}20`, color: PRIORITY_COLORS[item.priority] || PRIORITY_COLORS.medium, flexShrink: 0 }}>
+                      {item.priority || "medium"}
                     </span>
+                  </div>
+                  <div className="catalog-card-meta">
+                    <span className={`condition-badge ${item.type === "preventive" ? "cond-good" : "cond-fair"}`}>{TYPE_LABELS[item.type] || item.type}</span>
+                    <span className="badge" style={{ background: `${STATUS_COLORS[item.status] || "#666"}20`, color: STATUS_COLORS[item.status] || "#666" }}>
+                      {item.status === "in-progress" ? "In Progress" : item.status}
+                    </span>
+                  </div>
+                  {relDate && item.status !== "completed" && (
+                    <span className={`maintenance-date-badge ${relDate.className}`} style={{ marginBottom: 6, display: "inline-block" }}>{relDate.text}</span>
                   )}
-                  {item.assignedTo && <span className="maintenance-assigned"><MdAssignment size={14} /> {item.assignedTo}</span>}
+                  {item.assignedTo && <p className="catalog-card-desc" style={{ fontSize: 12, color: "var(--text-muted)", margin: "4px 0 0" }}>Assigned: {item.assignedTo}</p>}
                 </div>
-                {item.description && <p className="maintenance-desc">{item.description}</p>}
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="maintenance-list">
+          {filtered.map((item) => {
+            const relDate = getRelativeDate(item.scheduledDate);
+            const dateStyle = getDateBorderStyle(item);
+            return (
+              <div className={`maintenance-card ${dateStyle}`} key={item.id} onClick={() => setSelectedItem(item)}>
+                {item.photoURL && (
+                  <div className="maintenance-card-photo">
+                    <img src={item.photoURL} alt={item.itemName} />
+                  </div>
+                )}
+                <div className="maintenance-card-header">
+                  <div className="maintenance-card-title">
+                    <MdBuild size={18} />
+                    <span>{item.itemName}</span>
+                  </div>
+                  <div className="maintenance-card-badges">
+                    <span className="maintenance-priority-badge" style={{ background: `${PRIORITY_COLORS[item.priority] || PRIORITY_COLORS.medium}20`, color: PRIORITY_COLORS[item.priority] || PRIORITY_COLORS.medium }}>
+                      {item.priority || "medium"}
+                    </span>
+                    <span className="badge" style={{ background: `${STATUS_COLORS[item.status] || "#666"}20`, color: STATUS_COLORS[item.status] || "#666" }}>
+                      {item.status === "in-progress" ? "In Progress" : item.status}
+                    </span>
+                  </div>
+                </div>
+                <div className="maintenance-card-body">
+                  <div className="maintenance-meta">
+                    <span className={`maintenance-type-badge ${item.type}`}>
+                      <MdWarning size={14} /> {TYPE_LABELS[item.type] || item.type}
+                    </span>
+                    {item.scheduledDate && (
+                      <span className={`maintenance-date-badge ${relDate?.className || ""}`}>
+                        <MdCalendarToday size={14} /> {new Date(item.scheduledDate).toLocaleDateString()}
+                        {relDate && item.status !== "completed" && <span className="relative-date">{relDate.text}</span>}
+                      </span>
+                    )}
+                    {item.assignedTo && <span className="maintenance-assigned"><MdAssignment size={14} /> {item.assignedTo}</span>}
+                  </div>
+                  {item.description && <p className="maintenance-desc">{item.description}</p>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {selectedItem && (
         <Modal title="Maintenance Details" onClose={() => setSelectedItem(null)}>

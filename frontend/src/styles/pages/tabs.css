@@ -606,6 +606,12 @@
 .manuals-empty h3{font-size:16px;color:var(--text);margin:0 0 6px 0}
 .manuals-empty p{font-size:13px;color:var(--text-muted);margin:0}
 
+/* Manual upload enhancements */
+.manual-upload-btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px 20px;border:2px dashed var(--border);border-radius:10px;background:var(--bg);color:var(--text-muted);font-size:13px;cursor:pointer;transition:all .2s;text-align:center;width:100%}
+.manual-upload-btn:hover{border-color:var(--green);color:var(--green);background:rgba(46,125,50,.03)}
+.manual-file-preview{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px}
+.manual-file-name{font-size:13px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;margin-right:8px}
+
 /* Activity Tab */
 .activity-page-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px}
 .activity-page-header h2{font-size:1.4rem;color:var(--dark-green);margin:0;display:flex;align-items:center;gap:8px}
@@ -687,15 +693,31 @@
 .report-summary-label{font-size:13px;font-weight:600;color:var(--text-muted)}
 .report-summary-detail{font-size:11px;color:var(--text-muted);margin-top:4px}
 
-.reports-charts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;margin:24px 0}
+.reports-charts-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;margin:24px 0}
 .report-chart-box{background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;padding:22px;box-shadow:var(--card-shadow)}
 .report-chart-box h4{font-size:14px;color:var(--dark-green);margin:0 0 16px 0;font-weight:600}
+.report-chart-wide{grid-column:1 / -1}
+.recharts-default-tooltip{background:var(--bg-card)!important;border:1px solid var(--border)!important;border-radius:8px!important}
+.recharts-legend-item-text{color:var(--text)!important}
 .report-bar-chart{display:flex;flex-direction:column;gap:10px}
 .report-bar-row{display:flex;align-items:center;gap:10px}
 .report-bar-label{width:100px;font-size:12px;color:var(--text-muted);text-align:right;flex-shrink:0}
 .report-bar-track{flex:1;height:20px;background:var(--bg);border-radius:10px;overflow:hidden}
 .report-bar-fill{height:100%;border-radius:10px;transition:width .5s ease}
 .report-bar-value{width:30px;font-size:12px;font-weight:600;color:var(--text)}
+
+/* Borrow Requests */
+.borrow-overdue-banner{display:flex;align-items:center;gap:8px;padding:10px 16px;margin-bottom:16px;background:rgba(211,47,47,.1);border:1px solid rgba(211,47,47,.2);border-radius:10px;color:#d32f2f;font-size:13px;font-weight:500}
+.overdue-pulse{width:8px;height:8px;border-radius:50%;background:#d32f2f;animation:pulse 1.5s ease-in-out infinite}
+.borrow-thumb{width:28px;height:28px;border-radius:6px;object-fit:cover;flex-shrink:0}
+.maintenance-sort{display:flex;align-items:center;gap:4px;color:var(--text-muted)}
+.maintenance-sort select{padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--bg-card);color:var(--text);cursor:pointer}
+.maintenance-toolbar-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+
+/* Incident enhancements */
+.filter-count{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;margin-left:4px;border-radius:10px;background:rgba(255,255,255,.2);font-size:10px;font-weight:700}
+.incident-filter-btn.active .filter-count{background:rgba(0,0,0,.15)}
+.incident-severity-mini{font-size:10px;font-weight:600;display:block;margin-top:2px}
 
 /* Responsive */
 @media(max-width:900px){
@@ -707,6 +729,8 @@
   .manuals-stats{grid-template-columns:repeat(2,1fr)}
   .activity-stats{grid-template-columns:repeat(3,1fr)}
   .doc-stats{grid-template-columns:repeat(2,1fr)}
+  .reports-charts-grid{grid-template-columns:1fr}
+  .reports-summary-grid{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
 }
 @media(max-width:600px){
   .overview-cards{grid-template-columns:1fr 1fr}
@@ -889,6 +913,9 @@ body.dark .report-summary-card{border-color:rgba(255,255,255,.1);background:#131
 body.dark .report-summary-value{color:#FFFFFF}
 body.dark .report-chart-box{border-color:rgba(255,255,255,.1);background:#131313}
 body.dark .report-bar-track{background:#0a0a0a}
+body.dark .recharts-default-tooltip{background:#1a1a1a!important;border-color:rgba(255,255,255,.1)!important}
+body.dark .recharts-tooltip-item{color:#fff!important}
+body.dark .recharts-cartesian-grid line{stroke:rgba(255,255,255,.08)!important}
 body.dark .tab-bar{border-color:rgba(255,255,255,.1)}
 body.dark .tab-btn{color:#888}
 body.dark .tab-btn.active{color:var(--amber)}
@@ -910,3 +937,12 @@ body.dark .manual-card-icon{background:linear-gradient(135deg,#1a1a1a,rgba(255,2
 .chart-box{animation:fadeInUp .5s ease .2s backwards}
 .chart-box:nth-child(2){animation-delay:.3s}
 .chart-box:nth-child(3){animation-delay:.4s}
+
+/* Dark mode - new elements */
+body.dark .borrow-overdue-banner{background:rgba(211,47,47,.15);border-color:rgba(211,47,47,.25)}
+body.dark .borrow-thumb{border:1px solid rgba(255,255,255,.1)}
+body.dark .maintenance-sort select{background:#0f0f0f;border-color:rgba(255,255,255,.1);color:#FFFFFF}
+body.dark .manual-upload-btn{border-color:rgba(255,255,255,.15);background:#0a0a0a;color:#888}
+body.dark .manual-upload-btn:hover{border-color:var(--green);color:var(--green)}
+body.dark .manual-file-preview{background:#0a0a0a;border-color:rgba(255,255,255,.1)}
+body.dark .manual-file-name{color:#FFFFFF}

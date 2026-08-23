@@ -3,10 +3,31 @@ import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
-import { MdMenuBook, MdAdd, MdDelete, MdEdit, MdSearch, MdOpenInNew } from "react-icons/md";
+import { MdMenuBook, MdAdd, MdDelete, MdEdit, MdSearch, MdOpenInNew, MdDownload, MdCloudUpload } from "react-icons/md";
 
 const CATEGORIES = ["All", "General", "Safety", "Equipment Guide", "Software", "Procedure"];
 const CATEGORY_ICONS = { General: "📘", Safety: "🛡️", "Equipment Guide": "🔧", Software: "💻", Procedure: "📋" };
+
+const FILE_TYPE_ICONS = {
+  pdf: { color: "#d32f2f", label: "PDF" },
+  doc: { color: "#1976d2", label: "DOC" },
+  docx: { color: "#1976d2", label: "DOC" },
+  xls: { color: "#2E7D32", label: "XLS" },
+  xlsx: { color: "#2E7D32", label: "XLS" },
+  ppt: { color: "#ef6c00", label: "PPT" },
+  pptx: { color: "#ef6c00", label: "PPT" },
+  jpg: { color: "#7b1fa2", label: "IMG" },
+  jpeg: { color: "#7b1fa2", label: "IMG" },
+  png: { color: "#7b1fa2", label: "IMG" },
+  video: { color: "#c62828", label: "VID" },
+  mp4: { color: "#c62828", label: "VID" },
+};
+
+function getFileType(fileName) {
+  if (!fileName) return null;
+  const ext = fileName.split(".").pop().toLowerCase();
+  return FILE_TYPE_ICONS[ext] || null;
+}
 
 function timeAgo(date) {
   if (!date) return "";
@@ -36,13 +57,14 @@ export default function ManualsTab() {
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("All");
   const [form, setForm] = useState(EMPTY_FORM);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => { load(); }, []);
 
   async function load() {
     try {
       const data = await api.getManuals();
-      setManuals(data);
+      setManuals(data || []);
     } catch {
       toast.error("Failed to load manuals");
     } finally {
@@ -62,7 +84,8 @@ export default function ManualsTab() {
   const filtered = useMemo(() => manuals.filter((m) => {
     const matchSearch = !search ||
       m.title?.toLowerCase().includes(search.toLowerCase()) ||
-      m.description?.toLowerCase().includes(search.toLowerCase());
+      m.description?.toLowerCase().includes(search.toLowerCase()) ||
+      m.fileName?.toLowerCase().includes(search.toLowerCase());
     const matchCategory = filterCategory === "All" || m.category === filterCategory;
     return matchSearch && matchCategory;
   }), [manuals, search, filterCategory]);
@@ -95,6 +118,21 @@ export default function ManualsTab() {
       load();
     } catch {
       toast.error(editing ? "Failed to update manual" : "Failed to upload manual");
+    }
+  }
+
+  async function handleFileUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const { url } = await api.uploadDocument(file);
+      setForm((f) => ({ ...f, fileUrl: url, fileName: file.name }));
+      toast.success("File uploaded!");
+    } catch {
+      toast.error("Upload failed");
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -185,20 +223,32 @@ export default function ManualsTab() {
                 </select>
               </div>
               <div className="form-group">
-                <label>File URL</label>
-                <input type="url" value={form.fileUrl} onChange={(e) => setForm({ ...form, fileUrl: e.target.value })} required placeholder="https://drive.google.com/..." />
+                <label>File</label>
+                {form.fileUrl ? (
+                  <div className="manual-file-preview">
+                    <span className="manual-file-name">{form.fileName || "Uploaded file"}</span>
+                    <button type="button" className="btn btn-sm btn-danger" onClick={() => setForm((f) => ({ ...f, fileUrl: "", fileName: "" }))}>Remove</button>
+                  </div>
+                ) : (
+                  <label className="manual-upload-btn">
+                    <MdCloudUpload size={18} /> {uploading ? "Uploading..." : "Choose file or paste URL"}
+                    <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.mp4" onChange={handleFileUpload} hidden disabled={uploading} />
+                  </label>
+                )}
               </div>
-              <div className="form-group">
-                <label>File Name</label>
-                <input type="text" value={form.fileName} onChange={(e) => setForm({ ...form, fileName: e.target.value })} placeholder="e.g. Lab Safety Guide.pdf" />
-              </div>
+              {!form.fileUrl && (
+                <div className="form-group">
+                  <label>Or paste File URL</label>
+                  <input type="url" value={form.fileUrl} onChange={(e) => setForm({ ...form, fileUrl: e.target.value })} placeholder="https://drive.google.com/..." />
+                </div>
+              )}
               <div className="form-group">
                 <label>Description</label>
                 <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} placeholder="Brief description..." />
               </div>
               <div className="form-actions">
                 <button type="button" className="btn btn-outline" onClick={() => { setShowForm(false); setEditing(null); }}>Cancel</button>
-                <button type="submit" className="btn btn-primary">{editing ? "Update" : "Upload"}</button>
+                <button type="submit" className="btn btn-primary" disabled={!form.fileUrl}>{editing ? "Update" : "Upload"}</button>
               </div>
             </form>
           </div>
@@ -212,36 +262,51 @@ export default function ManualsTab() {
             <h3>{search || filterCategory !== "All" ? "No matching manuals" : "No manuals yet"}</h3>
             <p>{search || filterCategory !== "All" ? "Try adjusting your search or filter" : role === "admin" ? "Click 'Upload Manual' to add your first manual" : "No manuals have been uploaded yet"}</p>
           </div>
-        ) : filtered.map((m) => (
-          <div className="manual-card" key={m.id}>
-            <div className="manual-card-icon">
-              <MdMenuBook size={32} />
-            </div>
-            <div className="manual-card-body">
-              <h4>{m.title}</h4>
-              <span className="manual-card-category">{m.category}</span>
-              {m.description && <p className="manual-card-desc">{m.description}</p>}
-              {m.fileName && <span className="manual-filename">{m.fileName}</span>}
-              <div className="manual-card-meta">
-                {m.createdAt && <span className="manual-meta-date">{timeAgo(m.createdAt)}</span>}
-                {m.uploadedBy && <span className="manual-meta-uploader">by {m.uploadedBy}</span>}
+        ) : filtered.map((m) => {
+          const fileType = getFileType(m.fileName);
+          return (
+            <div className="manual-card" key={m.id}>
+              <div className="manual-card-icon">
+                {fileType ? (
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                    <MdMenuBook size={28} style={{ color: fileType.color }} />
+                    <span style={{ fontSize: 9, fontWeight: 700, color: fileType.color, background: `${fileType.color}15`, padding: "1px 6px", borderRadius: 4 }}>{fileType.label}</span>
+                  </div>
+                ) : (
+                  <MdMenuBook size={32} />
+                )}
+              </div>
+              <div className="manual-card-body">
+                <h4>{m.title}</h4>
+                <span className="manual-card-category">{m.category}</span>
+                {m.description && <p className="manual-card-desc">{m.description}</p>}
+                {m.fileName && <span className="manual-filename">{m.fileName}</span>}
+                <div className="manual-card-meta">
+                  {m.createdAt && <span className="manual-meta-date">{timeAgo(m.updatedAt || m.createdAt)}</span>}
+                  {m.uploaderName && <span className="manual-meta-uploader">by {m.uploaderName}</span>}
+                </div>
+              </div>
+              <div className="manual-card-actions">
+                {m.fileUrl && (
+                  <>
+                    <a href={m.fileUrl} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-primary" onClick={(e) => e.stopPropagation()}>
+                      <MdOpenInNew size={14} /> Open
+                    </a>
+                    <a href={m.fileUrl} download className="btn btn-sm btn-outline" onClick={(e) => e.stopPropagation()}>
+                      <MdDownload size={14} />
+                    </a>
+                  </>
+                )}
+                {role === "admin" && (
+                  <>
+                    <button className="btn btn-sm btn-outline" onClick={() => openEdit(m)}><MdEdit size={14} /></button>
+                    <button className="btn btn-sm btn-danger" onClick={() => handleDelete(m.id)}><MdDelete size={14} /></button>
+                  </>
+                )}
               </div>
             </div>
-            <div className="manual-card-actions">
-              {m.fileUrl && (
-                <a href={m.fileUrl} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-primary" onClick={(e) => e.stopPropagation()}>
-                  <MdOpenInNew size={14} /> Open
-                </a>
-              )}
-              {role === "admin" && (
-                <>
-                  <button className="btn btn-sm btn-outline" onClick={() => openEdit(m)}><MdEdit size={14} /> Edit</button>
-                  <button className="btn btn-sm btn-danger" onClick={() => handleDelete(m.id)}><MdDelete size={14} /></button>
-                </>
-              )}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

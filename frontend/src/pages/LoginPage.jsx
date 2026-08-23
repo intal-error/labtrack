@@ -42,11 +42,7 @@ export default function LoginPage() {
       return;
     }
     toast.success("Welcome back!");
-    if (role === "student") {
-      navigate("/scanner");
-    } else {
-      navigate("/overview");
-    }
+    navigate("/home");
   }, [signedIn, authLoading, role, selectedRole, navigate]);
 
   const handleSubmit = async (e) => {

@@ -18,7 +18,23 @@ const getAllFines = async (req, res) => {
   try {
     const snap = await db.collection(FINES).orderBy("createdAt", "desc").get();
     const fines = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    res.json(fines);
+
+    const userIds = [...new Set(fines.map((f) => f.userId).filter(Boolean))];
+    const userSnaps = await Promise.all(userIds.map((id) => db.collection(USERS).doc(id).get()));
+    const userMap = {};
+    userSnaps.forEach((snap) => {
+      if (snap.exists) {
+        const data = snap.data();
+        userMap[snap.id] = `${data.firstName || ""} ${data.lastName || ""}`.trim() || data.email || snap.id;
+      }
+    });
+
+    const enriched = fines.map((f) => ({
+      ...f,
+      userName: userMap[f.userId] || f.userId || "Unknown",
+    }));
+
+    res.json(enriched);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -37,7 +53,15 @@ const getMyFines = async (req, res) => {
         const db2 = b.createdAt?.toDate?.() || (b.createdAt?.seconds ? new Date(b.createdAt.seconds * 1000) : new Date(0));
         return db2 - da;
       });
-    res.json(fines);
+
+    const userSnap = await db.collection(USERS).doc(uid).get();
+    const userName = userSnap.exists
+      ? `${userSnap.data().firstName || ""} ${userSnap.data().lastName || ""}`.trim() || userSnap.data().email || uid
+      : uid;
+
+    const enriched = fines.map((f) => ({ ...f, userName }));
+
+    res.json(enriched);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

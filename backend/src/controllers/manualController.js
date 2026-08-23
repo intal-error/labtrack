@@ -1,13 +1,30 @@
 const { db } = require("../config/firebase");
 
 const COLLECTION = "manuals";
+const USERS = "users";
 
 const getAll = async (req, res) => {
   try {
     const snap = await db.collection(COLLECTION).orderBy("createdAt", "desc").get();
     const items = [];
     snap.forEach((doc) => items.push({ id: doc.id, ...doc.data() }));
-    res.json(items);
+
+    const userIds = [...new Set(items.map((m) => m.uploadedBy).filter(Boolean))];
+    const userSnaps = await Promise.all(userIds.map((id) => db.collection(USERS).doc(id).get()));
+    const userMap = {};
+    userSnaps.forEach((s) => {
+      if (s.exists) {
+        const data = s.data();
+        userMap[s.id] = `${data.firstName || ""} ${data.lastName || ""}`.trim() || data.email || s.id;
+      }
+    });
+
+    const enriched = items.map((m) => ({
+      ...m,
+      uploaderName: userMap[m.uploadedBy] || m.uploadedBy || "Unknown",
+    }));
+
+    res.json(enriched);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

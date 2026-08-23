@@ -12,7 +12,7 @@ import CatalogPage from "./pages/CatalogPage";
 import PersonaPage from "./pages/PersonaPage";
 import AdminPage from "./pages/AdminPage";
 import AboutPage from "./pages/AboutPage";
-import OverviewTab from "./components/tabs/OverviewTab";
+import HomePage from "./pages/HomePage";
 
 import NotificationsTab from "./components/tabs/NotificationsTab";
 import SettingsTab from "./components/tabs/SettingsTab";
@@ -38,19 +38,18 @@ function ProtectedRoute({ children }) {
 function RoleRoute({ children, allowed }) {
   const { role, loading } = useAuth();
   if (loading) return <div className="loading-screen"><div className="spinner-lg" /></div>;
-  if (!allowed.includes(role)) return <Navigate to="/overview" replace />;
+  if (!allowed.includes(role)) return <Navigate to="/home" replace />;
   return children;
 }
 
 function IndexRedirect() {
-  const { role } = useAuth();
-  return <Navigate to={role === "student" ? "/usage-logs" : "/overview"} replace />;
+  return <Navigate to="/home" replace />;
 }
 
 function GuestRoute({ children }) {
   const { user, role, loading } = useAuth();
   if (loading) return <div className="loading-screen"><div className="spinner-lg" /></div>;
-  if (user && role) return <Navigate to={role === "student" ? "/usage-logs" : "/overview"} replace />;
+  if (user && role) return <Navigate to="/home" replace />;
   return children;
 }
 
@@ -91,7 +90,8 @@ function App() {
             <Route path="/register" element={<GuestRoute><RegisterPage /></GuestRoute>} />
             <Route path="/" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
               <Route index element={<IndexRedirect />} />
-              <Route path="overview" element={<RoleRoute allowed={["faculty", "admin"]}><OverviewTab /></RoleRoute>} />
+              <Route path="home" element={<HomePage />} />
+              <Route path="overview" element={<Navigate to="/home" replace />} />
 
               <Route path="notifications" element={<NotificationsTab />} />
               <Route path="settings" element={<RoleRoute allowed={["admin"]}><SettingsTab /></RoleRoute>} />
@@ -115,7 +115,7 @@ function App() {
               <Route path="profile" element={<ProfilePage />} />
               <Route path="about" element={<AboutPage />} />
             </Route>
-            <Route path="*" element={<Navigate to="/overview" replace />} />
+            <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
           </ErrorBoundary>
         </ThemeProvider>

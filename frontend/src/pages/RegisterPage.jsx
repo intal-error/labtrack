@@ -22,11 +22,7 @@ export default function RegisterPage() {
 
   useEffect(() => {
     if (!registered || authLoading || !role) return;
-    if (role === "student") {
-      navigate("/scanner");
-    } else {
-      navigate("/overview");
-    }
+    navigate("/home");
   }, [registered, authLoading, role, navigate]);
 
   const [form, setForm] = useState({

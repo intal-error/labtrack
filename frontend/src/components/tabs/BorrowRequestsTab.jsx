@@ -5,7 +5,7 @@ import Modal from "../ui/Modal";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
 import "../../styles/pages/catalog.css";
-import { MdAssignment, MdSearch, MdCheckCircle, MdCancel, MdSchedule, MdPerson, MdInventory } from "react-icons/md";
+import { MdAssignment, MdSearch, MdCheckCircle, MdCancel, MdSchedule, MdPerson, MdInventory, MdSort } from "react-icons/md";
 
 const STATUS_COLORS = {
   pending: "#f57c00",
@@ -35,9 +35,34 @@ function timeAgo(date) {
   return `${days}d ago`;
 }
 
+function getDueDateInfo(dueDate) {
+  if (!dueDate) return null;
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const due = new Date(dueDate);
+  due.setHours(0, 0, 0, 0);
+  const diffMs = due - now;
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) return { label: `Overdue by ${Math.abs(diffDays)}d`, cls: "date-overdue", days: diffDays };
+  if (diffDays === 0) return { label: "Due today", cls: "date-today", days: 0 };
+  if (diffDays <= 3) return { label: `Due in ${diffDays}d`, cls: "date-urgent", days: diffDays };
+  if (diffDays <= 7) return { label: `Due in ${diffDays}d`, cls: "date-soon", days: diffDays };
+  return { label: `Due in ${diffDays}d`, cls: "date-normal", days: diffDays };
+}
+
+function toDate(value) {
+  if (!value) return null;
+  if (typeof value?.toDate === "function") return value.toDate();
+  if (value instanceof Date) return value;
+  if (typeof value?.seconds === "number") return new Date(value.seconds * 1000);
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 export default function BorrowRequestsTab() {
   const { role, userProfile } = useAuth();
   const [requests, setRequests] = useState([]);
+  const [catalog, setCatalog] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("pending");
   const [search, setSearch] = useState("");
@@ -45,19 +70,27 @@ export default function BorrowRequestsTab() {
   const [reviewNotes, setReviewNotes] = useState("");
   const [processing, setProcessing] = useState(null);
   const [viewMode, setViewMode] = useState("grid");
+  const [sortBy, setSortBy] = useState("newest");
 
   useEffect(() => { load(); }, []);
 
   async function load() {
     try {
-      const data = await api.getBorrowRequests();
-      setRequests(data || []);
+      const [reqs, cat] = await Promise.all([api.getBorrowRequests(), api.getCatalog()]);
+      setRequests(reqs || []);
+      setCatalog(Array.isArray(cat) ? cat : []);
     } catch {
       toast.error("Failed to load requests");
     } finally {
       setLoading(false);
     }
   }
+
+  const catalogImageMap = useMemo(() => {
+    const map = {};
+    catalog.forEach((item) => { map[item.id] = item.imageUrl || ""; });
+    return map;
+  }, [catalog]);
 
   async function handleApprove(id) {
     setProcessing(id);
@@ -98,7 +131,12 @@ export default function BorrowRequestsTab() {
     const pending = requests.filter((r) => r.status === "pending").length;
     const approved = requests.filter((r) => r.status === "approved").length;
     const rejected = requests.filter((r) => r.status === "rejected").length;
-    return { total, pending, approved, rejected };
+    const overdue = requests.filter((r) => {
+      if (r.status === "rejected" || r.status === "cancelled" || r.status === "returned") return false;
+      const info = getDueDateInfo(toDate(r.dueDate));
+      return info && info.days < 0;
+    }).length;
+    return { total, pending, approved, rejected, overdue };
   }, [requests]);
 
   const filtered = useMemo(() => {
@@ -113,8 +151,17 @@ export default function BorrowRequestsTab() {
         (r.schoolID || "").toLowerCase().includes(q)
       );
     }
+    result = [...result].sort((a, b) => {
+      if (sortBy === "oldest") return (toDate(a.createdAt)?.getTime() || 0) - (toDate(b.createdAt)?.getTime() || 0);
+      if (sortBy === "due-date") {
+        const aDue = toDate(a.dueDate)?.getTime() || Infinity;
+        const bDue = toDate(b.dueDate)?.getTime() || Infinity;
+        return aDue - bDue;
+      }
+      return (toDate(b.createdAt)?.getTime() || 0) - (toDate(a.createdAt)?.getTime() || 0);
+    });
     return result;
-  }, [requests, filter, search]);
+  }, [requests, filter, search, sortBy]);
 
   if (loading) return <div className="page-loading"><div className="spinner-lg" /></div>;
 
@@ -154,6 +201,14 @@ export default function BorrowRequestsTab() {
             <MdSearch size={16} />
             <input type="text" placeholder="Search name, item, ID..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
+          <div className="maintenance-sort">
+            <MdSort size={14} />
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+              <option value="due-date">Due Date</option>
+            </select>
+          </div>
           <div className="catalog-view-toggle">
             <button className={`view-btn ${viewMode === "grid" ? "active" : ""}`} onClick={() => setViewMode("grid")} title="Grid view">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
@@ -165,6 +220,13 @@ export default function BorrowRequestsTab() {
         </div>
       </div>
 
+      {stats.overdue > 0 && (
+        <div className="borrow-overdue-banner">
+          <span className="overdue-pulse" />
+          <strong>{stats.overdue}</strong> request{stats.overdue > 1 ? "s" : ""} overdue
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <div className="maintenance-empty">
           <MdAssignment size={48} />
@@ -173,48 +235,58 @@ export default function BorrowRequestsTab() {
         </div>
       ) : viewMode === "grid" ? (
         <div className="maintenance-list">
-          {filtered.map((req) => (
-            <div className="maintenance-card" key={req.id} onClick={() => setSelectedRequest(req)}>
-              <div className="maintenance-card-header">
-                <div className="maintenance-card-title">
-                  <MdPerson size={18} />
-                  <span>{req.firstName} {req.lastName}</span>
+          {filtered.map((req) => {
+            const dueInfo = getDueDateInfo(toDate(req.dueDate));
+            const thumb = catalogImageMap[req.catalogId];
+            return (
+              <div className={`maintenance-card ${dueInfo && dueInfo.days < 0 && req.status !== "rejected" && req.status !== "cancelled" ? "card-overdue" : ""}`} key={req.id} onClick={() => setSelectedRequest(req)}>
+                <div className="maintenance-card-header">
+                  <div className="maintenance-card-title">
+                    {thumb ? (
+                      <img src={thumb} alt="" className="borrow-thumb" />
+                    ) : (
+                      <MdPerson size={18} />
+                    )}
+                    <span>{req.firstName} {req.lastName}</span>
+                  </div>
+                  <div className="maintenance-card-badges">
+                    <span className="badge" style={{ background: `${STATUS_COLORS[req.status] || "#666"}20`, color: STATUS_COLORS[req.status] || "#666" }}>
+                      {STATUS_LABELS[req.status] || req.status}
+                    </span>
+                  </div>
                 </div>
-                <div className="maintenance-card-badges">
-                  <span className="badge" style={{ background: `${STATUS_COLORS[req.status] || "#666"}20`, color: STATUS_COLORS[req.status] || "#666" }}>
-                    {STATUS_LABELS[req.status] || req.status}
-                  </span>
+                <div className="maintenance-card-body">
+                  <div className="maintenance-meta">
+                    <span className="maintenance-type-badge preventive">
+                      <MdInventory size={14} /> {req.itemName}
+                    </span>
+                    <span className="maintenance-date-badge">
+                      Qty: {req.quantity}
+                    </span>
+                    <span className="maintenance-assigned">
+                      <MdSchedule size={14} /> {timeAgo(req.createdAt)}
+                    </span>
+                  </div>
+                  {req.purpose && <p className="maintenance-desc">Purpose: {req.purpose}</p>}
+                  <div className="maintenance-meta">
+                    {dueInfo && (
+                      <span className={`maintenance-date-badge ${dueInfo.cls}`}>
+                        {dueInfo.label}
+                      </span>
+                    )}
+                    {req.course && <span className="maintenance-assigned">{req.course}</span>}
+                  </div>
                 </div>
+                {req.status === "pending" && (role === "admin" || role === "faculty") && (
+                  <div className="maintenance-card-actions">
+                    <button className="btn btn-sm btn-primary" onClick={(e) => { e.stopPropagation(); setSelectedRequest(req); }}>
+                      <MdCheckCircle size={14} /> Review
+                    </button>
+                  </div>
+                )}
               </div>
-              <div className="maintenance-card-body">
-                <div className="maintenance-meta">
-                  <span className="maintenance-type-badge preventive">
-                    <MdInventory size={14} /> {req.itemName}
-                  </span>
-                  <span className="maintenance-date-badge">
-                    Qty: {req.quantity}
-                  </span>
-                  <span className="maintenance-assigned">
-                    <MdSchedule size={14} /> {timeAgo(req.createdAt)}
-                  </span>
-                </div>
-                {req.purpose && <p className="maintenance-desc">Purpose: {req.purpose}</p>}
-                <div className="maintenance-meta">
-                  <span className="maintenance-date-badge">
-                    Due: {req.dueDate ? new Date(req.dueDate?.toDate?.() || req.dueDate).toLocaleDateString() : "-"}
-                  </span>
-                  {req.course && <span className="maintenance-assigned">{req.course}</span>}
-                </div>
-              </div>
-              {req.status === "pending" && (role === "admin" || role === "faculty") && (
-                <div className="maintenance-card-actions">
-                  <button className="btn btn-sm btn-primary" onClick={(e) => { e.stopPropagation(); setSelectedRequest(req); }}>
-                    <MdCheckCircle size={14} /> Review
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="catalog-table-wrapper">
@@ -231,21 +303,29 @@ export default function BorrowRequestsTab() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((req) => (
-                <tr key={req.id} onClick={() => setSelectedRequest(req)} style={{ cursor: "pointer" }}>
-                  <td>{req.firstName} {req.lastName}</td>
-                  <td>{req.schoolID || "-"}</td>
-                  <td>{req.itemName}</td>
-                  <td>{req.quantity}</td>
-                  <td>{req.dueDate ? new Date(req.dueDate?.toDate?.() || req.dueDate).toLocaleDateString() : "-"}</td>
-                  <td><span className="badge" style={{ background: `${STATUS_COLORS[req.status] || "#666"}20`, color: STATUS_COLORS[req.status] || "#666" }}>{STATUS_LABELS[req.status] || req.status}</span></td>
-                  <td>
-                    {req.status === "pending" && (role === "admin" || role === "faculty") && (
-                      <button className="btn btn-sm btn-primary" onClick={(e) => { e.stopPropagation(); setSelectedRequest(req); }}>Review</button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {filtered.map((req) => {
+                const dueInfo = getDueDateInfo(toDate(req.dueDate));
+                return (
+                  <tr key={req.id} onClick={() => setSelectedRequest(req)} style={{ cursor: "pointer" }}>
+                    <td>{req.firstName} {req.lastName}</td>
+                    <td>{req.schoolID || "-"}</td>
+                    <td>{req.itemName}</td>
+                    <td>{req.quantity}</td>
+                    <td>
+                      <span className={dueInfo ? `maintenance-date-badge ${dueInfo.cls}` : ""}>
+                        {req.dueDate ? new Date(req.dueDate?.toDate?.() || req.dueDate).toLocaleDateString() : "-"}
+                        {dueInfo && <small style={{ marginLeft: 6, fontSize: 10 }}>({dueInfo.label})</small>}
+                      </span>
+                    </td>
+                    <td><span className="badge" style={{ background: `${STATUS_COLORS[req.status] || "#666"}20`, color: STATUS_COLORS[req.status] || "#666" }}>{STATUS_LABELS[req.status] || req.status}</span></td>
+                    <td>
+                      {req.status === "pending" && (role === "admin" || role === "faculty") && (
+                        <button className="btn btn-sm btn-primary" onClick={(e) => { e.stopPropagation(); setSelectedRequest(req); }}>Review</button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

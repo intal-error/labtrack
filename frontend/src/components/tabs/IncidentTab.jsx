@@ -74,7 +74,24 @@ export default function IncidentTab() {
     open: incidents.filter((i) => i.status === "open").length,
     investigating: incidents.filter((i) => i.status === "investigating").length,
     resolved: incidents.filter((i) => i.status === "resolved").length,
+    critical: incidents.filter((i) => i.severity === "critical" && i.status !== "resolved").length,
+    high: incidents.filter((i) => i.severity === "high" && i.status !== "resolved").length,
+    newToday: incidents.filter((i) => {
+      const d = i.createdAt?.toDate ? i.createdAt.toDate() : new Date(i.createdAt);
+      const today = new Date(); today.setHours(0,0,0,0);
+      return d >= today;
+    }).length,
   }), [incidents]);
+
+  const statusCounts = useMemo(() => {
+    const counts = { All: incidents.length, Open: 0, Investigating: 0, Resolved: 0 };
+    incidents.forEach((i) => {
+      if (i.status === "open") counts.Open++;
+      else if (i.status === "investigating") counts.Investigating++;
+      else if (i.status === "resolved") counts.Resolved++;
+    });
+    return counts;
+  }, [incidents]);
 
   const filtered = useMemo(() => incidents.filter((inc) => {
     const matchSearch = !search ||
@@ -211,6 +228,7 @@ export default function IncidentTab() {
           <div className="incident-stat-info">
             <span className="incident-stat-number">{stats.open}</span>
             <span className="incident-stat-label">Open</span>
+            {stats.critical > 0 && <span className="incident-severity-mini" style={{ color: SEVERITY_COLORS.critical }}>{stats.critical} critical</span>}
           </div>
         </div>
         <div className={`incident-stat-card ${filterStatus === "Investigating" ? "active" : ""}`} onClick={() => setFilterStatus("Investigating")}>
@@ -233,7 +251,7 @@ export default function IncidentTab() {
         <div className="incident-filter-tabs">
           {STATUS_TABS.map((s) => (
             <button key={s} className={`incident-filter-btn ${filterStatus === s ? "active" : ""}`} onClick={() => setFilterStatus(s)}>
-              {s}
+              {s} {statusCounts[s] > 0 && <span className="filter-count">{statusCounts[s]}</span>}
             </button>
           ))}
           <button className={`incident-filter-btn incident-my-btn ${filterMy ? "active" : ""}`} onClick={() => setFilterMy(!filterMy)}>

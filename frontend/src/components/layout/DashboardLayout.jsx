@@ -5,8 +5,8 @@ import { useTheme } from "../../context/ThemeContext";
 import { api } from "../../services/api";
 import { FiMenu, FiX } from "react-icons/fi";
 import {
-  MdDashboard, MdQrCodeScanner, MdInventory, MdPerson, MdAdminPanelSettings, MdInfo,
-  MdLogout, MdDarkMode, MdLightMode,
+  MdQrCodeScanner, MdInventory, MdPerson, MdAdminPanelSettings, MdInfo,
+  MdLogout, MdDarkMode, MdLightMode, MdHome,
   MdNotifications, MdPeople, MdFolderOpen, MdSettings,
   MdChevronLeft, MdChevronRight, MdExpandMore, MdExpandLess,
   MdBuild, MdWarning, MdMenuBook, MdHistory, MdAssessment, MdAccountCircle,
@@ -22,7 +22,7 @@ const navSections = [
   {
     label: "HOME",
     items: [
-      { path: "/overview", label: "Overview", icon: MdDashboard, roles: ["faculty", "admin"] },
+      { path: "/home", label: "Home", icon: MdHome, roles: ["student", "faculty", "admin"] },
       { path: "/usage-logs", label: "My Activity", icon: MdHistory, roles: ["student"] },
       { path: "/reports", label: "Reports", icon: MdAssessment, roles: ["admin"] },
     ],
@@ -146,6 +146,7 @@ export default function DashboardLayout() {
             ) : (
               userInitials
             )}
+            <span className="user-status-dot" />
           </div>
           {!collapsed && (
             <div className="sidebar-user-info">
@@ -184,7 +185,7 @@ export default function DashboardLayout() {
                             to={path}
                             className={({ isActive }) => isActive ? "active" : ""}
                             onClick={() => setSidebarOpen(false)}
-                            title={collapsed ? label : undefined}
+                            data-label={label}
                           >
                             <span className="nav-icon"><Icon size={18} /></span>
                             {!collapsed && <span className="nav-label">{label}</span>}
@@ -203,11 +204,11 @@ export default function DashboardLayout() {
         </nav>
 
         <div className="sidebar-bottom">
-          <button className="sidebar-bottom-item theme-toggle" onClick={toggleTheme} title={dark ? "Light Mode" : "Dark Mode"}>
+          <button className="sidebar-bottom-item theme-toggle" onClick={toggleTheme} title={dark ? "Light Mode" : "Dark Mode"} data-label={dark ? "Light Mode" : "Dark Mode"}>
             <span className="nav-icon">{dark ? <MdLightMode size={18} /> : <MdDarkMode size={18} />}</span>
             {!collapsed && <span className="nav-label">{dark ? "Light Mode" : "Dark Mode"}</span>}
           </button>
-          <button className="sidebar-bottom-item logout-btn" onClick={handleLogout} title="Logout">
+          <button className="sidebar-bottom-item logout-btn" onClick={handleLogout} title="Logout" data-label="Logout">
             <span className="nav-icon"><MdLogout size={18} /></span>
             {!collapsed && <span className="nav-label">Logout</span>}
           </button>

@@ -4,7 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import Modal from "../ui/Modal";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
-import { MdAttachMoney, MdSearch, MdCheckCircle, MdCancel, MdWarning } from "react-icons/md";
+import { MdAttachMoney, MdSearch, MdCheckCircle, MdCancel, MdWarning, MdSort, MdPerson } from "react-icons/md";
 
 const STATUS_COLORS = {
   pending: "#f57c00",
@@ -26,6 +26,7 @@ export default function FinesTab() {
   const [search, setSearch] = useState("");
   const [selectedFine, setSelectedFine] = useState(null);
   const [waiveReason, setWaiveReason] = useState("");
+  const [sortBy, setSortBy] = useState("oldest");
 
   useEffect(() => { load(); }, []);
 
@@ -81,11 +82,22 @@ export default function FinesTab() {
       const q = search.toLowerCase();
       result = result.filter((f) =>
         (f.itemName || "").toLowerCase().includes(q) ||
+        (f.userName || "").toLowerCase().includes(q) ||
         (f.userId || "").toLowerCase().includes(q)
       );
     }
+    result = [...result].sort((a, b) => {
+      if (sortBy === "newest") {
+        const da = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
+        const db = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+        return db - da;
+      }
+      if (sortBy === "amount") return (Number(b.totalFine) || 0) - (Number(a.totalFine) || 0);
+      if (sortBy === "name") return (a.itemName || "").localeCompare(b.itemName || "");
+      return (Number(b.daysOverdue) || 0) - (Number(a.daysOverdue) || 0);
+    });
     return result;
-  }, [fines, filter, search]);
+  }, [fines, filter, search, sortBy]);
 
   if (loading) return <div className="page-loading"><div className="spinner-lg" /></div>;
 
@@ -120,9 +132,20 @@ export default function FinesTab() {
             </button>
           ))}
         </div>
-        <div className="maintenance-search">
-          <MdSearch size={16} />
-          <input type="text" placeholder="Search item, user..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        <div className="maintenance-toolbar-right">
+          <div className="maintenance-search">
+            <MdSearch size={16} />
+            <input type="text" placeholder="Search item, user..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <div className="maintenance-sort">
+            <MdSort size={14} />
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+              <option value="oldest">Most Overdue</option>
+              <option value="newest">Newest First</option>
+              <option value="amount">Highest Amount</option>
+              <option value="name">Item Name</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -148,6 +171,9 @@ export default function FinesTab() {
             </div>
             <div className="maintenance-card-body">
               <div className="maintenance-meta">
+                <span className="maintenance-type-badge pending">
+                  <MdPerson size={14} /> {fine.userName || "Unknown"}
+                </span>
                 <span className="maintenance-type-badge pending">
                   <MdWarning size={14} /> {fine.daysOverdue} days overdue
                 </span>
@@ -181,6 +207,10 @@ export default function FinesTab() {
                 <div className="txn-detail-row">
                   <span className="txn-detail-label">Item</span>
                   <span className="txn-detail-value">{selectedFine.itemName}</span>
+                </div>
+                <div className="txn-detail-row">
+                  <span className="txn-detail-label">Borrower</span>
+                  <span className="txn-detail-value">{selectedFine.userName || selectedFine.userId || "Unknown"}</span>
                 </div>
                 <div className="txn-detail-row">
                   <span className="txn-detail-label">Days Overdue</span>
