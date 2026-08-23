@@ -15,9 +15,6 @@ import {
 import { FaExchangeAlt } from "react-icons/fa";
 import "../../styles/pages/layout.css";
 
-const ROLE_LABELS = { student: "Student", faculty: "Faculty", admin: "Admin" };
-const ROLE_COLORS = { student: "#1976d2", faculty: "#7b1fa2", admin: "#d32f2f" };
-
 const navSections = [
   {
     label: "HOME",
@@ -68,7 +65,7 @@ export default function DashboardLayout() {
     Object.fromEntries(navSections.map((s) => [s.label, true]))
   );
   const [unreadCount, setUnreadCount] = useState(0);
-  const { user, role, userProfile, logout, loading } = useAuth();
+  const { role, logout, loading } = useAuth();
   const { dark, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -110,16 +107,6 @@ export default function DashboardLayout() {
     );
   }
 
-  const userInitials = userProfile
-    ? `${(userProfile.firstName || "")[0] || ""}${(userProfile.lastName || "")[0] || ""}`.toUpperCase()
-    : user?.displayName
-      ? user.displayName.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)
-      : user?.email?.[0]?.toUpperCase() || "?";
-
-  const displayName = userProfile
-    ? `${userProfile.firstName} ${userProfile.lastName}`
-    : user?.displayName || user?.email || "User";
-
   return (
     <div className="app-layout">
       <button className="burger-btn" onClick={() => setSidebarOpen(!sidebarOpen)}>
@@ -137,25 +124,6 @@ export default function DashboardLayout() {
               </div>
             )}
           </div>
-        </div>
-
-        <div className="sidebar-user">
-          <div className="sidebar-user-avatar" style={{ background: userProfile?.profileURL ? "transparent" : (ROLE_COLORS[role] || "#F57C00") }}>
-            {userProfile?.profileURL ? (
-              <img src={userProfile.profileURL} alt={displayName} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "12px" }} />
-            ) : (
-              userInitials
-            )}
-            <span className="user-status-dot" />
-          </div>
-          {!collapsed && (
-            <div className="sidebar-user-info">
-              <div className="sidebar-user-name">{displayName}</div>
-              <span className="sidebar-user-role" style={{ background: `${ROLE_COLORS[role] || "#F57C00"}20`, color: ROLE_COLORS[role] || "#F57C00" }}>
-                {ROLE_LABELS[role] || role}
-              </span>
-            </div>
-          )}
         </div>
 
         <nav>
