@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
+import { filterBySearch } from "../../utils/search";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
 import { MdMenuBook, MdAdd, MdDelete, MdEdit, MdSearch, MdOpenInNew, MdDownload, MdCloudUpload } from "react-icons/md";
@@ -83,9 +84,7 @@ export default function ManualsTab() {
 
   const filtered = useMemo(() => manuals.filter((m) => {
     const matchSearch = !search ||
-      m.title?.toLowerCase().includes(search.toLowerCase()) ||
-      m.description?.toLowerCase().includes(search.toLowerCase()) ||
-      m.fileName?.toLowerCase().includes(search.toLowerCase());
+      filterBySearch([m], search, ["title", "description", "fileName"]).length > 0;
     const matchCategory = filterCategory === "All" || m.category === filterCategory;
     return matchSearch && matchCategory;
   }), [manuals, search, filterCategory]);

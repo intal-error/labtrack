@@ -51,7 +51,7 @@
 .table-item-thumb{width:32px;height:32px;border-radius:6px;object-fit:cover;cursor:pointer;flex-shrink:0}
 .table-item-thumb-placeholder{width:32px;height:32px;border-radius:6px;background:var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-muted);flex-shrink:0}
 
-.catalog-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;padding-bottom:8px}
+.catalog-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;padding-bottom:8px;max-height:calc(100vh - 280px);overflow-y:auto;scrollbar-width:thin}
 .catalog-card{background:var(--bg-card);border:1.5px solid var(--border);border-radius:10px;transition:all .3s;box-shadow:var(--card-shadow)}
 .catalog-card:hover{transform:translateY(-4px);box-shadow:0 12px 28px rgba(0,0,0,.12)}
 .catalog-card-image{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;border-radius:10px 10px 0 0;background:#f0f4f1}

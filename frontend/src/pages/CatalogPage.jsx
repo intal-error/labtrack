@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "../services/api";
 import { COURSES } from "../constants/courses";
 import { numOr, getAvailableQuantity } from "../utils/helpers";
+import { filterBySearch } from "../utils/search";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Modal from "../components/ui/Modal";
 import toast from "react-hot-toast";
@@ -37,9 +38,7 @@ export default function CatalogPage() {
     let result = allItems;
     if (filter !== "All") result = result.filter((i) => i.status === filter);
     if (filterCourse !== "All") result = result.filter((i) => i.course === filterCourse);
-    if (search) result = result.filter((i) =>
-      (i.itemName || "").toLowerCase().includes(search.toLowerCase())
-    );
+    if (search) result = filterBySearch(result, search, ["itemName"]);
     if (sort === "name") result.sort((a, b) => (a.itemName || "").localeCompare(b.itemName || ""));
     else if (sort === "number") result.sort((a, b) => (parseFloat(a.itemName) || 0) - (parseFloat(b.itemName) || 0));
     else if (sort === "date") result.sort((a, b) => new Date(b.createdAt?.seconds * 1000 || 0) - new Date(a.createdAt?.seconds * 1000 || 0));

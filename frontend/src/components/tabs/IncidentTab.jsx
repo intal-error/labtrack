@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import toast from "react-hot-toast";
+import { filterBySearch } from "../../utils/search";
 import "../../styles/pages/tabs.css";
 import { MdWarning, MdAdd, MdEdit, MdDelete, MdSearch, MdInfo, MdOutlineWarning, MdCameraAlt, MdFilterList, MdClose } from "react-icons/md";
 
@@ -95,9 +96,7 @@ export default function IncidentTab() {
 
   const filtered = useMemo(() => incidents.filter((inc) => {
     const matchSearch = !search ||
-      inc.title?.toLowerCase().includes(search.toLowerCase()) ||
-      inc.description?.toLowerCase().includes(search.toLowerCase()) ||
-      inc.reporterName?.toLowerCase().includes(search.toLowerCase());
+      filterBySearch([inc], search, ["title", "description", "reporterName"]).length > 0;
     const matchStatus = filterStatus === "All" || inc.status === filterStatus.toLowerCase();
     const matchSeverity = filterSeverity === "All" || inc.severity === filterSeverity.toLowerCase();
     const matchMy = !filterMy || inc.reportedBy === user?.uid;

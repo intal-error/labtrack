@@ -68,7 +68,7 @@ body.dark .btn-report{background:#1a1a1a;color:#FFFFFF;border-color:#2a2a2a}
 .transactions-search input{padding:8px 12px 8px 36px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--bg-card);color:var(--text);min-width:180px;transition:border .2s}
 .transactions-search input:focus{outline:none;border-color:var(--green);box-shadow:0 0 3px rgba(46,125,50,.3)}
 
-.transactions-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:20px}
+.transactions-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:20px;max-height:calc(100vh - 280px);overflow-y:auto;scrollbar-width:thin}
 .transaction-card{background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;overflow:hidden;transition:all .3s;box-shadow:var(--card-shadow);border-left:3px solid transparent}
 .transaction-card:hover{transform:translateY(-4px);box-shadow:0 12px 28px rgba(0,0,0,.12)}
 .transaction-card.overdue-warning{border-left-color:#f57c00}
@@ -134,7 +134,7 @@ body.dark .btn-report{background:#1a1a1a;color:#FFFFFF;border-color:#2a2a2a}
 .btn-refresh{border:1px solid var(--border);background:var(--bg-card);color:var(--text)}
 .btn-refresh:hover{border-color:var(--green);color:var(--green)}
 
-.transactions-table-wrapper{background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:var(--card-shadow)}
+.transactions-table-wrapper{background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:var(--card-shadow);max-height:calc(100vh - 280px);overflow-y:auto;scrollbar-width:thin}
 .transactions-table{width:100%;border-collapse:collapse;font-size:13px}
 .transactions-table thead th{background:var(--dark-green);color:#fff;text-transform:uppercase;font-weight:700;font-size:11px;text-align:left;padding:12px 14px;border:none}
 .transactions-table tbody td{padding:10px 14px;border-bottom:1px solid var(--border);text-align:left;color:var(--text)}

@@ -157,13 +157,13 @@
 .notif-empty h3{font-size:16px;color:var(--text);margin:0 0 6px 0}
 .notif-empty p{font-size:13px;color:var(--text-muted);margin:0}
 
-.notification-list{display:flex;flex-direction:column;gap:10px;margin:0}
+.notification-list{display:flex;flex-direction:column;gap:10px;margin:0;max-height:calc(100vh - 280px);overflow-y:auto;scrollbar-width:thin}
 .notif-card{
   background:var(--bg-card);border:1.5px solid var(--border);
   border-radius:14px;padding:18px 20px;
   display:flex;align-items:flex-start;gap:16px;
   transition:all .25s cubic-bezier(.4,0,.2,1);
-  position:relative;overflow:hidden;box-shadow:var(--card-shadow);
+  position:relative;overflow:visible;box-shadow:var(--card-shadow);
   cursor:pointer;
 }
 .notif-card::before{
@@ -298,7 +298,7 @@
 .stat-number{font-size:1.5rem;font-weight:700;color:var(--text);line-height:1.2}
 .stat-label{font-size:12px;color:var(--text-muted);font-weight:500}
 
-.members-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px}
+.members-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px;max-height:calc(100vh - 280px);overflow-y:auto;scrollbar-width:thin}
 .member-card{background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;overflow:hidden;transition:all .3s;box-shadow:var(--card-shadow);position:relative}
 .member-card:hover{transform:translateY(-4px);box-shadow:0 12px 28px rgba(0,0,0,.12)}
 .member-card-accent{height:4px;width:100%}
@@ -362,7 +362,7 @@
 .doc-filter-select{padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--bg-card);color:var(--text);cursor:pointer;transition:border .2s}
 .doc-filter-select:focus{outline:none;border-color:var(--green);box-shadow:0 0 3px rgba(46,125,50,.3)}
 
-.docs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;margin:0 0 20px 0}
+.docs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;margin:0 0 20px 0;max-height:calc(100vh - 280px);overflow-y:auto;scrollbar-width:thin}
 .doc-card{background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;padding:18px;transition:all .2s;border-left:3px solid transparent;display:flex;flex-direction:column;align-items:center;text-align:center;box-shadow:var(--card-shadow)}
 .doc-card:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,.1)}
 .doc-card.doc-type-pdf{border-left-color:#d32f2f}
@@ -438,7 +438,7 @@
 .maintenance-search input{padding:8px 12px 8px 32px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--bg-card);color:var(--text);min-width:200px;transition:border .2s}
 .maintenance-search input:focus{outline:none;border-color:var(--green);box-shadow:0 0 3px rgba(46,125,50,.3)}
 
-.maintenance-list{display:flex;flex-direction:column;gap:14px;margin:0}
+.maintenance-list{display:flex;flex-direction:column;gap:14px;margin:0;max-height:calc(100vh - 280px);overflow-y:auto;scrollbar-width:thin}
 .maintenance-card{background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;padding:18px;transition:all .2s;border-left:3px solid transparent;cursor:pointer;box-shadow:var(--card-shadow)}
 .maintenance-card:hover{box-shadow:0 4px 12px rgba(0,0,0,.1)}
 .maintenance-card.card-overdue{border-left-color:#d32f2f;border-color:#d32f2f}
@@ -510,7 +510,7 @@
 .incident-search input::placeholder{color:var(--text-muted);opacity:.6}
 .incident-search input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 2px rgba(184,217,0,.15)}
 
-.incident-list{display:flex;flex-direction:column;gap:12px;margin:20px 0}
+.incident-list{display:flex;flex-direction:column;gap:12px;margin:20px 0;max-height:calc(100vh - 280px);overflow-y:auto;scrollbar-width:thin}
 .incident-card{background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;padding:20px 22px;transition:all .25s ease;border-left:3px solid transparent;position:relative;box-shadow:var(--card-shadow)}
 .incident-card:hover{box-shadow:0 6px 20px rgba(0,0,0,.08);border-color:var(--green)}
 .incident-card.incident-severity-low{border-left-color:#4caf50}
@@ -588,7 +588,7 @@
 .manuals-search input{padding:8px 12px 8px 32px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--bg-card);color:var(--text);min-width:200px;transition:border .2s}
 .manuals-search input:focus{outline:none;border-color:var(--green);box-shadow:0 0 3px rgba(46,125,50,.3)}
 
-.manuals-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin:20px 0}
+.manuals-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin:20px 0;max-height:calc(100vh - 280px);overflow-y:auto;scrollbar-width:thin}
 .manual-card{background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;padding:20px;display:flex;flex-direction:column;align-items:center;text-align:center;transition:all .2s;box-shadow:var(--card-shadow)}
 .manual-card:hover{box-shadow:0 4px 12px rgba(0,0,0,.1);transform:translateY(-2px)}
 .manual-card-icon{width:56px;height:56px;border-radius:14px;background:linear-gradient(135deg,#e8f5e9,#c8e6c9);display:flex;align-items:center;justify-content:center;color:#2e7d32;margin-bottom:12px}
@@ -642,7 +642,7 @@
 .activity-search input{padding:8px 12px 8px 32px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--bg-card);color:var(--text);min-width:200px;transition:border .2s}
 .activity-search input:focus{outline:none;border-color:var(--green);box-shadow:0 0 3px rgba(46,125,50,.3)}
 
-.usage-log-list{display:flex;flex-direction:column;gap:10px;margin:0}
+.usage-log-list{display:flex;flex-direction:column;gap:10px;margin:0;max-height:calc(100vh - 280px);overflow-y:auto;scrollbar-width:thin}
 .usage-log-card{background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;padding:18px 20px;display:flex;align-items:flex-start;gap:16px;transition:all .25s;border-left:4px solid transparent;box-shadow:var(--card-shadow)}
 .usage-log-card:hover{box-shadow:0 4px 14px rgba(0,0,0,.08);transform:translateY(-1px)}
 .usage-log-card.card-overdue{border-left-color:#d32f2f;border-color:rgba(211,47,47,.15);background:rgba(211,47,47,.02)}

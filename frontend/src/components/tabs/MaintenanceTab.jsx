@@ -3,6 +3,7 @@ import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import Modal from "../ui/Modal";
 import toast from "react-hot-toast";
+import { filterBySearch } from "../../utils/search";
 import "../../styles/pages/tabs.css";
 import "../../styles/pages/catalog.css";
 import { MdBuild, MdAdd, MdEdit, MdDelete, MdCalendarToday, MdWarning, MdSearch, MdCheckCircle, MdSchedule, MdPlayArrow, MdAssignment, MdCameraAlt, MdImage, MdGridOn, MdList } from "react-icons/md";
@@ -184,14 +185,7 @@ export default function MaintenanceTab() {
     if (filter !== "all") {
       result = result.filter((i) => i.status === filter);
     }
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      result = result.filter((i) =>
-        (i.itemName || "").toLowerCase().includes(q) ||
-        (i.assignedTo || "").toLowerCase().includes(q) ||
-        (i.description || "").toLowerCase().includes(q)
-      );
-    }
+    if (search.trim()) result = filterBySearch(result, search, ["itemName", "assignedTo", "description"]);
     result.sort((a, b) => {
       if (a.status === "completed" && b.status !== "completed") return 1;
       if (a.status !== "completed" && b.status === "completed") return -1;

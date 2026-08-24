@@ -7,14 +7,20 @@ const search = async (req, res) => {
     const { firstName, lastName } = req.query;
     if (!firstName || !lastName) return res.status(400).json({ error: "firstName and lastName required" });
 
-    const snap = await db.collection(USERS)
-      .where("firstName", "==", firstName.trim())
-      .where("lastName", "==", lastName.trim())
-      .get();
+    const snap = await db.collection(USERS).get();
+    const queryFirst = firstName.trim().toLowerCase();
+    const queryLast = lastName.trim().toLowerCase();
 
-    if (snap.empty) return res.status(404).json({ error: "No person found" });
+    const matched = snap.docs.filter((doc) => {
+      const u = doc.data();
+      const f = String(u.firstName || "").trim().toLowerCase();
+      const l = String(u.lastName || "").trim().toLowerCase();
+      return f.includes(queryFirst) && l.includes(queryLast);
+    });
 
-    const userDoc = snap.docs[0];
+    if (matched.length === 0) return res.status(404).json({ error: "No person found" });
+
+    const userDoc = matched[0];
     const u = userDoc.data();
 
     const [borrowedSnap, returnedSnap] = await Promise.all([

@@ -1,6 +1,7 @@
 import { db } from "../../services/firebase";
 import { doc, getDoc, query, where, limit, getDocs, collection } from "firebase/firestore";
 import { normalize, readScanPayload, canUseAsDocId } from "../../utils/helpers";
+import { sanitizeSearchInput } from "../../utils/search";
 
 export async function resolveUser(rawCode) {
   const { raw, payload } = readScanPayload(rawCode, "USER|BORROWER|STUDENT");
@@ -11,7 +12,7 @@ export async function resolveUser(rawCode) {
   }
 
   const trimmed = [raw, payload].map((v) => String(v || "").trim()).filter(Boolean);
-  const normalized = trimmed.map((v) => normalize(v));
+  const normalized = trimmed.map((v) => sanitizeSearchInput(v));
   const candidates = [...new Set([...trimmed, ...normalized])].filter(Boolean);
   if (candidates.length === 0) return null;
 

@@ -3,6 +3,7 @@ import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import Modal from "../ui/Modal";
 import toast from "react-hot-toast";
+import { filterBySearch } from "../../utils/search";
 import "../../styles/pages/tabs.css";
 import { MdAttachMoney, MdSearch, MdCheckCircle, MdCancel, MdWarning, MdSort, MdPerson } from "react-icons/md";
 
@@ -78,14 +79,7 @@ export default function FinesTab() {
   const filtered = useMemo(() => {
     let result = fines;
     if (filter !== "all") result = result.filter((f) => f.status === filter);
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      result = result.filter((f) =>
-        (f.itemName || "").toLowerCase().includes(q) ||
-        (f.userName || "").toLowerCase().includes(q) ||
-        (f.userId || "").toLowerCase().includes(q)
-      );
-    }
+    if (search.trim()) result = filterBySearch(result, search, ["itemName", "userName", "userId"]);
     result = [...result].sort((a, b) => {
       if (sortBy === "newest") {
         const da = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);

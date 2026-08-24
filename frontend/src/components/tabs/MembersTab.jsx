@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../../services/api";
+import { filterBySearch } from "../../utils/search";
 import Modal from "../ui/Modal";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
@@ -41,7 +42,7 @@ export default function MembersTab() {
   }
 
   const filtered = members.filter((m) => {
-    const matchSearch = !search || m.name.toLowerCase().includes(search.toLowerCase()) || m.email.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = !search || filterBySearch([m], search, ["name", "email"]).length > 0;
     const matchRole = filterRole === "All" || m.role === filterRole;
     return matchSearch && matchRole;
   });

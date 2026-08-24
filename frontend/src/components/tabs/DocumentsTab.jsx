@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
+import { filterBySearch } from "../../utils/search";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
 import { MdDescription, MdPictureAsPdf, MdTableChart, MdSearch, MdDownload, MdDelete, MdCloudUpload } from "react-icons/md";
@@ -44,7 +45,7 @@ export default function DocumentsTab() {
   }), [documents]);
 
   const filtered = documents.filter((d) => {
-    const matchSearch = !search || d.name.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = !search || filterBySearch([d], search, ["name"]).length > 0;
     const matchCategory = filterCategory === "All" || d.category === filterCategory;
     const matchType =
       activeType === "total" ||

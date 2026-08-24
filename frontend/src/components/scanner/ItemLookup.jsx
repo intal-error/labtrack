@@ -1,6 +1,7 @@
 import { db } from "../../services/firebase";
 import { doc, getDoc, query, where, limit, getDocs, collection } from "firebase/firestore";
 import { normalize, readScanPayload, canUseAsDocId } from "../../utils/helpers";
+import { sanitizeSearchInput } from "../../utils/search";
 
 export async function resolveItem(rawCode) {
   const { raw, payload } = readScanPayload(rawCode, "TOOL|ITEM");
@@ -9,7 +10,7 @@ export async function resolveItem(rawCode) {
     const snap = await getDoc(doc(db, "catalog", id));
     if (snap.exists()) return { id: snap.id, data: snap.data(), scanCode: raw };
   }
-  const candidates = [normalize(raw), normalize(payload)].filter(Boolean);
+  const candidates = [sanitizeSearchInput(raw), sanitizeSearchInput(payload)].filter(Boolean);
   if (candidates.length === 0) return null;
 
   const fields = ["barcode", "assetTag", "itemCode", "qrCode", "scanCode"];

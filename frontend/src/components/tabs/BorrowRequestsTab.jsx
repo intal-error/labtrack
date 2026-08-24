@@ -3,6 +3,7 @@ import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import Modal from "../ui/Modal";
 import toast from "react-hot-toast";
+import { filterBySearch } from "../../utils/search";
 import "../../styles/pages/tabs.css";
 import "../../styles/pages/catalog.css";
 import { MdAssignment, MdSearch, MdCheckCircle, MdCancel, MdSchedule, MdPerson, MdInventory, MdSort } from "react-icons/md";
@@ -142,15 +143,7 @@ export default function BorrowRequestsTab() {
   const filtered = useMemo(() => {
     let result = requests;
     if (filter !== "all") result = result.filter((r) => r.status === filter);
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      result = result.filter((r) =>
-        (r.firstName || "").toLowerCase().includes(q) ||
-        (r.lastName || "").toLowerCase().includes(q) ||
-        (r.itemName || "").toLowerCase().includes(q) ||
-        (r.schoolID || "").toLowerCase().includes(q)
-      );
-    }
+    if (search.trim()) result = filterBySearch(result, search, ["firstName", "lastName", "itemName", "schoolID"]);
     result = [...result].sort((a, b) => {
       if (sortBy === "oldest") return (toDate(a.createdAt)?.getTime() || 0) - (toDate(b.createdAt)?.getTime() || 0);
       if (sortBy === "due-date") {

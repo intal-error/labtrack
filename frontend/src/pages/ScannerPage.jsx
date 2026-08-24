@@ -45,6 +45,8 @@ export default function ScannerPage() {
   const [conditionOnBorrow, setConditionOnBorrow] = useState("Good");
   const [conditionOnReturn, setConditionOnReturn] = useState("Good");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [step1Collapsed, setStep1Collapsed] = useState(false);
+  const [step2Collapsed, setStep2Collapsed] = useState(false);
 
   const step2Ref = useRef(null);
   const borrowPhotoRef = useRef(null);
@@ -107,6 +109,7 @@ export default function ScannerPage() {
     setRole(d.role === "faculty" ? "faculty" : "student");
     setBorrowerResult({ name: `${d.firstName || ""} ${d.lastName || ""}`.trim(), schoolID: d.schoolId || d.employeeId || d.schoolID || d.studentID || schoolId, role: d.role, course: d.course });
     setTxStatus("Borrower found."); setTxStatusType("success");
+    setStep1Collapsed(true);
     scrollToStep2();
   };
 
@@ -124,6 +127,7 @@ export default function ScannerPage() {
     const avail = getAvailableQuantity(d);
     setItemResult({ name: d.itemName, available: avail, total: numOr(d.quantity), condition: d.condition, category: d.category });
     setTxStatus("Item found."); setTxStatusType("success");
+    setStep2Collapsed(true);
   };
 
   const handleCameraScan = async (decodedText) => {
@@ -210,6 +214,7 @@ export default function ScannerPage() {
     setItemCode("");
     setSelectedItem(null); setItemResult(null);
     setTxStatus(""); setTxStatusType("");
+    setStep2Collapsed(false);
     setDueDate(defaultDueDate());
     setPurpose("");
     setBorrowPhotoURL(""); setReturnPhotoURL("");
@@ -272,13 +277,33 @@ export default function ScannerPage() {
         <form onSubmit={handleSubmit} noValidate>
           <div className="scanner-step-card">
             <div className="scanner-step-header">
-              <div className="scanner-step-badge">1</div>
+              <div className={`scanner-step-badge ${step1Collapsed && borrowerResult ? "completed" : ""}`}>
+                {step1Collapsed && borrowerResult ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20,6 9,17 4,12"/></svg>
+                ) : "1"}
+              </div>
               <div className="scanner-step-text">
                 <h2>{isBorrow ? "Borrower" : "Returner"}</h2>
                 <p>{!isAdmin && borrowerResult ? "Account verified from login session" : "Scan or enter school ID"}</p>
               </div>
+              {step1Collapsed && borrowerResult && (
+                <button type="button" className="scanner-step-change" onClick={() => { setStep1Collapsed(false); setSelectedUser(null); setBorrowerResult(null); setSchoolId(""); setFirstName(""); setLastName(""); setEmail(""); setTxStatus(""); setTxStatusType(""); }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  Change
+                </button>
+              )}
             </div>
-            <div className="scanner-step-body">
+            {step1Collapsed && borrowerResult ? (
+              <div className="scanner-step-collapsed" onClick={() => setStep1Collapsed(false)}>
+                <div className="scanner-collapsed-info">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  <span className="scanner-collapsed-name">{borrowerResult.name}</span>
+                  <span className="scanner-collapsed-id">{borrowerResult.schoolID}</span>
+                  <span className={`scanner-collapsed-role ${borrowerResult.role}`}>{borrowerResult.role === "faculty" ? "Faculty" : "Student"}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="scanner-step-body">
               {!isAdmin && borrowerResult ? (
                 <div className="scanner-user-profile">
                   <div className="scanner-user-profile-header">
@@ -386,17 +411,39 @@ export default function ScannerPage() {
                   )}
                 </>
               )}
-            </div>
+              </div>
+            )}
           </div>
 
           <div className="scanner-step-card" ref={step2Ref}>
             <div className="scanner-step-header">
-              <div className="scanner-step-badge">2</div>
+              <div className={`scanner-step-badge ${step2Collapsed && itemResult ? "completed" : ""}`}>
+                {step2Collapsed && itemResult ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20,6 9,17 4,12"/></svg>
+                ) : "2"}
+              </div>
               <div className="scanner-step-text">
                 <h2>Tool or Equipment</h2>
                 <p>Scan QR code or barcode on the item</p>
               </div>
+              {step2Collapsed && itemResult && (
+                <button type="button" className="scanner-step-change" onClick={() => { setStep2Collapsed(false); setSelectedItem(null); setItemResult(null); setItemCode(""); setTxStatus(""); setTxStatusType(""); }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  Change
+                </button>
+              )}
             </div>
+            {step2Collapsed && itemResult ? (
+              <div className="scanner-step-collapsed" onClick={() => setStep2Collapsed(false)}>
+                <div className="scanner-collapsed-info">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                  <span className="scanner-collapsed-name">{itemResult.name}</span>
+                  <span className={`scanner-collapsed-stock ${itemResult.available <= 0 ? "stock-out" : itemResult.available <= 2 ? "stock-low" : ""}`}>
+                    {itemResult.available} of {itemResult.total} available
+                  </span>
+                </div>
+              </div>
+            ) : (
             <div className="scanner-step-body">
               <div className="scanner-input-row">
                 <div className="scanner-input-wrap">
@@ -432,6 +479,7 @@ export default function ScannerPage() {
                 </div>
               )}
             </div>
+            )}
           </div>
 
           {cameraTarget && (

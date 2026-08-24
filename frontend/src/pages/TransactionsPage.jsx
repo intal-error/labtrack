@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "../services/api";
 import { COURSES } from "../constants/courses";
 import { toDate, formatDate, getRemainingQuantity } from "../utils/helpers";
+import { filterBySearch } from "../utils/search";
 import { useAuth } from "../context/AuthContext";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Modal from "../components/ui/Modal";
@@ -162,16 +163,7 @@ export default function TransactionsPage() {
     if (dateRange !== "all") {
       result = result.filter((item) => matchesDateRange(toDate(item.timestamp), dateRange));
     }
-    if (search) {
-      const q = search.toLowerCase();
-      result = result.filter((item) =>
-        (item.schoolID || "").toLowerCase().includes(q) ||
-        (item.firstName || "").toLowerCase().includes(q) ||
-        (item.lastName || "").toLowerCase().includes(q) ||
-        (item.itemName || "").toLowerCase().includes(q) ||
-        (item.course || "").toLowerCase().includes(q)
-      );
-    }
+    if (search) result = filterBySearch(result, search, ["schoolID", "firstName", "lastName", "itemName", "course"]);
     return sortItems(result, sortBy);
   }, [filterCourse, dateRange, search, sortBy]);
 
@@ -184,16 +176,7 @@ export default function TransactionsPage() {
     let result = all;
     if (filterCourse !== "All") result = result.filter((i) => i.course === filterCourse);
     if (dateRange !== "all") result = result.filter((i) => matchesDateRange(toDate(i.timestamp), dateRange));
-    if (search) {
-      const q = search.toLowerCase();
-      result = result.filter((i) =>
-        (i.schoolID || "").toLowerCase().includes(q) ||
-        (i.firstName || "").toLowerCase().includes(q) ||
-        (i.lastName || "").toLowerCase().includes(q) ||
-        (i.itemName || "").toLowerCase().includes(q) ||
-        (i.course || "").toLowerCase().includes(q)
-      );
-    }
+    if (search) result = filterBySearch(result, search, ["schoolID", "firstName", "lastName", "itemName", "course"]);
     return result.length;
   }, [activeTab, borrowed, returned, filterCourse, dateRange, search]);
 

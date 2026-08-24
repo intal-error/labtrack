@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
+import { filterBySearch } from "../../utils/search";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
 import {
@@ -91,12 +92,7 @@ export default function UsageLogsTab() {
   const filtered = useMemo(() => {
     const list = tab === "borrowed" ? borrowed : returned;
     if (!search) return list;
-    const q = search.toLowerCase();
-    return list.filter(
-      (t) =>
-        t.itemName?.toLowerCase().includes(q) ||
-        t.course?.toLowerCase().includes(q)
-    );
+    return filterBySearch(list, search, ["itemName", "course"]);
   }, [tab, borrowed, returned, search]);
 
   if (loading) return <div className="page-loading"><div className="spinner-lg" /></div>;

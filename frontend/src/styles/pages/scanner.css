@@ -14,10 +14,41 @@
 .scanner-step-card{border:1.5px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:16px;transition:all .25s;box-shadow:var(--card-shadow)}
 .scanner-step-card:hover{box-shadow:0 4px 12px rgba(0,0,0,.06)}
 .scanner-step-header{display:flex;align-items:center;gap:12px;padding:16px 20px;background:var(--bg)}
-.scanner-step-badge{width:32px;height:32px;border-radius:50%;background:var(--dark-green);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0}
+.scanner-step-badge{width:32px;height:32px;border-radius:50%;background:var(--dark-green);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0;transition:all .25s}
+.scanner-step-badge.completed{background:var(--green);box-shadow:0 2px 8px rgba(46,125,50,.3)}
 .scanner-step-text h2{font-size:15px;font-weight:600;color:var(--text);margin:0 0 2px}
 .scanner-step-text p{font-size:12px;color:var(--text-muted);margin:0}
+.scanner-step-header{position:relative}
+.scanner-step-change{
+  position:absolute;right:0;top:50%;transform:translateY(-50%);
+  display:inline-flex;align-items:center;gap:4px;
+  padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;
+  cursor:pointer;transition:all .2s;border:1px solid var(--border);
+  background:var(--bg-card);color:var(--text-muted);
+}
+.scanner-step-change:hover{border-color:var(--green);color:var(--green);background:rgba(46,125,50,.05)}
 .scanner-step-body{padding:16px 20px}
+
+.scanner-step-collapsed{
+  padding:12px 20px;cursor:pointer;transition:all .2s;
+  border-top:1px solid rgba(46,125,50,.1);
+  background:linear-gradient(135deg,rgba(46,125,50,.03),rgba(46,125,50,.01));
+}
+.scanner-step-collapsed:hover{background:linear-gradient(135deg,rgba(46,125,50,.06),rgba(46,125,50,.03))}
+.scanner-collapsed-info{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text)}
+.scanner-collapsed-info svg{color:var(--green);flex-shrink:0}
+.scanner-collapsed-name{font-weight:600;color:var(--text)}
+.scanner-collapsed-id{color:var(--text-muted);font-size:12px}
+.scanner-collapsed-role{
+  display:inline-block;padding:2px 8px;border-radius:12px;
+  font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;
+}
+.scanner-collapsed-role.student{background:rgba(33,150,243,.1);color:#1976d2}
+.scanner-collapsed-role.faculty{background:rgba(106,27,154,.1);color:#6a1b9a}
+.scanner-collapsed-role.admin{background:rgba(211,47,47,.1);color:#d32f2f}
+.scanner-collapsed-stock{font-size:12px;padding:2px 8px;border-radius:6px;background:rgba(46,125,50,.08);color:var(--green)}
+.scanner-collapsed-stock.stock-out{background:rgba(211,47,47,.08);color:#c62828}
+.scanner-collapsed-stock.stock-low{background:rgba(245,124,0,.08);color:#ef6c00}
 
 .scanner-input-row{display:grid;grid-template-columns:1fr auto auto;gap:8px}
 .scanner-input-wrap{position:relative;display:flex;align-items:center}
@@ -155,6 +186,15 @@ body.dark .scanner-step-card{border-color:rgba(255,255,255,.1);background:#13131
 body.dark .scanner-step-header{background:#0a0a0a}
 body.dark .scanner-step-text h2{color:#FFFFFF}
 body.dark .scanner-step-text p{color:#888}
+body.dark .scanner-step-change{background:#0f0f0f;border-color:rgba(255,255,255,.1);color:#888}
+body.dark .scanner-step-change:hover{border-color:var(--green-light);color:var(--green-light)}
+body.dark .scanner-step-collapsed{border-top-color:rgba(67,160,71,.15);background:linear-gradient(135deg,rgba(67,160,71,.05),rgba(67,160,71,.02))}
+body.dark .scanner-step-collapsed:hover{background:linear-gradient(135deg,rgba(67,160,71,.08),rgba(67,160,71,.04))}
+body.dark .scanner-collapsed-info{color:#FFFFFF}
+body.dark .scanner-collapsed-info svg{color:var(--green-light)}
+body.dark .scanner-collapsed-name{color:#FFFFFF}
+body.dark .scanner-collapsed-id{color:#888}
+body.dark .scanner-collapsed-stock{background:rgba(67,160,71,.12);color:var(--green-light)}
 body.dark .scanner-input-wrap input{background:#0f0f0f;border-color:rgba(255,255,255,.1);color:#FFFFFF}
 body.dark .scanner-btn-scan{background:#0f0f0f;color:var(--green-light);border-color:#2e7d32}
 body.dark .scanner-btn-scan:hover{background:var(--green);color:#fff}
