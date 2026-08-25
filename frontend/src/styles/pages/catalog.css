@@ -136,6 +136,11 @@
   .catalog-card-actions{padding-top:6px;gap:5px}
   .catalog-empty{padding:40px 16px}
 }
+@media(max-width:480px){
+  .catalog-stats{grid-template-columns:1fr}
+  .catalog-grid{grid-template-columns:1fr}
+  .catalog-header-actions{flex-direction:column}
+}
 
 body.dark .catalog-page h1{color:#FFFFFF}
 body.dark .catalog-subtitle{color:#888}

@@ -111,6 +111,10 @@
   .action-tile-desc{display:none}
   .notif-msg{max-width:130px}
 }
+@media(max-width:480px){
+  .home-stats{grid-template-columns:1fr}
+  .home-actions{grid-template-columns:1fr}
+}
 
 /* ---------- Dark mode ---------- */
 body.dark .home-hero{background:linear-gradient(120deg,#0d2915 0%,#143a1c 50%,#1e5628 100%);box-shadow:0 10px 30px rgba(0,0,0,.45)}

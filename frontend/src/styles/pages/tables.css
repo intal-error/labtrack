@@ -14,7 +14,7 @@ table thead th:last-child{border-top-right-radius:12px}
 table td{padding:12px 10px;text-align:center;border-bottom:1px solid var(--border);vertical-align:middle;color:var(--text)}
 table tbody tr:nth-child(even){background:#fafafa}
 table tr:hover{background-color:#f9f9f9}
-@media(max-width:768px){.table-wrapper{overflow-x:auto;display:block}table{min-width:700px}}
+@media(max-width:768px){.table-wrapper{overflow-x:auto;display:block}table{min-width:700px}.tables-course-filter{min-width:0}}
 body.dark .tables-page h1{color:#FFFFFF}
 body.dark .table-wrapper{background:#131313;border-color:rgba(255,255,255,.1)}
 body.dark table th,body.dark table td{color:#FFFFFF;border-color:#2a2a2a}

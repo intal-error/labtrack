@@ -92,10 +92,11 @@ export default function ScannerPage() {
     }, 200);
   };
 
-  const lookupBorrower = async () => {
-    if (!schoolId.trim()) { setTxStatus("Enter a school ID first."); setTxStatusType("error"); return; }
+  const lookupBorrower = async (idOverride) => {
+    const sid = idOverride || schoolId;
+    if (!sid.trim()) { setTxStatus("Enter a school ID first."); setTxStatusType("error"); return; }
     setTxStatus("Looking for borrower..."); setTxStatusType("");
-    const user = await resolveUser(schoolId.trim());
+    const user = await resolveUser(sid.trim());
     if (!user) {
       setSelectedUser(null); setBorrowerResult(null);
       setTxStatus("No registered borrower found. Fill in name fields to create on borrow."); setTxStatusType("error");
@@ -113,10 +114,11 @@ export default function ScannerPage() {
     scrollToStep2();
   };
 
-  const lookupItem = async () => {
-    if (!itemCode.trim()) { setTxStatus("Enter an item code first."); setTxStatusType("error"); return; }
+  const lookupItem = async (codeOverride) => {
+    const code = codeOverride || itemCode;
+    if (!code.trim()) { setTxStatus("Enter an item code first."); setTxStatusType("error"); return; }
     setTxStatus("Looking for item..."); setTxStatusType("");
-    const item = await resolveItem(itemCode.trim());
+    const item = await resolveItem(code.trim());
     if (!item) {
       setSelectedItem(null); setItemResult(null);
       setTxStatus("No matching catalog item found."); setTxStatusType("error");
@@ -131,8 +133,8 @@ export default function ScannerPage() {
   };
 
   const handleCameraScan = async (decodedText) => {
-    if (cameraTarget === "borrower") { setSchoolId(decodedText); setTimeout(() => lookupBorrower(), 100); }
-    else { setItemCode(decodedText); setTimeout(() => lookupItem(), 100); }
+    if (cameraTarget === "borrower") { setSchoolId(decodedText); setTimeout(() => lookupBorrower(decodedText), 100); }
+    else { setItemCode(decodedText); setTimeout(() => lookupItem(decodedText), 100); }
     setCameraTarget(null);
   };
 

@@ -219,6 +219,7 @@
   .sidebar.active{transform:translateX(0)}
   .sidebar-overlay.active{display:block}
   .burger-btn{display:block}
+  .sidebar-toggle{display:none}
 }
 
 /* Dark mode */
