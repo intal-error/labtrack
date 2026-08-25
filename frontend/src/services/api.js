@@ -233,4 +233,14 @@ export const api = {
     return res.json();
   },
 
+  // Lab Activities
+  getLabActivities: () => request("/lab-activities"),
+  getMyLabActivities: () => request("/lab-activities/student"),
+  createLabActivity: (data) => request("/lab-activities", { method: "POST", body: JSON.stringify(data) }),
+  updateLabActivity: (id, data) => request(`/lab-activities/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteLabActivity: (id) => request(`/lab-activities/${id}`, { method: "DELETE" }),
+  joinLabSession: (activityId) => request(`/lab-activities/${activityId}/join`, { method: "POST" }),
+  getSessionAttendees: (activityId) => request(`/lab-activities/${activityId}/attendees`),
+  getSessionNonAttendees: (activityId) => request(`/lab-activities/${activityId}/non-attendees`),
+
 };

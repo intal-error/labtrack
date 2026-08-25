@@ -19,6 +19,7 @@ const manualRoutes = require("./src/routes/manuals");
 const finesRoutes = require("./src/routes/fines");
 const backupRoutes = require("./src/routes/backup");
 const borrowRequestRoutes = require("./src/routes/borrowRequests");
+const labActivityRoutes = require("./src/routes/labActivities");
 const { checkOverdueTransactions } = require("./src/utils/overdueChecker");
 
 const app = express();
@@ -39,15 +40,16 @@ app.use("/api/catalog", verifyToken, catalogRoutes);
 app.use("/api/transactions", verifyToken, transactionRoutes);
 app.use("/api/users", verifyToken, userRoutes);
 app.use("/api/notifications", verifyToken, notificationsRoutes);
-app.use("/api/documents", verifyToken, authorize("admin", "faculty"), documentsRoutes);
-app.use("/api/reports", verifyToken, authorize("admin", "faculty"), reportRoutes);
+app.use("/api/documents", verifyToken, authorize("admin"), documentsRoutes);
+app.use("/api/reports", verifyToken, authorize("admin"), reportRoutes);
 app.use("/api/upload", verifyToken, uploadRoutes);
-app.use("/api/maintenance", verifyToken, authorize("admin", "faculty"), maintenanceRoutes);
+app.use("/api/maintenance", verifyToken, authorize("admin"), maintenanceRoutes);
 app.use("/api/incidents", verifyToken, incidentRoutes);
 app.use("/api/manuals", verifyToken, manualRoutes);
 app.use("/api/fines", verifyToken, finesRoutes);
 app.use("/api/backup", verifyToken, authorize("admin"), backupRoutes);
 app.use("/api/borrow-requests", verifyToken, borrowRequestRoutes);
+app.use("/api/lab-activities", verifyToken, labActivityRoutes);
 
 // Admin-only routes
 app.use("/api/admin", verifyToken, authorize("admin"), adminRoutes);

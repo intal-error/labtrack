@@ -955,3 +955,85 @@ body.dark .manual-upload-btn{border-color:rgba(255,255,255,.15);background:#0a0a
 body.dark .manual-upload-btn:hover{border-color:var(--green);color:var(--green)}
 body.dark .manual-file-preview{background:#0a0a0a;border-color:rgba(255,255,255,.1)}
 body.dark .manual-file-name{color:#FFFFFF}
+
+/* Incident slide panel section icons */
+.lab-form-section-icon.inc-details {
+  background: linear-gradient(135deg, #ffebee, #ffcdd2);
+  color: #c62828;
+}
+
+.lab-form-section-icon.inc-classification {
+  background: linear-gradient(135deg, #fff8e1, #ffecb3);
+  color: #f57f17;
+}
+
+.lab-form-section-icon.inc-description {
+  background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+  color: #1565c0;
+}
+
+.lab-form-section-icon.inc-evidence {
+  background: linear-gradient(135deg, #f3e5f5, #e1bee7);
+  color: #6a1b9a;
+}
+
+.lab-form-section-icon.inc-resolved {
+  background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+  color: #2e7d32;
+}
+
+.lab-form-section-icon.inc-actions {
+  background: linear-gradient(135deg, #fff3e0, #ffe0b2);
+  color: #ef6c00;
+}
+
+/* Incident detail actions layout */
+.incident-detail-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.incident-detail-actions-row {
+  display: flex;
+  gap: 8px;
+}
+
+.incident-detail-actions-row .btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* Dark mode - incident section icons */
+body.dark .lab-form-section-icon.inc-details {
+  background: linear-gradient(135deg, #2e1416, #1a0d0e);
+  color: #ef9a9a;
+}
+
+body.dark .lab-form-section-icon.inc-classification {
+  background: linear-gradient(135deg, #2e2313, #1a1610);
+  color: #ffb74d;
+}
+
+body.dark .lab-form-section-icon.inc-description {
+  background: linear-gradient(135deg, #14202e, #10161d);
+  color: #64b5f6;
+}
+
+body.dark .lab-form-section-icon.inc-evidence {
+  background: linear-gradient(135deg, #231430, #17101d);
+  color: #ce93d8;
+}
+
+body.dark .lab-form-section-icon.inc-resolved {
+  background: linear-gradient(135deg, #1a2e1e, #152218);
+  color: #a5d6a7;
+}
+
+body.dark .lab-form-section-icon.inc-actions {
+  background: linear-gradient(135deg, #2e2313, #1a1610);
+  color: #ffb74d;
+}

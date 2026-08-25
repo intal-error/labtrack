@@ -4,7 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import toast from "react-hot-toast";
 import { filterBySearch } from "../../utils/search";
 import "../../styles/pages/tabs.css";
-import { MdWarning, MdAdd, MdEdit, MdDelete, MdSearch, MdInfo, MdOutlineWarning, MdCameraAlt, MdFilterList, MdClose } from "react-icons/md";
+import { MdWarning, MdAdd, MdEdit, MdDelete, MdSearch, MdInfo, MdOutlineWarning, MdCameraAlt, MdFilterList, MdClose, MdEvent, MdPerson, MdAssignment, MdSchedule, MdLocationOn } from "react-icons/md";
 
 const SEVERITY_COLORS = { low: "#43A047", medium: "#f57c00", high: "#d32f2f", critical: "#b71c1c" };
 const STATUS_COLORS = { open: "#d32f2f", investigating: "#f57c00", resolved: "#43A047" };
@@ -53,6 +53,7 @@ export default function IncidentTab() {
   const [uploading, setUploading] = useState(false);
   const [resolutionNote, setResolutionNote] = useState("");
   const [imageOverlay, setImageOverlay] = useState(null);
+  const [showDetail, setShowDetail] = useState(false);
 
   const canCreate = true;
 
@@ -280,48 +281,93 @@ export default function IncidentTab() {
         </div>
       </div>
 
-      {showForm && (
-        <div className="modal-overlay" onClick={() => { setShowForm(false); setEditing(null); }}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3>{editing ? "Edit Incident" : "Report Incident"}</h3>
-            <form onSubmit={handleSubmit}>
-              <div className="form-group">
-                <label>Title</label>
-                <input type="text" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required placeholder="Brief incident title" />
+      <div className={`lab-slide-panel ${showForm ? "open" : ""}`}>
+        <div className="lab-slide-header">
+          <h2>{editing ? "Edit Incident" : "Report Incident"}</h2>
+          <button className="lab-slide-close" onClick={() => { setShowForm(false); setEditing(null); }}>
+            <MdClose size={20} />
+          </button>
+        </div>
+        <div className="lab-slide-body">
+          <div className="lab-slide-accent" />
+          <form onSubmit={handleSubmit}>
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon inc-details"><MdWarning size={14} /></div>
+                <span className="lab-form-section-title">Incident Info</span>
               </div>
-              <div className="form-group">
+              <div className="lab-form-row">
+                <div className="lab-form-field">
+                  <label>Title <span className="lab-required" /></label>
+                  <div className="lab-input-wrap">
+                    <input type="text" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required placeholder="Brief incident title" />
+                    <MdEdit size={16} />
+                  </div>
+                </div>
+              </div>
+              <div className="lab-form-field">
                 <label>Related Item (optional)</label>
-                <select value={form.catalogId} onChange={(e) => setForm({ ...form, catalogId: e.target.value })}>
-                  <option value="">None</option>
-                  {catalog.map((c) => <option key={c.id} value={c.id}>{c.itemName}</option>)}
-                </select>
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Type</label>
-                  <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-                    <option value="damage">Damage</option>
-                    <option value="accident">Accident</option>
-                    <option value="irregularity">Irregularity</option>
-                    <option value="other">Other</option>
+                <div className="lab-input-wrap">
+                  <select value={form.catalogId} onChange={(e) => setForm({ ...form, catalogId: e.target.value })}>
+                    <option value="">None</option>
+                    {catalog.map((c) => <option key={c.id} value={c.id}>{c.itemName}</option>)}
                   </select>
-                </div>
-                <div className="form-group">
-                  <label>Severity</label>
-                  <select value={form.severity} onChange={(e) => setForm({ ...form, severity: e.target.value })}>
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="critical">Critical</option>
-                  </select>
+                  <MdAssignment size={16} />
                 </div>
               </div>
-              <div className="form-group">
-                <label>Description</label>
+            </div>
+
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon inc-classification"><MdFilterList size={14} /></div>
+                <span className="lab-form-section-title">Classification</span>
+              </div>
+              <div className="lab-form-row">
+                <div className="lab-form-field">
+                  <label>Type <span className="lab-required" /></label>
+                  <div className="lab-input-wrap">
+                    <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+                      <option value="damage">Damage</option>
+                      <option value="accident">Accident</option>
+                      <option value="irregularity">Irregularity</option>
+                      <option value="other">Other</option>
+                    </select>
+                    <MdWarning size={16} />
+                  </div>
+                </div>
+                <div className="lab-form-field">
+                  <label>Severity <span className="lab-required" /></label>
+                  <div className="lab-input-wrap">
+                    <select value={form.severity} onChange={(e) => setForm({ ...form, severity: e.target.value })}>
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                      <option value="critical">Critical</option>
+                    </select>
+                    <MdOutlineWarning size={16} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon inc-description"><MdInfo size={14} /></div>
+                <span className="lab-form-section-title">Details</span>
+              </div>
+              <div className="lab-form-field">
+                <label>Description <span className="lab-required" /></label>
                 <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={4} required placeholder="Describe the incident in detail..." />
               </div>
-              <div className="form-group">
-                <label>Evidence Photos (optional, max 3)</label>
+            </div>
+
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon inc-evidence"><MdCameraAlt size={14} /></div>
+                <span className="lab-form-section-title">Evidence</span>
+              </div>
+              <div className="lab-form-field">
+                <label>Photos (optional, max 3)</label>
                 <div className="incident-photo-upload-area">
                   {form.photos.map((url, i) => (
                     <div className="incident-photo-thumb" key={i}>
@@ -337,14 +383,16 @@ export default function IncidentTab() {
                   )}
                 </div>
               </div>
-              <div className="form-actions">
-                <button type="button" className="btn btn-outline" onClick={() => { setShowForm(false); setEditing(null); }}>Cancel</button>
-                <button type="submit" className="btn btn-primary">{editing ? "Update" : "Submit Report"}</button>
-              </div>
-            </form>
-          </div>
+            </div>
+
+            <div className="lab-form-actions">
+              <button type="button" className="lab-form-cancel-btn" onClick={() => { setShowForm(false); setEditing(null); }}>Cancel</button>
+              <button type="submit" className="lab-form-submit-btn">{editing ? "Update" : "Submit Report"}</button>
+            </div>
+          </form>
         </div>
-      )}
+      </div>
+      {showForm && <div className="lab-slide-backdrop" onClick={() => { setShowForm(false); setEditing(null); }} />}
 
       <div className="incident-list">
         {filtered.length === 0 ? (
@@ -355,7 +403,7 @@ export default function IncidentTab() {
           </div>
         ) : filtered.map((inc) => (
           <div className={`incident-card incident-severity-${inc.severity}`} key={inc.id}
-               onClick={() => setSelectedIncident(inc)} style={{ cursor: "pointer" }}>
+               onClick={() => { setSelectedIncident(inc); setShowDetail(true); }} style={{ cursor: "pointer" }}>
             <div className="incident-card-header">
               <div className="incident-card-title">
                 <MdWarning size={18} style={{ color: SEVERITY_COLORS[inc.severity] }} />
@@ -385,71 +433,114 @@ export default function IncidentTab() {
       </div>
 
       {selectedIncident && (
-        <div className="modal-overlay" onClick={() => { setSelectedIncident(null); setResolutionNote(""); }}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3>{selectedIncident.title}</h3>
-            <div className="incident-detail-badges">
-              <span className="badge" style={{ background: `${SEVERITY_COLORS[selectedIncident.severity]}20`, color: SEVERITY_COLORS[selectedIncident.severity] }}>
-                {selectedIncident.severity}
-              </span>
-              <span className="badge" style={{ background: `${STATUS_COLORS[selectedIncident.status]}20`, color: STATUS_COLORS[selectedIncident.status] }}>
-                {selectedIncident.status}
-              </span>
+        <div className={`lab-slide-panel ${showDetail ? "open" : ""}`}>
+          <div className="lab-slide-header">
+            <h2>{selectedIncident.title}</h2>
+            <button className="lab-slide-close" onClick={() => { setSelectedIncident(null); setShowDetail(false); setResolutionNote(""); }}>
+              <MdClose size={20} />
+            </button>
+          </div>
+          <div className="lab-slide-body">
+            <div className="lab-slide-accent" />
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon inc-details"><MdWarning size={14} /></div>
+                <span className="lab-form-section-title">Status</span>
+              </div>
+              <div className="incident-detail-badges">
+                <span className="badge" style={{ background: `${SEVERITY_COLORS[selectedIncident.severity]}20`, color: SEVERITY_COLORS[selectedIncident.severity] }}>
+                  {selectedIncident.severity}
+                </span>
+                <span className="badge" style={{ background: `${STATUS_COLORS[selectedIncident.status]}20`, color: STATUS_COLORS[selectedIncident.status] }}>
+                  {selectedIncident.status}
+                </span>
+              </div>
             </div>
+
             {selectedIncident.photos?.length > 0 && (
-              <div className="incident-detail-photos">
-                <div className="incident-photos-grid">
-                  {selectedIncident.photos.map((url, i) => (
-                    <img key={i} src={url} alt={`Evidence ${i + 1}`} onClick={() => setImageOverlay(url)} style={{ cursor: "pointer" }} />
-                  ))}
+              <div className="lab-form-section">
+                <div className="lab-form-section-header">
+                  <div className="lab-form-section-icon inc-evidence"><MdCameraAlt size={14} /></div>
+                  <span className="lab-form-section-title">Evidence</span>
+                </div>
+                <div className="incident-detail-photos">
+                  <div className="incident-photos-grid">
+                    {selectedIncident.photos.map((url, i) => (
+                      <img key={i} src={url} alt={`Evidence ${i + 1}`} onClick={() => setImageOverlay(url)} style={{ cursor: "pointer" }} />
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
-            <div className="incident-detail-info">
-              <p><strong>Type:</strong> {TYPE_LABELS[selectedIncident.type] || selectedIncident.type}</p>
-              {selectedIncident.itemName && <p><strong>Related Item:</strong> {selectedIncident.itemName}</p>}
-              <p><strong>Reported by:</strong> {selectedIncident.reporterName} ({selectedIncident.reporterRole})</p>
-              {selectedIncident.createdAt && <p><strong>Date:</strong> {timeAgo(selectedIncident.createdAt)}</p>}
+
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon inc-classification"><MdInfo size={14} /></div>
+                <span className="lab-form-section-title">Information</span>
+              </div>
+              <div className="incident-detail-info">
+                <p><strong>Type:</strong> {TYPE_LABELS[selectedIncident.type] || selectedIncident.type}</p>
+                {selectedIncident.itemName && <p><strong>Related Item:</strong> {selectedIncident.itemName}</p>}
+                <p><strong>Reported by:</strong> {selectedIncident.reporterName} ({selectedIncident.reporterRole})</p>
+                {selectedIncident.createdAt && <p><strong>Date:</strong> {timeAgo(selectedIncident.createdAt)}</p>}
+              </div>
             </div>
-            <div className="incident-detail-desc">
-              <strong>Description:</strong>
-              <p>{selectedIncident.description}</p>
+
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon inc-description"><MdEdit size={14} /></div>
+                <span className="lab-form-section-title">Description</span>
+              </div>
+              <div className="incident-detail-desc">
+                <p>{selectedIncident.description}</p>
+              </div>
             </div>
+
             {selectedIncident.resolutionNote && (
-              <div className="incident-detail-resolution">
-                <strong>Resolution Note:</strong>
-                <p>{selectedIncident.resolutionNote}</p>
+              <div className="lab-form-section">
+                <div className="lab-form-section-header">
+                  <div className="lab-form-section-icon inc-resolved"><MdInfo size={14} /></div>
+                  <span className="lab-form-section-title">Resolution Note</span>
+                </div>
+                <div className="incident-detail-resolution">
+                  <p>{selectedIncident.resolutionNote}</p>
+                </div>
               </div>
             )}
-            {(role === "admin" || role === "faculty") && (
-              <div className="incident-detail-actions">
-                {selectedIncident.status === "open" && (
-                  <button className="btn btn-outline" onClick={async () => { await updateStatus(selectedIncident.id, "investigating"); setSelectedIncident(null); }}>
-                    <MdInfo size={14} /> Mark Investigating
-                  </button>
-                )}
-                {selectedIncident.status !== "resolved" && (
-                  <>
+
+            {role === "admin" && (
+              <div className="lab-form-section">
+                <div className="lab-form-section-header">
+                  <div className="lab-form-section-icon inc-actions"><MdFilterList size={14} /></div>
+                  <span className="lab-form-section-title">Actions</span>
+                </div>
+                <div className="incident-detail-actions">
+                  {selectedIncident.status === "open" && (
+                    <button className="btn btn-outline" onClick={async () => { await updateStatus(selectedIncident.id, "investigating"); setSelectedIncident(null); setShowDetail(false); }}>
+                      <MdInfo size={14} /> Mark Investigating
+                    </button>
+                  )}
+                  {selectedIncident.status !== "resolved" && (
                     <div className="incident-resolve-row">
                       <input type="text" className="incident-resolution-input" value={resolutionNote} onChange={(e) => setResolutionNote(e.target.value)} placeholder="Resolution note (optional)" />
                       <button className="btn btn-primary" onClick={handleResolve}><MdInfo size={14} /> Resolve</button>
                     </div>
-                  </>
-                )}
-                {role === "admin" && (
-                  <>
-                    <button className="btn btn-outline" onClick={() => { setSelectedIncident(null); openEdit(selectedIncident); }}><MdEdit size={14} /> Edit</button>
-                    <button className="btn btn-danger" onClick={async () => { await handleDelete(selectedIncident.id); setSelectedIncident(null); }}><MdDelete size={14} /> Delete</button>
-                  </>
-                )}
+                  )}
+                  <div className="incident-detail-actions-row">
+                    <button className="btn btn-outline" onClick={() => { setSelectedIncident(null); setShowDetail(false); openEdit(selectedIncident); }}><MdEdit size={14} /> Edit</button>
+                    <button className="btn btn-danger" onClick={async () => { await handleDelete(selectedIncident.id); setSelectedIncident(null); setShowDetail(false); }}><MdDelete size={14} /> Delete</button>
+                  </div>
+                </div>
               </div>
             )}
-            <div className="form-actions">
-              <button className="btn btn-outline" onClick={() => { setSelectedIncident(null); setResolutionNote(""); }}>Close</button>
+
+            <div className="lab-form-actions">
+              <button className="lab-form-cancel-btn" onClick={() => { setSelectedIncident(null); setShowDetail(false); setResolutionNote(""); }}>Close</button>
             </div>
           </div>
         </div>
       )}
+      {selectedIncident && <div className="lab-slide-backdrop" onClick={() => { setSelectedIncident(null); setShowDetail(false); setResolutionNote(""); }} />}
 
       {imageOverlay && (
         <div className="incident-image-overlay" onClick={() => setImageOverlay(null)}>

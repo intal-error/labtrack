@@ -58,7 +58,12 @@ const getBorrowed = async (req, res) => {
     const snap = await db.collection(TRANS).where("action", "==", "borrowed").get();
     let items = snap.docs
       .map((doc) => ({ id: doc.id, ...doc.data() }))
-      .filter((d) => isOpenBorrow(d))
+      .filter((d) => isOpenBorrow(d));
+    // Filter by course for admin users with assigned course
+    if (req.adminAssignment?.assignedCourse) {
+      items = items.filter((d) => d.course === req.adminAssignment.assignedCourse);
+    }
+    items = items
       .sort((a, b) => (toDate(b.timestamp)?.getTime() || 0) - (toDate(a.timestamp)?.getTime() || 0));
     items = await enrichWithProfileURL(items);
     res.json(items);
@@ -71,7 +76,12 @@ const getReturned = async (req, res) => {
   try {
     const snap = await db.collection(TRANS).where("action", "==", "returned").get();
     let items = snap.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .map((doc) => ({ id: doc.id, ...doc.data() }));
+    // Filter by course for admin users with assigned course
+    if (req.adminAssignment?.assignedCourse) {
+      items = items.filter((d) => d.course === req.adminAssignment.assignedCourse);
+    }
+    items = items
       .sort((a, b) => (toDate(b.timestamp)?.getTime() || 0) - (toDate(a.timestamp)?.getTime() || 0));
 
     const missingDates = items.filter((i) => !i.borrowedAt && i.originalTransactionId);
@@ -137,20 +147,37 @@ const getMyReturned = async (req, res) => {
 
 const getDashboardCounts = async (req, res) => {
   try {
-    const [borrowedSnap, returnedSnap, studentsSnap, facultySnap] = await Promise.all([
+    const [borrowedSnap, returnedSnap, studentsSnap] = await Promise.all([
       db.collection(TRANS).where("action", "==", "borrowed").get(),
       db.collection(TRANS).where("action", "==", "returned").get(),
       db.collection(USERS).where("role", "==", "student").get(),
-      db.collection(USERS).where("role", "==", "faculty").get(),
     ]);
-    const activeBorrowed = borrowedSnap.docs.filter((doc) => isOpenBorrow(doc.data())).length;
+    const assignedCourse = req.adminAssignment?.assignedCourse || "";
+    const activeBorrowed = borrowedSnap.docs.filter((doc) => {
+      const d = doc.data();
+      if (!isOpenBorrow(d)) return false;
+      if (assignedCourse && d.course !== assignedCourse) return false;
+      return true;
+    }).length;
+    let returnedCount = returnedSnap.size;
+    let studentsCount = studentsSnap.size;
+    if (assignedCourse) {
+      returnedCount = returnedSnap.docs.filter((d) => d.data().course === assignedCourse).length;
+      studentsCount = studentsSnap.docs.filter((d) => d.data().course === assignedCourse).length;
+    }
     const usersSnap = await db.collection(USERS).get();
+    let usersCount = usersSnap.size;
+    if (assignedCourse) {
+      usersCount = usersSnap.docs.filter((d) => {
+        const data = d.data();
+        return data.course === assignedCourse || data.role === "admin";
+      }).length;
+    }
     res.json({
       borrowed: activeBorrowed,
-      returned: returnedSnap.size,
-      users: usersSnap.size,
-      students: studentsSnap.size,
-      faculty: facultySnap.size,
+      returned: returnedCount,
+      users: usersCount,
+      students: studentsCount,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -165,9 +192,16 @@ const getChartData = async (req, res) => {
       db.collection(CATALOG).where("available", "==", true).get(),
       db.collection(CATALOG).get(),
     ]);
+    const assignedCourse = req.adminAssignment?.assignedCourse || "";
+    let borrowedCount = borrowedSnap.size;
+    let returnedCount = returnedSnap.size;
+    if (assignedCourse) {
+      borrowedCount = borrowedSnap.docs.filter((d) => d.data().course === assignedCourse).length;
+      returnedCount = returnedSnap.docs.filter((d) => d.data().course === assignedCourse).length;
+    }
     res.json({
-      borrowed: borrowedSnap.size,
-      returned: returnedSnap.size,
+      borrowed: borrowedCount,
+      returned: returnedCount,
       available: availableSnap.size,
       inventory: inventorySnap.size,
     });
@@ -220,6 +254,16 @@ const recordBorrow = async (req, res) => {
         }
       }
 
+      let userYear = borrower.year || "";
+      if (!userYear) {
+        const userData = resolvedUser || (await t.get(db.collection(USERS).doc(userRef.id)));
+        if (userData?.data) {
+          userYear = userData.data.year || "";
+        } else if (userData?.exists) {
+          userYear = userData.data().year || "";
+        }
+      }
+
       const nextAvailable = available - quantity;
       const userData = {
         schoolID: borrower.schoolID,
@@ -245,6 +289,7 @@ const recordBorrow = async (req, res) => {
         firstName: borrower.firstName,
         lastName: borrower.lastName,
         course: userCourse,
+        year: userYear,
         userId: userRef.id,
         dueDate: new Date(dueDate),
         timestamp: new Date(),
@@ -297,6 +342,13 @@ const recordReturn = async (req, res) => {
 
       const borrow = borrowSnap.data();
       if (!isOpenBorrow(borrow)) throw new Error("Already returned");
+
+      // Course-based access control: admin can only process returns from their assigned course
+      if (req.user.role === "admin" && req.adminAssignment?.assignedCourse) {
+        if (borrow.course !== req.adminAssignment.assignedCourse) {
+          throw new Error("You do not have permission to process returns for this course");
+        }
+      }
       const remaining = getRemainingQuantity(borrow);
       if (quantity > remaining) throw new Error(`Only ${remaining} remain`);
 
@@ -319,6 +371,7 @@ const recordReturn = async (req, res) => {
         firstName: borrow.firstName || "",
         lastName: borrow.lastName || "",
         course: borrow.course || "",
+        year: borrow.year || "",
         userId: borrow.userId || null,
         timestamp: new Date(),
         returnedAt: new Date(),
@@ -379,42 +432,48 @@ const getRecentActivity = async (req, res) => {
       db.collection(TRANS).where("action", "==", "returned").get(),
     ]);
 
-    const borrows = borrowSnap.docs.map((doc) => {
-      const d = doc.data();
-      return {
-        id: doc.id,
-        action: "borrowed",
-        firstName: d.firstName || "",
-        lastName: d.lastName || "",
-        itemName: d.itemName || "",
-        quantity: numberOr(d.quantity, 1),
-        timestamp: d.timestamp || d.borrowedAt || null,
-        dueDate: d.dueDate || null,
-        schoolID: d.schoolID || "",
-        course: d.course || "",
-        email: d.email || "",
-        role: d.role || "",
-      };
-    });
+    const assignedCourse = req.adminAssignment?.assignedCourse || "";
 
-    const returns = returnSnap.docs.map((doc) => {
-      const d = doc.data();
-      return {
-        id: doc.id,
-        action: "returned",
-        firstName: d.firstName || "",
-        lastName: d.lastName || "",
-        itemName: d.itemName || "",
-        quantity: numberOr(d.quantity, 1),
-        timestamp: d.timestamp || d.returnedAt || null,
-        returnedAt: d.returnedAt || null,
-        dueDate: d.dueDate || null,
-        schoolID: d.schoolID || "",
-        course: d.course || "",
-        email: d.email || "",
-        role: d.role || "",
-      };
-    });
+    const borrows = borrowSnap.docs
+      .map((doc) => {
+        const d = doc.data();
+        return {
+          id: doc.id,
+          action: "borrowed",
+          firstName: d.firstName || "",
+          lastName: d.lastName || "",
+          itemName: d.itemName || "",
+          quantity: numberOr(d.quantity, 1),
+          timestamp: d.timestamp || d.borrowedAt || null,
+          dueDate: d.dueDate || null,
+          schoolID: d.schoolID || "",
+          course: d.course || "",
+          email: d.email || "",
+          role: d.role || "",
+        };
+      })
+      .filter((d) => !assignedCourse || d.course === assignedCourse);
+
+    const returns = returnSnap.docs
+      .map((doc) => {
+        const d = doc.data();
+        return {
+          id: doc.id,
+          action: "returned",
+          firstName: d.firstName || "",
+          lastName: d.lastName || "",
+          itemName: d.itemName || "",
+          quantity: numberOr(d.quantity, 1),
+          timestamp: d.timestamp || d.returnedAt || null,
+          returnedAt: d.returnedAt || null,
+          dueDate: d.dueDate || null,
+          schoolID: d.schoolID || "",
+          course: d.course || "",
+          email: d.email || "",
+          role: d.role || "",
+        };
+      })
+      .filter((d) => !assignedCourse || d.course === assignedCourse);
 
     const merged = [...borrows, ...returns]
       .sort((a, b) => (toDate(b.timestamp)?.getTime() || 0) - (toDate(a.timestamp)?.getTime() || 0))

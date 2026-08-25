@@ -69,7 +69,7 @@ export default function ScannerPage() {
       setFirstName(d.firstName || d.firstname || "");
       setLastName(d.lastName || d.lastname || "");
       setEmail(d.email || "");
-      setRole(d.role === "faculty" ? "faculty" : "student");
+      setRole("student");
       setSelectedUser(userProfile);
       setBorrowerResult({
         name: `${d.firstName || d.firstname || ""} ${d.lastName || d.lastname || ""}`.trim(),
@@ -107,7 +107,7 @@ export default function ScannerPage() {
     setFirstName(d.firstName || d.firstname || "");
     setLastName(d.lastName || d.lastname || "");
     setEmail(d.email || "");
-    setRole(d.role === "faculty" ? "faculty" : "student");
+    setRole("student");
     setBorrowerResult({ name: `${d.firstName || ""} ${d.lastName || ""}`.trim(), schoolID: d.schoolId || d.employeeId || d.schoolID || d.studentID || schoolId, role: d.role, course: d.course });
     setTxStatus("Borrower found."); setTxStatusType("success");
     setStep1Collapsed(true);
@@ -226,7 +226,7 @@ export default function ScannerPage() {
       setFirstName(userProfile.firstName || userProfile.firstname || "");
       setLastName(userProfile.lastName || userProfile.lastname || "");
       setEmail(userProfile.email || "");
-      setRole(userProfile.role === "faculty" ? "faculty" : "student");
+      setRole("student");
       setSelectedUser(userProfile);
       setBorrowerResult({
         name: `${userProfile.firstName || userProfile.firstname || ""} ${userProfile.lastName || userProfile.lastname || ""}`.trim(),
@@ -301,7 +301,7 @@ export default function ScannerPage() {
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                   <span className="scanner-collapsed-name">{borrowerResult.name}</span>
                   <span className="scanner-collapsed-id">{borrowerResult.schoolID}</span>
-                  <span className={`scanner-collapsed-role ${borrowerResult.role}`}>{borrowerResult.role === "faculty" ? "Faculty" : "Student"}</span>
+                   <span className={`scanner-collapsed-role ${borrowerResult.role}`}>Student</span>
                 </div>
               </div>
             ) : (
@@ -319,9 +319,9 @@ export default function ScannerPage() {
                     <div className="scanner-user-profile-info">
                       <div className="scanner-user-name">{borrowerResult.name}</div>
                       <div className="scanner-user-id">{borrowerResult.schoolID}</div>
-                      <div className={`scanner-user-role ${borrowerResult.role}`}>
-                        {borrowerResult.role === "faculty" ? "Faculty" : "Student"}
-                      </div>
+                       <div className={`scanner-user-role ${borrowerResult.role}`}>
+                         Student
+                       </div>
                     </div>
                     <div className="scanner-user-verified">
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>
@@ -406,7 +406,6 @@ export default function ScannerPage() {
                         <label>Role</label>
                         <select value={role} onChange={(e) => setRole(e.target.value)}>
                           <option value="student">Student</option>
-                          <option value="faculty">Faculty</option>
                         </select>
                       </div>
                     </div>
@@ -531,7 +530,7 @@ export default function ScannerPage() {
                 )}
               </>
             )}
-            {isBorrow && (isAdmin || userProfile?.role === "faculty") && (
+            {isBorrow && isAdmin && (
               <div className="scanner-field" style={{ marginTop: 12 }}>
                 <label>Condition on Borrow</label>
                 <select value={conditionOnBorrow} onChange={(e) => setConditionOnBorrow(e.target.value)}>
@@ -542,7 +541,7 @@ export default function ScannerPage() {
                 </select>
               </div>
             )}
-            {isBorrow && (isAdmin || userProfile?.role === "faculty") && (
+            {isBorrow && isAdmin && (
               <div className="scanner-field" style={{ marginTop: 12 }}>
                 <label>Condition Photo (Borrow)</label>
                 <input type="file" accept="image/*" capture="environment" ref={borrowPhotoRef} onChange={(e) => handlePhotoUpload(e, "borrow")} style={{ display: "none" }} />

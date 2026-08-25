@@ -134,7 +134,7 @@ export default function ProfilePage() {
 
   const initials = `${(firstName || "")[0] || ""}${(lastName || "")[0] || ""}`.toUpperCase() || "?";
   const roleLabel = role ? role.charAt(0).toUpperCase() + role.slice(1) : "User";
-  const roleColor = role === "admin" ? "#d32f2f" : role === "faculty" ? "#7b1fa2" : "#1976d2";
+  const roleColor = role === "admin" ? "#d32f2f" : "#1976d2";
   const joinDate = formatJoinDate(userProfile?.createdAt);
   const lastUpdated = formatJoinDate(userProfile?.updatedAt);
 

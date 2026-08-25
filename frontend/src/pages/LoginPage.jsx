@@ -14,7 +14,6 @@ import "../styles/pages/login.css";
 
 const ROLES = [
   { key: "student", label: "Student", icon: MdSchool, desc: "Access lab equipment" },
-  { key: "faculty", label: "Faculty", icon: MdPerson, desc: "Manage records & grades" },
   { key: "admin", label: "Admin", icon: MdAdminPanelSettings, desc: "System administration" },
 ];
 

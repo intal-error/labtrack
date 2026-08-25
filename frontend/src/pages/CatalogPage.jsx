@@ -7,6 +7,8 @@ import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Modal from "../components/ui/Modal";
 import toast from "react-hot-toast";
 import "../styles/pages/catalog.css";
+import "../styles/pages/lab-activity.css";
+import { MdClose, MdAdd, MdEdit, MdInfo, MdImage, MdAssignment, MdTag, MdQrCode } from "react-icons/md";
 
 export default function CatalogPage() {
   const [allItems, setAllItems] = useState([]);
@@ -35,7 +37,7 @@ export default function CatalogPage() {
   useEffect(() => { load(); }, [load]);
 
   const filteredItems = useMemo(() => {
-    let result = allItems;
+    let result = [...allItems];
     if (filter !== "All") result = result.filter((i) => i.status === filter);
     if (filterCourse !== "All") result = result.filter((i) => i.course === filterCourse);
     if (search) result = filterBySearch(result, search, ["itemName"]);
@@ -334,39 +336,114 @@ export default function CatalogPage() {
         </div>
       )}
 
-      {showCreate && (
-        <Modal title="Create Item" onClose={() => setShowCreate(false)}>
+      <div className={`lab-slide-panel ${showCreate ? "open" : ""}`}>
+        <div className="lab-slide-header">
+          <h2>Create Item</h2>
+          <button className="lab-slide-close" onClick={() => setShowCreate(false)}>
+            <MdClose size={20} />
+          </button>
+        </div>
+        <div className="lab-slide-body">
+          <div className="lab-slide-accent" />
           <form onSubmit={handleCreate}>
-            <input type="text" placeholder="Item Name" value={form.itemName} onChange={(e) => setForm({ ...form, itemName: e.target.value })} required />
-            <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} required>
-              <option value="" disabled>Select Category</option>
-              <option value="Tools">Tools</option>
-              <option value="Equipment">Equipment</option>
-            </select>
-            <select value={form.course} onChange={(e) => setForm({ ...form, course: e.target.value })} required>
-              <option value="" disabled>Select Course</option>
-              {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <input type="number" placeholder="Quantity" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} required />
-            <input type="text" placeholder="Barcode (optional)" value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} />
-            <select value={form.condition} onChange={(e) => setForm({ ...form, condition: e.target.value })} required>
-              <option value="" disabled>Select Condition</option>
-              {["Excellent", "Good", "Fair", "Damaged", "For Repair", "Missing"].map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <div className="image-upload-row">
-              <input type="url" placeholder="Image URL" value={form.imageUrl} readOnly required />
-              <label className="text-btn">
-                {uploading ? "Uploading..." : "Upload"}
-                <input type="file" accept="image/*" onChange={handleUpload} hidden />
-              </label>
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon details"><MdAssignment size={14} /></div>
+                <span className="lab-form-section-title">Item Info</span>
+              </div>
+              <div className="lab-form-row">
+                <div className="lab-form-field">
+                  <label>Item Name <span className="lab-required" /></label>
+                  <div className="lab-input-wrap">
+                    <input type="text" value={form.itemName} onChange={(e) => setForm({ ...form, itemName: e.target.value })} required placeholder="e.g. Oscilloscope" />
+                    <MdEdit size={16} />
+                  </div>
+                </div>
+                <div className="lab-form-field">
+                  <label>Category <span className="lab-required" /></label>
+                  <div className="lab-input-wrap">
+                    <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} required>
+                      <option value="" disabled>Select Category</option>
+                      <option value="Tools">Tools</option>
+                      <option value="Equipment">Equipment</option>
+                    </select>
+                    <MdInfo size={16} />
+                  </div>
+                </div>
+              </div>
+              <div className="lab-form-field">
+                <label>Course <span className="lab-required" /></label>
+                <div className="lab-input-wrap">
+                  <select value={form.course} onChange={(e) => setForm({ ...form, course: e.target.value })} required>
+                    <option value="" disabled>Select Course</option>
+                    {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <MdAssignment size={16} />
+                </div>
+              </div>
             </div>
-            <div className="catalog-actions">
-              <button type="submit" className="btn btn-green">Create</button>
-              <button type="button" className="btn btn-orange" onClick={() => setShowCreate(false)}>Cancel</button>
+
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon schedule"><MdTag size={14} /></div>
+                <span className="lab-form-section-title">Details</span>
+              </div>
+              <div className="lab-form-row">
+                <div className="lab-form-field">
+                  <label>Quantity <span className="lab-required" /></label>
+                  <div className="lab-input-wrap">
+                    <input type="number" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} required placeholder="0" />
+                    <MdTag size={16} />
+                  </div>
+                </div>
+                <div className="lab-form-field">
+                  <label>Barcode</label>
+                  <div className="lab-input-wrap">
+                    <input type="text" value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} placeholder="Optional" />
+                    <MdQrCode size={16} />
+                  </div>
+                </div>
+              </div>
+              <div className="lab-form-field">
+                <label>Condition <span className="lab-required" /></label>
+                <div className="lab-input-wrap">
+                  <select value={form.condition} onChange={(e) => setForm({ ...form, condition: e.target.value })} required>
+                    <option value="" disabled>Select Condition</option>
+                    {["Excellent", "Good", "Fair", "Damaged", "For Repair", "Missing"].map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <MdInfo size={16} />
+                </div>
+              </div>
+            </div>
+
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon class"><MdImage size={14} /></div>
+                <span className="lab-form-section-title">Image</span>
+              </div>
+              <div className="lab-form-field">
+                <label>Photo <span className="lab-required" /></label>
+                <div className="image-upload-row">
+                  <div className="lab-input-wrap" style={{ flex: 1 }}>
+                    <input type="url" placeholder="Image URL" value={form.imageUrl} readOnly required />
+                    <MdImage size={16} />
+                  </div>
+                  <label className="text-btn">
+                    {uploading ? "Uploading..." : "Upload"}
+                    <input type="file" accept="image/*" onChange={handleUpload} hidden />
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="lab-form-actions">
+              <button type="button" className="lab-form-cancel-btn" onClick={() => setShowCreate(false)}>Cancel</button>
+              <button type="submit" className="lab-form-submit-btn">Create Item</button>
             </div>
           </form>
-        </Modal>
-      )}
+        </div>
+      </div>
+      {showCreate && <div className="lab-slide-backdrop" onClick={() => setShowCreate(false)} />}
 
       {showQr && (
         <Modal title={showQr.name || "Item QR Code"} onClose={() => setShowQr(null)} wide>
@@ -380,36 +457,115 @@ export default function CatalogPage() {
         </Modal>
       )}
 
-      {showUpdate && (
-        <Modal title="Update Item" onClose={() => setShowUpdate(null)}>
+      <div className={`lab-slide-panel ${showUpdate ? "open" : ""}`}>
+        {showUpdate && (
+        <div className="lab-slide-header">
+          <h2>Update Item</h2>
+          <button className="lab-slide-close" onClick={() => setShowUpdate(null)}>
+            <MdClose size={20} />
+          </button>
+        </div>
+        )}
+        <div className="lab-slide-body">
+          {showUpdate && (<>
+          <div className="lab-slide-accent" />
           <form onSubmit={handleUpdate}>
-            <input type="text" placeholder="Item Name" value={showUpdate.itemName || ""} onChange={(e) => setShowUpdate({ ...showUpdate, itemName: e.target.value })} required />
-            <select value={showUpdate.category || ""} onChange={(e) => setShowUpdate({ ...showUpdate, category: e.target.value })} required>
-              <option value="" disabled>Select Category</option>
-              <option value="Tools">Tools</option>
-              <option value="Equipment">Equipment</option>
-            </select>
-            <select value={showUpdate.course || ""} onChange={(e) => setShowUpdate({ ...showUpdate, course: e.target.value })} required>
-              <option value="" disabled>Select Course</option>
-              {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <input type="number" placeholder="Quantity" value={showUpdate.quantity || ""} onChange={(e) => setShowUpdate({ ...showUpdate, quantity: e.target.value })} required />
-            <select value={showUpdate.condition || ""} onChange={(e) => setShowUpdate({ ...showUpdate, condition: e.target.value })} required>
-              <option value="" disabled>Select Condition</option>
-              {["Excellent", "Good", "Fair", "Damaged", "For Repair", "Missing"].map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <select value={showUpdate.status || "Available"} onChange={(e) => setShowUpdate({ ...showUpdate, status: e.target.value })}>
-              <option value="Available">Available</option>
-              <option value="Borrowed">Borrowed</option>
-            </select>
-            <input type="url" placeholder="Image URL" value={showUpdate.imageUrl || ""} readOnly required />
-            <div className="catalog-actions">
-              <button type="submit" className="btn btn-green">Update</button>
-              <button type="button" className="btn btn-orange" onClick={() => setShowUpdate(null)}>Cancel</button>
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon details"><MdAssignment size={14} /></div>
+                <span className="lab-form-section-title">Item Info</span>
+              </div>
+              <div className="lab-form-row">
+                <div className="lab-form-field">
+                  <label>Item Name <span className="lab-required" /></label>
+                  <div className="lab-input-wrap">
+                    <input type="text" value={showUpdate.itemName || ""} onChange={(e) => setShowUpdate({ ...showUpdate, itemName: e.target.value })} required placeholder="Item name" />
+                    <MdEdit size={16} />
+                  </div>
+                </div>
+                <div className="lab-form-field">
+                  <label>Category <span className="lab-required" /></label>
+                  <div className="lab-input-wrap">
+                    <select value={showUpdate.category || ""} onChange={(e) => setShowUpdate({ ...showUpdate, category: e.target.value })} required>
+                      <option value="" disabled>Select Category</option>
+                      <option value="Tools">Tools</option>
+                      <option value="Equipment">Equipment</option>
+                    </select>
+                    <MdInfo size={16} />
+                  </div>
+                </div>
+              </div>
+              <div className="lab-form-field">
+                <label>Course <span className="lab-required" /></label>
+                <div className="lab-input-wrap">
+                  <select value={showUpdate.course || ""} onChange={(e) => setShowUpdate({ ...showUpdate, course: e.target.value })} required>
+                    <option value="" disabled>Select Course</option>
+                    {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <MdAssignment size={16} />
+                </div>
+              </div>
+            </div>
+
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon schedule"><MdTag size={14} /></div>
+                <span className="lab-form-section-title">Details</span>
+              </div>
+              <div className="lab-form-row">
+                <div className="lab-form-field">
+                  <label>Quantity <span className="lab-required" /></label>
+                  <div className="lab-input-wrap">
+                    <input type="number" value={showUpdate.quantity || ""} onChange={(e) => setShowUpdate({ ...showUpdate, quantity: e.target.value })} required placeholder="0" />
+                    <MdTag size={16} />
+                  </div>
+                </div>
+                <div className="lab-form-field">
+                  <label>Condition <span className="lab-required" /></label>
+                  <div className="lab-input-wrap">
+                    <select value={showUpdate.condition || ""} onChange={(e) => setShowUpdate({ ...showUpdate, condition: e.target.value })} required>
+                      <option value="" disabled>Select Condition</option>
+                      {["Excellent", "Good", "Fair", "Damaged", "For Repair", "Missing"].map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <MdInfo size={16} />
+                  </div>
+                </div>
+              </div>
+              <div className="lab-form-field">
+                <label>Status</label>
+                <div className="lab-input-wrap">
+                  <select value={showUpdate.status || "Available"} onChange={(e) => setShowUpdate({ ...showUpdate, status: e.target.value })}>
+                    <option value="Available">Available</option>
+                    <option value="Borrowed">Borrowed</option>
+                  </select>
+                  <MdInfo size={16} />
+                </div>
+              </div>
+            </div>
+
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon class"><MdImage size={14} /></div>
+                <span className="lab-form-section-title">Image</span>
+              </div>
+              <div className="lab-form-field">
+                <label>Photo <span className="lab-required" /></label>
+                <div className="lab-input-wrap">
+                  <input type="url" placeholder="Image URL" value={showUpdate.imageUrl || ""} readOnly required />
+                  <MdImage size={16} />
+                </div>
+              </div>
+            </div>
+
+            <div className="lab-form-actions">
+              <button type="button" className="lab-form-cancel-btn" onClick={() => setShowUpdate(null)}>Cancel</button>
+              <button type="submit" className="lab-form-submit-btn">Update Item</button>
             </div>
           </form>
-        </Modal>
-      )}
+          </>)}
+        </div>
+      </div>
+      {showUpdate && <div className="lab-slide-backdrop" onClick={() => setShowUpdate(null)} />}
 
       {imageOverlay && (
         <div className="image-overlay" onClick={() => setImageOverlay(null)}>

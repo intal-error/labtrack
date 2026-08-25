@@ -4,7 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import { filterBySearch } from "../../utils/search";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
-import { MdMenuBook, MdAdd, MdDelete, MdEdit, MdSearch, MdOpenInNew, MdDownload, MdCloudUpload } from "react-icons/md";
+import { MdMenuBook, MdAdd, MdDelete, MdEdit, MdSearch, MdOpenInNew, MdDownload, MdCloudUpload, MdClose, MdInfo, MdAssignment, MdDescription } from "react-icons/md";
 
 const CATEGORIES = ["All", "General", "Safety", "Equipment Guide", "Software", "Procedure"];
 const CATEGORY_ICONS = { General: "📘", Safety: "🛡️", "Equipment Guide": "🔧", Software: "💻", Procedure: "📋" };
@@ -202,27 +202,50 @@ export default function ManualsTab() {
         </div>
       </div>
 
-      {showForm && (
-        <div className="modal-overlay" onClick={() => { setShowForm(false); setEditing(null); }}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3>{editing ? "Edit Manual" : "Upload Manual"}</h3>
-            <form onSubmit={handleSubmit}>
-              <div className="form-group">
-                <label>Title</label>
-                <input type="text" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required placeholder="Manual title" />
+      <div className={`lab-slide-panel ${showForm ? "open" : ""}`}>
+        <div className="lab-slide-header">
+          <h2>{editing ? "Edit Manual" : "Upload Manual"}</h2>
+          <button className="lab-slide-close" onClick={() => { setShowForm(false); setEditing(null); }}>
+            <MdClose size={20} />
+          </button>
+        </div>
+        <div className="lab-slide-body">
+          <div className="lab-slide-accent" />
+          <form onSubmit={handleSubmit}>
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon inc-details"><MdMenuBook size={14} /></div>
+                <span className="lab-form-section-title">Document Info</span>
               </div>
-              <div className="form-group">
+              <div className="lab-form-field">
+                <label>Title <span className="lab-required" /></label>
+                <div className="lab-input-wrap">
+                  <input type="text" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required placeholder="Manual title" />
+                  <MdEdit size={16} />
+                </div>
+              </div>
+              <div className="lab-form-field">
                 <label>Category</label>
-                <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-                  <option value="General">General</option>
-                  <option value="Safety">Safety</option>
-                  <option value="Equipment Guide">Equipment Guide</option>
-                  <option value="Software">Software</option>
-                  <option value="Procedure">Procedure</option>
-                </select>
+                <div className="lab-input-wrap">
+                  <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
+                    <option value="General">General</option>
+                    <option value="Safety">Safety</option>
+                    <option value="Equipment Guide">Equipment Guide</option>
+                    <option value="Software">Software</option>
+                    <option value="Procedure">Procedure</option>
+                  </select>
+                  <MdAssignment size={16} />
+                </div>
               </div>
-              <div className="form-group">
-                <label>File</label>
+            </div>
+
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon inc-evidence"><MdCloudUpload size={14} /></div>
+                <span className="lab-form-section-title">File</span>
+              </div>
+              <div className="lab-form-field">
+                <label>Upload <span className="lab-required" /></label>
                 {form.fileUrl ? (
                   <div className="manual-file-preview">
                     <span className="manual-file-name">{form.fileName || "Uploaded file"}</span>
@@ -236,23 +259,35 @@ export default function ManualsTab() {
                 )}
               </div>
               {!form.fileUrl && (
-                <div className="form-group">
+                <div className="lab-form-field">
                   <label>Or paste File URL</label>
-                  <input type="url" value={form.fileUrl} onChange={(e) => setForm({ ...form, fileUrl: e.target.value })} placeholder="https://drive.google.com/..." />
+                  <div className="lab-input-wrap">
+                    <input type="url" value={form.fileUrl} onChange={(e) => setForm({ ...form, fileUrl: e.target.value })} placeholder="https://drive.google.com/..." />
+                    <MdInfo size={16} />
+                  </div>
                 </div>
               )}
-              <div className="form-group">
+            </div>
+
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon inc-description"><MdDescription size={14} /></div>
+                <span className="lab-form-section-title">Details</span>
+              </div>
+              <div className="lab-form-field">
                 <label>Description</label>
                 <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} placeholder="Brief description..." />
               </div>
-              <div className="form-actions">
-                <button type="button" className="btn btn-outline" onClick={() => { setShowForm(false); setEditing(null); }}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={!form.fileUrl}>{editing ? "Update" : "Upload"}</button>
-              </div>
-            </form>
-          </div>
+            </div>
+
+            <div className="lab-form-actions">
+              <button type="button" className="lab-form-cancel-btn" onClick={() => { setShowForm(false); setEditing(null); }}>Cancel</button>
+              <button type="submit" className="lab-form-submit-btn" disabled={!form.fileUrl}>{editing ? "Update" : "Upload"}</button>
+            </div>
+          </form>
         </div>
-      )}
+      </div>
+      {showForm && <div className="lab-slide-backdrop" onClick={() => { setShowForm(false); setEditing(null); }} />}
 
       <div className="manuals-grid">
         {filtered.length === 0 ? (

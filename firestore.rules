@@ -12,18 +12,14 @@ service cloud.firestore {
       return request.auth != null && getRole() == "admin";
     }
 
-    function isFacultyOrAdmin() {
-      return request.auth != null && (getRole() == "admin" || getRole() == "faculty");
-    }
-
     function isOwner(userId) {
       return request.auth != null && request.auth.uid == userId;
     }
 
     // Users collection
     match /users/{userId} {
-      // Users can read their own profile; admins/faculty can read all
-      allow read: if request.auth != null && (isOwner(userId) || isFacultyOrAdmin());
+      // Users can read their own profile; admins can read all
+      allow read: if request.auth != null && (isOwner(userId) || isAdmin());
       // Users can create their own profile during registration
       allow create: if request.auth != null && request.auth.uid == userId;
       // Users can update their own profile; admins can update anyone
@@ -33,12 +29,12 @@ service cloud.firestore {
 
       // Subcollections for borrowed/returned items
       match /borrowed/{transactionId} {
-        allow read: if request.auth != null && (isOwner(userId) || isFacultyOrAdmin());
-        allow write: if request.auth != null && isFacultyOrAdmin();
+        allow read: if request.auth != null && (isOwner(userId) || isAdmin());
+        allow write: if request.auth != null && isAdmin();
       }
       match /returned/{transactionId} {
-        allow read: if request.auth != null && (isOwner(userId) || isFacultyOrAdmin());
-        allow write: if request.auth != null && isFacultyOrAdmin();
+        allow read: if request.auth != null && (isOwner(userId) || isAdmin());
+        allow write: if request.auth != null && isAdmin();
       }
     }
 
@@ -47,18 +43,18 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
-    // Catalog - anyone authenticated can read; faculty/admin can write
+    // Catalog - anyone authenticated can read; admin can write
     match /catalog/{itemId} {
       allow read: if request.auth != null;
-      allow create, update: if isFacultyOrAdmin();
+      allow create, update: if isAdmin();
       allow delete: if isAdmin();
     }
 
-    // Transactions - borrowers can read their own; faculty/admin can read/write all
+    // Transactions - admins can read/write all
     match /transactions/{transactionId} {
-      allow read: if request.auth != null && isFacultyOrAdmin();
+      allow read: if request.auth != null && isAdmin();
       allow create: if request.auth != null;
-      allow update: if request.auth != null && isFacultyOrAdmin();
+      allow update: if request.auth != null && isAdmin();
       allow delete: if isAdmin();
     }
 
@@ -70,45 +66,45 @@ service cloud.firestore {
       allow delete: if request.auth != null;
     }
 
-    // Documents - faculty/admin can manage
+    // Documents - admin can manage
     match /documents/{docId} {
-      allow read: if request.auth != null && isFacultyOrAdmin();
-      allow write: if isFacultyOrAdmin();
+      allow read: if request.auth != null && isAdmin();
+      allow write: if isAdmin();
     }
 
-    // Maintenance - faculty/admin can manage
+    // Maintenance - admin can manage
     match /maintenance/{id} {
-      allow read: if request.auth != null && isFacultyOrAdmin();
-      allow write: if isFacultyOrAdmin();
+      allow read: if request.auth != null && isAdmin();
+      allow write: if isAdmin();
     }
 
-    // Incidents - anyone can read; anyone can create; faculty/admin can update
+    // Incidents - anyone can read; anyone can create; admin can update
     match /incidents/{id} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
-      allow update: if request.auth != null && isFacultyOrAdmin();
+      allow update: if request.auth != null && isAdmin();
       allow delete: if isAdmin();
     }
 
-    // Manuals - anyone authenticated can read; faculty/admin can manage
+    // Manuals - anyone authenticated can read; admin can manage
     match /manuals/{id} {
       allow read: if request.auth != null;
-      allow write: if isFacultyOrAdmin();
+      allow write: if isAdmin();
     }
 
-    // Fines - anyone can read their own; admin can manage all
+    // Fines - admin can manage all
     match /fines/{id} {
-      allow read: if request.auth != null && isFacultyOrAdmin();
+      allow read: if request.auth != null && isAdmin();
       allow create: if request.auth != null;
-      allow update: if request.auth != null && isFacultyOrAdmin();
+      allow update: if request.auth != null && isAdmin();
       allow delete: if isAdmin();
     }
 
-    // Borrow Requests - anyone can create/read own; faculty/admin can manage
+    // Borrow Requests - anyone can create/read own; admin can manage
     match /borrowRequests/{id} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
-      allow update: if request.auth != null && isFacultyOrAdmin();
+      allow update: if request.auth != null && isAdmin();
       allow delete: if isAdmin();
     }
 
@@ -120,6 +116,19 @@ service cloud.firestore {
     // Settings - admin only
     match /settings/{docId} {
       allow read, write: if isAdmin();
+    }
+
+    // Lab Activities - anyone authenticated can read; admin can manage
+    match /labActivities/{activityId} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Lab Attendance - anyone authenticated can read/create; admin can manage
+    match /labAttendance/{attendanceId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if isAdmin();
     }
   }
 }

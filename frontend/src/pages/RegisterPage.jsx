@@ -5,14 +5,13 @@ import { auth } from "../services/firebase";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { COURSES } from "../constants/courses";
-import { MdSchool, MdPerson, MdVisibility, MdVisibilityOff } from "react-icons/md";
+import { MdSchool, MdPerson, MdVisibility, MdVisibilityOff, MdEmail, MdLock, MdBadge, MdBook, MdCalendarToday, MdAssignment, MdArrowForward, MdCheckCircle } from "react-icons/md";
 import toast from "react-hot-toast";
 import "../styles/pages/register.css";
 
 const YEARS = ["1st Year", "2nd Year", "3rd Year", "4th Year", "5th Year"];
 
 export default function RegisterPage() {
-  const [activeTab, setActiveTab] = useState("student");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -34,9 +33,7 @@ export default function RegisterPage() {
     schoolId: "",
     course: "",
     year: "",
-    employeeId: "",
-    department: "",
-    position: "",
+    section: "",
   });
 
   const update = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
@@ -53,34 +50,24 @@ export default function RegisterPage() {
     if (!form.firstName || !form.lastName || !form.email) {
       return toast.error("Please fill in all required fields");
     }
-    if (activeTab === "student" && !form.schoolId) {
+    if (!form.schoolId) {
       return toast.error("School ID is required");
-    }
-    if (activeTab === "faculty" && !form.employeeId) {
-      return toast.error("Employee ID is required");
     }
 
     setLoading(true);
     try {
-      // Register via backend (creates Auth user + Firestore doc + custom claims)
       await api.register({
-        role: activeTab,
+        role: "student",
         email: form.email.trim(),
         password: form.password,
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
-        ...(activeTab === "student" ? {
-          schoolId: form.schoolId.trim(),
-          course: form.course,
-          year: form.year,
-        } : {
-          employeeId: form.employeeId.trim(),
-          department: form.department.trim(),
-          position: form.position.trim(),
-        }),
+        schoolId: form.schoolId.trim(),
+        course: form.course,
+        year: form.year,
+        section: form.section.trim(),
       });
 
-      // Auto-login
       await signInWithEmailAndPassword(auth, form.email.trim(), form.password);
 
       toast.success("Registration successful! Welcome to LabTrack!");
@@ -119,165 +106,171 @@ export default function RegisterPage() {
           <p className="register-subtitle">Create Your Account</p>
           <p className="register-desc">
             Join the digital tracking system for laboratory equipment borrowing.
-            Register as a student or faculty member to get started.
+            Register as a student to get started.
           </p>
         </div>
 
         <div className="register-card">
-          <h2 className="register-card-title">Create Account</h2>
-          <p className="register-card-subtitle">Choose your role and fill in your details</p>
-
-          <div className="register-tab-selector">
-            <button
-              className={`register-tab ${activeTab === "student" ? "active" : ""}`}
-              onClick={() => setActiveTab("student")}
-            >
-              <MdSchool size={18} />
-              <span>Student</span>
-            </button>
-            <button
-              className={`register-tab ${activeTab === "faculty" ? "active" : ""}`}
-              onClick={() => setActiveTab("faculty")}
-            >
-              <MdPerson size={18} />
-              <span>Faculty</span>
-            </button>
+          <div className="register-card-header">
+            <div className="register-badge">
+              <MdSchool size={16} />
+              <span>Student Registration</span>
+            </div>
+            <h2 className="register-card-title">Create Account</h2>
+            <p className="register-card-subtitle">Fill in your details to get started</p>
           </div>
 
           <form onSubmit={handleSubmit}>
-            <div className="register-row">
-              <div className="register-field">
-                <label>First Name *</label>
-                <input
-                  type="text"
-                  placeholder="First name"
-                  value={form.firstName}
-                  onChange={(e) => update("firstName", e.target.value)}
-                  required
-                />
+            <div className="register-section">
+              <div className="register-section-header">
+                <div className="register-section-icon personal"><MdPerson size={14} /></div>
+                <span className="register-section-title">Personal Info</span>
               </div>
-              <div className="register-field">
-                <label>Last Name *</label>
-                <input
-                  type="text"
-                  placeholder="Last name"
-                  value={form.lastName}
-                  onChange={(e) => update("lastName", e.target.value)}
-                  required
-                />
+              <div className="register-row">
+                <div className="register-field">
+                  <label>First Name <span className="register-required" /></label>
+                  <div className="register-input-wrap">
+                    <input
+                      type="text"
+                      placeholder="First name"
+                      value={form.firstName}
+                      onChange={(e) => update("firstName", e.target.value)}
+                      required
+                    />
+                    <MdPerson size={16} className="register-input-icon" />
+                  </div>
+                </div>
+                <div className="register-field">
+                  <label>Last Name <span className="register-required" /></label>
+                  <div className="register-input-wrap">
+                    <input
+                      type="text"
+                      placeholder="Last name"
+                      value={form.lastName}
+                      onChange={(e) => update("lastName", e.target.value)}
+                      required
+                    />
+                    <MdPerson size={16} className="register-input-icon" />
+                  </div>
+                </div>
               </div>
             </div>
 
-            {activeTab === "student" ? (
-              <>
-                <div className="register-field">
-                  <label>School ID *</label>
+            <div className="register-section">
+              <div className="register-section-header">
+                <div className="register-section-icon academic"><MdBook size={14} /></div>
+                <span className="register-section-title">Academic Details</span>
+              </div>
+              <div className="register-field">
+                <label>School ID <span className="register-required" /></label>
+                <div className="register-input-wrap">
                   <input
                     type="text"
-                    placeholder="e.g. 2023-00001"
+                    placeholder="e.g. 24D-00001"
                     value={form.schoolId}
                     onChange={(e) => update("schoolId", e.target.value)}
                     required
                   />
+                  <MdBadge size={16} className="register-input-icon" />
                 </div>
-                <div className="register-row">
-                  <div className="register-field">
-                    <label>Course</label>
+              </div>
+              <div className="register-row register-row-3">
+                <div className="register-field">
+                  <label>Course</label>
+                  <div className="register-input-wrap">
                     <select value={form.course} onChange={(e) => update("course", e.target.value)}>
                       <option value="">Select course</option>
                       {COURSES.map((c) => <option key={c}>{c}</option>)}
                     </select>
+                    <MdBook size={16} className="register-input-icon" />
                   </div>
-                  <div className="register-field">
-                    <label>Year</label>
+                </div>
+                <div className="register-field">
+                  <label>Year</label>
+                  <div className="register-input-wrap">
                     <select value={form.year} onChange={(e) => update("year", e.target.value)}>
                       <option value="">Select year</option>
                       {YEARS.map((y) => <option key={y}>{y}</option>)}
                     </select>
+                    <MdCalendarToday size={16} className="register-input-icon" />
                   </div>
                 </div>
-              </>
-            ) : (
-              <>
                 <div className="register-field">
-                  <label>Employee ID *</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. EMP-2024-001"
-                    value={form.employeeId}
-                    onChange={(e) => update("employeeId", e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="register-row">
-                  <div className="register-field">
-                    <label>Department</label>
+                  <label>Section</label>
+                  <div className="register-input-wrap">
                     <input
                       type="text"
-                      placeholder="e.g. IT Department"
-                      value={form.department}
-                      onChange={(e) => update("department", e.target.value)}
+                      placeholder="e.g. A, 3B"
+                      value={form.section}
+                      onChange={(e) => update("section", e.target.value)}
                     />
+                    <MdAssignment size={16} className="register-input-icon" />
                   </div>
-                  <div className="register-field">
-                    <label>Position</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Laboratory Instructor"
-                      value={form.position}
-                      onChange={(e) => update("position", e.target.value)}
-                    />
-                  </div>
-                </div>
-              </>
-            )}
-
-            <div className="register-field">
-              <label>Email *</label>
-              <input
-                type="email"
-                placeholder="your.email@slsu.edu.ph"
-                value={form.email}
-                onChange={(e) => update("email", e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="register-row">
-              <div className="register-field">
-                <label>Password *</label>
-                <div className="register-password-wrap">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Min. 6 characters"
-                    value={form.password}
-                    onChange={(e) => update("password", e.target.value)}
-                    required
-                  />
-                  <button type="button" className="register-password-toggle" onClick={() => setShowPassword(!showPassword)} tabIndex={-1}>
-                    {showPassword ? <MdVisibilityOff size={18} /> : <MdVisibility size={18} />}
-                  </button>
                 </div>
               </div>
+            </div>
+
+            <div className="register-section">
+              <div className="register-section-header">
+                <div className="register-section-icon security"><MdLock size={14} /></div>
+                <span className="register-section-title">Account Security</span>
+              </div>
               <div className="register-field">
-                <label>Confirm Password *</label>
-                <div className="register-password-wrap">
+                <label>Email <span className="register-required" /></label>
+                <div className="register-input-wrap">
                   <input
-                    type={showConfirm ? "text" : "password"}
-                    placeholder="Repeat password"
-                    value={form.confirmPassword}
-                    onChange={(e) => update("confirmPassword", e.target.value)}
+                    type="email"
+                    placeholder="your.email@slsu.edu.ph"
+                    value={form.email}
+                    onChange={(e) => update("email", e.target.value)}
                     required
                   />
-                  <button type="button" className="register-password-toggle" onClick={() => setShowConfirm(!showConfirm)} tabIndex={-1}>
-                    {showConfirm ? <MdVisibilityOff size={18} /> : <MdVisibility size={18} />}
-                  </button>
+                  <MdEmail size={16} className="register-input-icon" />
+                </div>
+              </div>
+              <div className="register-row">
+                <div className="register-field">
+                  <label>Password <span className="register-required" /></label>
+                  <div className="register-input-wrap">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Min. 6 characters"
+                      value={form.password}
+                      onChange={(e) => update("password", e.target.value)}
+                      required
+                    />
+                    <button type="button" className="register-password-toggle" onClick={() => setShowPassword(!showPassword)} tabIndex={-1}>
+                      {showPassword ? <MdVisibilityOff size={18} /> : <MdVisibility size={18} />}
+                    </button>
+                  </div>
+                </div>
+                <div className="register-field">
+                  <label>Confirm Password <span className="register-required" /></label>
+                  <div className="register-input-wrap">
+                    <input
+                      type={showConfirm ? "text" : "password"}
+                      placeholder="Repeat password"
+                      value={form.confirmPassword}
+                      onChange={(e) => update("confirmPassword", e.target.value)}
+                      required
+                    />
+                    <button type="button" className="register-password-toggle" onClick={() => setShowConfirm(!showConfirm)} tabIndex={-1}>
+                      {showConfirm ? <MdVisibilityOff size={18} /> : <MdVisibility size={18} />}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
 
             <button type="submit" className="register-submit" disabled={loading}>
-              {loading ? "Creating Account..." : "Create Account"}
+              {loading ? (
+                <span className="register-submit-loading">Creating Account...</span>
+              ) : (
+                <>
+                  Create Account
+                  <MdArrowForward size={18} />
+                </>
+              )}
             </button>
           </form>
 

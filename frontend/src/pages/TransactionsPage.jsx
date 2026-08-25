@@ -163,7 +163,7 @@ export default function TransactionsPage() {
     if (dateRange !== "all") {
       result = result.filter((item) => matchesDateRange(toDate(item.timestamp), dateRange));
     }
-    if (search) result = filterBySearch(result, search, ["schoolID", "firstName", "lastName", "itemName", "course"]);
+    if (search) result = filterBySearch(result, search, ["schoolID", "firstName", "lastName", "itemName", "course", "year"]);
     return sortItems(result, sortBy);
   }, [filterCourse, dateRange, search, sortBy]);
 
@@ -176,7 +176,7 @@ export default function TransactionsPage() {
     let result = all;
     if (filterCourse !== "All") result = result.filter((i) => i.course === filterCourse);
     if (dateRange !== "all") result = result.filter((i) => matchesDateRange(toDate(i.timestamp), dateRange));
-    if (search) result = filterBySearch(result, search, ["schoolID", "firstName", "lastName", "itemName", "course"]);
+    if (search) result = filterBySearch(result, search, ["schoolID", "firstName", "lastName", "itemName", "course", "year"]);
     return result.length;
   }, [activeTab, borrowed, returned, filterCourse, dateRange, search]);
 
@@ -394,7 +394,7 @@ export default function TransactionsPage() {
                       </div>
                     )}
                   </div>
-                  {item.course && <span className="transaction-course-tag">{item.course}</span>}
+                  {item.course && <span className="transaction-course-tag">{item.course}{item.year ? ` - ${item.year}` : ""}</span>}
                   {isBorrowed && item.quantity > 0 && (
                     <div className="transaction-progress">
                       <div className="progress-bar">
@@ -416,6 +416,7 @@ export default function TransactionsPage() {
                 <th>Name</th>
                 <th>School ID</th>
                 {activeTab === "borrowed" && <th>Course</th>}
+                {activeTab === "borrowed" && <th>Year</th>}
                 <th>Item</th>
                 <th>Qty</th>
                 <th>Date</th>
@@ -448,6 +449,7 @@ export default function TransactionsPage() {
                     </td>
                     <td>{item.schoolID || "-"}</td>
                     {isBorrowed && <td>{item.course || "-"}</td>}
+                    {isBorrowed && <td>{item.year || "-"}</td>}
                     <td>{item.itemName || "-"}</td>
                     <td>{isBorrowed ? `${remaining} / ${item.quantity || 0}` : (item.quantity || 0)}</td>
                     <td>{date ? timeAgo(date) : "-"}</td>
@@ -499,7 +501,7 @@ export default function TransactionsPage() {
                   <div className="txn-detail-borrower-info">
                     <h4>{fullName || "-"}</h4>
                     <p>{item.schoolID || "-"}</p>
-                    {item.course && <span className="txn-detail-course">{item.course}</span>}
+                    {item.course && <span className="txn-detail-course">{item.course}{item.year ? ` - ${item.year}` : ""}</span>}
                     {item.email && <span className="txn-detail-email">{item.email}</span>}
                     {item.role && <span className={`txn-detail-role ${item.role}`}>{item.role}</span>}
                   </div>

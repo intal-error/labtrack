@@ -85,7 +85,7 @@ export default function DocumentsTab() {
   }
 
   async function handleUpload(e) {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (!file) return;
     try {
       const result = await api.uploadDocument(file);
@@ -193,7 +193,7 @@ export default function DocumentsTab() {
               <button className="btn-doc-download" onClick={() => handleDownload(d)} title="Download">
                 <MdDownload size={14} /> Download
               </button>
-        {(role === "admin" || role === "faculty") && (
+        {role === "admin" && (
                 <button className="btn-doc-delete" onClick={() => handleDelete(d)} title="Delete">
                   <MdDelete size={14} /> Delete
                 </button>

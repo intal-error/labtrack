@@ -267,10 +267,10 @@ export default function BorrowRequestsTab() {
                         {dueInfo.label}
                       </span>
                     )}
-                    {req.course && <span className="maintenance-assigned">{req.course}</span>}
+                    {req.course && <span className="maintenance-assigned">{req.course}{req.year ? ` - ${req.year}` : ""}</span>}
                   </div>
                 </div>
-                {req.status === "pending" && (role === "admin" || role === "faculty") && (
+                {req.status === "pending" && role === "admin" && (
                   <div className="maintenance-card-actions">
                     <button className="btn btn-sm btn-primary" onClick={(e) => { e.stopPropagation(); setSelectedRequest(req); }}>
                       <MdCheckCircle size={14} /> Review
@@ -312,7 +312,7 @@ export default function BorrowRequestsTab() {
                     </td>
                     <td><span className="badge" style={{ background: `${STATUS_COLORS[req.status] || "#666"}20`, color: STATUS_COLORS[req.status] || "#666" }}>{STATUS_LABELS[req.status] || req.status}</span></td>
                     <td>
-                      {req.status === "pending" && (role === "admin" || role === "faculty") && (
+                {req.status === "pending" && role === "admin" && (
                         <button className="btn btn-sm btn-primary" onClick={(e) => { e.stopPropagation(); setSelectedRequest(req); }}>Review</button>
                       )}
                     </td>
@@ -339,7 +339,7 @@ export default function BorrowRequestsTab() {
                 </div>
                 <div className="txn-detail-row">
                   <span className="txn-detail-label">Course</span>
-                  <span className="txn-detail-value">{selectedRequest.course || "-"}</span>
+                  <span className="txn-detail-value">{selectedRequest.course || "-"}{selectedRequest.year ? ` - ${selectedRequest.year}` : ""}</span>
                 </div>
                 <div className="txn-detail-row">
                   <span className="txn-detail-label">Item</span>
@@ -379,7 +379,7 @@ export default function BorrowRequestsTab() {
                 )}
               </div>
             </div>
-            {selectedRequest.status === "pending" && (role === "admin" || role === "faculty") && (
+            {selectedRequest.status === "pending" && role === "admin" && (
               <div className="txn-detail-section">
                 <h5>Review Request</h5>
                 <div className="form-group">

@@ -58,6 +58,7 @@
 .admin-account-body{padding:20px}
 .admin-account-top{display:flex;align-items:center;gap:14px;margin-bottom:14px}
 .admin-account-avatar{width:50px;height:50px;border-radius:14px;background:linear-gradient(135deg,var(--green),var(--green-light));color:#000;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;flex-shrink:0}
+.admin-avatar-sm{width:36px;height:36px;border-radius:10px;font-size:13px}
 .admin-account-info{flex:1;min-width:0}
 .admin-account-name{margin:0;font-size:15px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .admin-account-position{margin:4px 0 0;font-size:12px;color:var(--text-muted)}
@@ -71,6 +72,30 @@
 .admin-btn-delete{background:#ffebee;color:#c62828;border:1px solid #ffcdd2}
 .admin-btn-delete:hover{background:#ffcdd2;border-color:#ef9a9a}
 
+/* Display Toggle */
+.admin-display-toggle{display:flex;gap:4px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:3px}
+.admin-toggle-btn{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border:none;border-radius:8px;background:transparent;color:var(--text-muted);cursor:pointer;transition:all .2s}
+.admin-toggle-btn:hover{color:var(--text);background:var(--bg-card)}
+.admin-toggle-btn.active{background:var(--green);color:#000;box-shadow:0 2px 8px rgba(46,125,50,.3)}
+
+/* Scrollable Container */
+.admin-list-scroll{max-height:60vh;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:var(--green) transparent}
+.admin-list-scroll::-webkit-scrollbar{width:6px}
+.admin-list-scroll::-webkit-scrollbar-track{background:transparent}
+.admin-list-scroll::-webkit-scrollbar-thumb{background:var(--green);border-radius:3px}
+.admin-list-scroll::-webkit-scrollbar-thumb:hover{background:var(--green-light)}
+
+/* Table View */
+.admin-table-wrap{overflow-x:auto}
+.admin-table{width:100%;border-collapse:collapse}
+.admin-table th{text-align:left;padding:10px 14px;font-size:12px;font-weight:600;text-transform:uppercase;color:var(--text-muted);background:var(--bg);border-bottom:1.5px solid var(--border);position:sticky;top:0;z-index:1}
+.admin-table td{padding:10px 14px;font-size:13px;color:var(--text);border-bottom:1px solid var(--border)}
+.admin-table tr:hover td{background:var(--bg)}
+.admin-table-user{display:flex;align-items:center;gap:10px}
+.admin-table-name{font-weight:600;white-space:nowrap}
+.admin-table-actions{display:flex;gap:6px}
+.admin-table-actions .admin-btn-edit,.admin-table-actions .admin-btn-delete{flex:none;padding:6px 10px;font-size:11px}
+
 /* Animations */
 @keyframes fadeInUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
 .fade-in-up{animation:fadeInUp .5s ease}
@@ -81,6 +106,10 @@
   .admin-form-row{flex-direction:column}
   .admin-grid{grid-template-columns:1fr}
   .admin-main-card{padding:28px 20px}
+  .admin-card-header{flex-wrap:wrap}
+  .admin-display-toggle{margin-left:auto}
+  .admin-table-wrap{margin:0 -28px;padding:0 28px}
+  .admin-table th,.admin-table td{padding:8px 10px;font-size:12px}
 }
 
 /* Dark Mode */
@@ -106,3 +135,11 @@ body.dark .admin-btn-edit{background:#2d2a1b;color:#ffd54f;border-color:#3d3520}
 body.dark .admin-btn-edit:hover{background:#3d3520;border-color:#ffd54f}
 body.dark .admin-btn-delete{background:#3a1b1b;color:#ef9a9a;border-color:#4d2626}
 body.dark .admin-btn-delete:hover{background:#4d2626;border-color:#ef9a9a}
+body.dark .admin-toggle-btn{color:#888}
+body.dark .admin-toggle-btn:hover{color:#fff;background:#1a1a1a}
+body.dark .admin-toggle-btn.active{background:var(--green);color:#000}
+body.dark .admin-display-toggle{background:#0a0a0a;border-color:rgba(255,255,255,.1)}
+body.dark .admin-table th{background:#0a0a0a;border-color:rgba(255,255,255,.1);color:#888}
+body.dark .admin-table td{border-color:rgba(255,255,255,.05)}
+body.dark .admin-table tr:hover td{background:#131313}
+body.dark .admin-table-name{color:#fff}

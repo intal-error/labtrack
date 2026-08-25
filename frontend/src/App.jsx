@@ -27,6 +27,7 @@ import FinesTab from "./components/tabs/FinesTab";
 import BorrowRequestsTab from "./components/tabs/BorrowRequestsTab";
 import MyRequestsPage from "./pages/MyRequestsPage";
 import ProfilePage from "./pages/ProfilePage";
+import LabActivityPage from "./pages/LabActivityPage";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -97,22 +98,23 @@ function App() {
               <Route path="settings" element={<RoleRoute allowed={["admin"]}><SettingsTab /></RoleRoute>} />
               <Route path="members" element={<RoleRoute allowed={["admin"]}><MembersTab /></RoleRoute>} />
               <Route path="documents" element={<DocumentsTab />} />
-              <Route path="scanner" element={<RoleRoute allowed={["admin", "faculty", "student"]}><ScannerPage /></RoleRoute>} />
+              <Route path="scanner" element={<RoleRoute allowed={["student"]}><ScannerPage /></RoleRoute>} />
               <Route path="transactions" element={<TransactionsPage />} />
               <Route path="borrowed" element={<Navigate to="/transactions" replace />} />
               <Route path="returned" element={<Navigate to="/transactions" replace />} />
-              <Route path="catalog" element={<RoleRoute allowed={["admin", "faculty"]}><CatalogPage /></RoleRoute>} />
-              <Route path="persona" element={<RoleRoute allowed={["admin", "faculty"]}><PersonaPage /></RoleRoute>} />
+              <Route path="catalog" element={<RoleRoute allowed={["admin"]}><CatalogPage /></RoleRoute>} />
+              <Route path="persona" element={<RoleRoute allowed={["admin"]}><PersonaPage /></RoleRoute>} />
               <Route path="admin" element={<RoleRoute allowed={["admin"]}><AdminPage /></RoleRoute>} />
-              <Route path="maintenance" element={<RoleRoute allowed={["admin", "faculty"]}><MaintenanceTab /></RoleRoute>} />
+              <Route path="maintenance" element={<RoleRoute allowed={["admin"]}><MaintenanceTab /></RoleRoute>} />
               <Route path="incidents" element={<IncidentTab />} />
               <Route path="manuals" element={<ManualsTab />} />
               <Route path="usage-logs" element={<RoleRoute allowed={["student"]}><UsageLogsTab /></RoleRoute>} />
               <Route path="reports" element={<RoleRoute allowed={["admin"]}><ReportsTab /></RoleRoute>} />
-              <Route path="fines" element={<RoleRoute allowed={["admin", "faculty"]}><FinesTab /></RoleRoute>} />
-              <Route path="borrow-requests" element={<RoleRoute allowed={["admin", "faculty"]}><BorrowRequestsTab /></RoleRoute>} />
+              <Route path="fines" element={<RoleRoute allowed={["admin"]}><FinesTab /></RoleRoute>} />
+              <Route path="borrow-requests" element={<RoleRoute allowed={["admin"]}><BorrowRequestsTab /></RoleRoute>} />
               <Route path="my-requests" element={<MyRequestsPage />} />
               <Route path="profile" element={<ProfilePage />} />
+              <Route path="lab-sessions" element={<LabActivityPage />} />
               <Route path="about" element={<AboutPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/home" replace />} />

@@ -57,7 +57,7 @@ export default function HomePage() {
   const isStudent = role === "student";
 
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState(null);
+  const [stats, setStats] = useState({ total: 0, borrowed: 0, overdue: 0, available: 0 });
   const [activity, setActivity] = useState([]);
   const [notifs, setNotifs] = useState([]);
 
@@ -71,14 +71,13 @@ export default function HomePage() {
 
         if (isStudent) {
           const [b, r, reqs] = await Promise.all([
-            api.getBorrowed(),
-            api.getReturned(),
+            api.getMyBorrowed(),
+            api.getMyReturned(),
             api.getMyBorrowRequests().catch(() => []),
           ]);
           if (cancelled) return;
-          const uid = user?.uid;
-          const mine = (b || []).filter((t) => t.userId === uid);
-          const myReturned = (r || []).filter((t) => t.userId === uid);
+          const mine = b || [];
+          const myReturned = r || [];
           const overdue = mine.filter((t) => {
             const d = toDate(t.dueDate);
             return d && d < new Date();

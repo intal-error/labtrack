@@ -4,7 +4,7 @@ const register = async (req, res) => {
   try {
     const {
       role, email, password, firstName, lastName,
-      schoolId, course, year,
+      schoolId, course, year, section,
       employeeId, department, position,
       contact,
     } = req.body;
@@ -13,16 +13,12 @@ const register = async (req, res) => {
       return res.status(400).json({ error: "Required fields missing" });
     }
 
-    if (!["student", "faculty"].includes(role)) {
-      return res.status(400).json({ error: "Invalid role. Must be student or faculty." });
+    if (role !== "student") {
+      return res.status(400).json({ error: "Invalid role. Must be student." });
     }
 
-    if (role === "student" && !schoolId) {
+    if (!schoolId) {
       return res.status(400).json({ error: "School ID is required for students" });
-    }
-
-    if (role === "faculty" && !employeeId) {
-      return res.status(400).json({ error: "Employee ID is required for faculty" });
     }
 
     let userRecord;
@@ -67,10 +63,7 @@ const register = async (req, res) => {
       userData.schoolId = schoolId;
       userData.course = course || "";
       userData.year = year || "";
-    } else {
-      userData.employeeId = employeeId;
-      userData.department = department || "";
-      userData.position = position || "";
+      userData.section = section || "";
     }
 
     await db.collection("users").doc(userRecord.uid).set(userData);
@@ -150,14 +143,29 @@ const changePassword = async (req, res) => {
       return res.status(400).json({ error: "No email associated with this account" });
     }
 
+    const apiKey = process.env.FIREBASE_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: "Server configuration error: missing Firebase API key" });
+    }
+
+    const verifyRes = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password: currentPassword, returnSecureToken: false }),
+      }
+    );
+    const verifyResult = await verifyRes.json();
+    if (verifyResult.error) {
+      return res.status(401).json({ error: "Current password is incorrect" });
+    }
+
     await auth.updateUser(uid, { password: newPassword });
 
     res.json({ message: "Password changed successfully" });
   } catch (err) {
     console.error("Password change error:", err);
-    if (err.code === "auth/invalid-credential" || err.code === "auth/wrong-password") {
-      return res.status(401).json({ error: "Current password is incorrect" });
-    }
     res.status(500).json({ error: err.message });
   }
 };

@@ -53,7 +53,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export default function ReportsTab() {
-  const [counts, setCounts] = useState({ borrowed: 0, returned: 0, users: 0, students: 0, faculty: 0 });
+  const [counts, setCounts] = useState({ borrowed: 0, returned: 0, users: 0, students: 0 });
   const [catalog, setCatalog] = useState([]);
   const [incidents, setIncidents] = useState([]);
   const [maintenance, setMaintenance] = useState([]);
@@ -98,9 +98,9 @@ export default function ReportsTab() {
   const stats = useMemo(() => ({
     users: counts.users || 0,
     students: counts.students || 0,
-    faculty: counts.faculty || 0,
     catalog: catalog.length,
     borrowed: counts.borrowed || 0,
+    returned: counts.returned || 0,
     incidents: incidents.length,
     openIncidents: incidents.filter((i) => i.status === "open").length,
     maintenance: maintenance.length,
@@ -200,7 +200,7 @@ export default function ReportsTab() {
           <MdPeople size={28} style={{ color: "#1976d2" }} />
           <div className="report-summary-value">{stats.users}</div>
           <div className="report-summary-label">Total Users</div>
-          <div className="report-summary-detail">{stats.students} students, {stats.faculty} faculty</div>
+          <div className="report-summary-detail">{stats.students} students</div>
         </div>
         <div className="report-summary-card">
           <MdInventory size={28} style={{ color: "#2E7D32" }} />

@@ -5,7 +5,7 @@ const { getAll, getMyIncidents, create, update, remove } = require("../controlle
 router.get("/", getAll);
 router.get("/mine", getMyIncidents);
 router.post("/", create);
-router.put("/:id", authorize("admin", "faculty"), update);
+router.put("/:id", authorize("admin"), update);
 router.delete("/:id", authorize("admin"), remove);
 
 module.exports = router;

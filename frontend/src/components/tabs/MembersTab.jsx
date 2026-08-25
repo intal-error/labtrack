@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { api } from "../../services/api";
 import { filterBySearch } from "../../utils/search";
-import Modal from "../ui/Modal";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
+import { MdPersonAdd, MdEdit, MdDelete, MdSearch, MdPerson, MdEmail, MdLock, MdPhone, MdWork, MdClose, MdInfo } from "react-icons/md";
 
-const EMPTY_FORM = { firstName: "", lastName: "", email: "", password: "", contact: "", position: "", role: "Faculty" };
+const EMPTY_FORM = { firstName: "", lastName: "", email: "", password: "", contact: "", position: "", role: "Admin" };
 
 export default function MembersTab() {
   const [members, setMembers] = useState([]);
@@ -50,7 +50,6 @@ export default function MembersTab() {
   const stats = {
     total: members.length,
     admin: members.filter((m) => m.role === "Admin").length,
-    faculty: members.filter((m) => m.role === "Faculty").length,
     staff: members.filter((m) => m.role === "Staff").length,
   };
 
@@ -149,15 +148,6 @@ export default function MembersTab() {
             <span className="stat-label">Admins</span>
           </div>
         </div>
-        <div className="stat-card stat-faculty">
-          <div className="stat-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 1.1 2.7 3 6 3s6-1.9 6-3v-5"/></svg>
-          </div>
-          <div className="stat-info">
-            <span className="stat-number">{stats.faculty}</span>
-            <span className="stat-label">Faculty</span>
-          </div>
-        </div>
         <div className="stat-card stat-staff">
           <div className="stat-icon">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
@@ -218,28 +208,93 @@ export default function MembersTab() {
         </div>
       )}
 
-      {showModal && (
-        <Modal title={editing ? "Edit Member" : "Add Member"} onClose={() => setShowModal(false)}>
+      <div className={`lab-slide-panel ${showModal ? "open" : ""}`}>
+        <div className="lab-slide-header">
+          <h2>{editing ? "Edit Member" : "Add Member"}</h2>
+          <button className="lab-slide-close" onClick={() => setShowModal(false)}>
+            <MdClose size={20} />
+          </button>
+        </div>
+        <div className="lab-slide-body">
+          <div className="lab-slide-accent" />
           <form onSubmit={handleSubmit}>
-            <input placeholder="First Name" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} required />
-            <input placeholder="Last Name" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} required />
-            <input type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
-            {!editing && <input type="password" placeholder="Password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />}
-            {editing && <input type="password" placeholder="New Password (leave blank to keep)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />}
-            <input placeholder="Contact" value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} />
-            <input placeholder="Position" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} />
-            <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-              <option>Admin</option>
-              <option>Faculty</option>
-              <option>Staff</option>
-            </select>
-            <div className="catalog-actions">
-              <button type="submit" className="btn btn-green">{editing ? "Update" : "Add"}</button>
-              <button type="button" className="btn btn-outline" onClick={() => setShowModal(false)}>Cancel</button>
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon inc-details"><MdPerson size={14} /></div>
+                <span className="lab-form-section-title">Account Info</span>
+              </div>
+              <div className="lab-form-row">
+                <div className="lab-form-field">
+                  <label>First Name <span className="lab-required" /></label>
+                  <div className="lab-input-wrap">
+                    <input type="text" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} required placeholder="First name" />
+                    <MdPerson size={16} />
+                  </div>
+                </div>
+                <div className="lab-form-field">
+                  <label>Last Name <span className="lab-required" /></label>
+                  <div className="lab-input-wrap">
+                    <input type="text" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} required placeholder="Last name" />
+                    <MdPerson size={16} />
+                  </div>
+                </div>
+              </div>
+              <div className="lab-form-field">
+                <label>Email <span className="lab-required" /></label>
+                <div className="lab-input-wrap">
+                  <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required placeholder="email@slsu.edu.ph" />
+                  <MdEmail size={16} />
+                </div>
+              </div>
+              <div className="lab-form-field">
+                <label>{editing ? "New Password (leave blank to keep)" : "Password"} {!editing && <span className="lab-required" />}</label>
+                <div className="lab-input-wrap">
+                  <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required={!editing} placeholder={editing ? "Leave blank to keep current" : "Enter password"} />
+                  <MdLock size={16} />
+                </div>
+              </div>
+            </div>
+
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon inc-classification"><MdWork size={14} /></div>
+                <span className="lab-form-section-title">Details</span>
+              </div>
+              <div className="lab-form-field">
+                <label>Contact</label>
+                <div className="lab-input-wrap">
+                  <input type="text" value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} placeholder="Phone number" />
+                  <MdPhone size={16} />
+                </div>
+              </div>
+              <div className="lab-form-field">
+                <label>Position</label>
+                <div className="lab-input-wrap">
+                  <input type="text" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} placeholder="Job title" />
+                  <MdWork size={16} />
+                </div>
+              </div>
+              <div className="lab-form-field">
+                <label>Role</label>
+                <div className="lab-input-wrap">
+                  <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+                    <option>Admin</option>
+                    <option>Faculty</option>
+                    <option>Staff</option>
+                  </select>
+                  <MdInfo size={16} />
+                </div>
+              </div>
+            </div>
+
+            <div className="lab-form-actions">
+              <button type="button" className="lab-form-cancel-btn" onClick={() => setShowModal(false)}>Cancel</button>
+              <button type="submit" className="lab-form-submit-btn">{editing ? "Update" : "Add Member"}</button>
             </div>
           </form>
-        </Modal>
-      )}
+        </div>
+      </div>
+      {showModal && <div className="lab-slide-backdrop" onClick={() => setShowModal(false)} />}
     </div>
   );
 }

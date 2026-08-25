@@ -25,7 +25,7 @@ const getAll = async (req, res) => {
 
 const create = async (req, res) => {
   try {
-    const { firstName, lastName, email, password, contact, position } = req.body;
+    const { firstName, lastName, email, password, contact, position, assignedCourse, assignedYear } = req.body;
     if (!firstName || !lastName || !email || !password) {
       return res.status(400).json({ error: "Required fields missing" });
     }
@@ -41,6 +41,8 @@ const create = async (req, res) => {
       email,
       contact: contact || "",
       position: position || "",
+      assignedCourse: assignedCourse || "",
+      assignedYear: assignedYear || "",
       role: "admin",
       status: "active",
       createdAt: new Date(),
@@ -52,10 +54,12 @@ const create = async (req, res) => {
 
     // Also store in admins collection for backward compatibility
     await db.collection("admins").doc(userRecord.uid).set({
-      firstname: firstName,
-      lastname: lastName,
+      firstName: firstName,
+      lastName: lastName,
       contact: contact || "",
       position: position || "",
+      assignedCourse: assignedCourse || "",
+      assignedYear: assignedYear || "",
       email,
       createdAt: new Date(),
     });
@@ -72,7 +76,7 @@ const create = async (req, res) => {
 const update = async (req, res) => {
   try {
     const { id } = req.params;
-    const { firstName, lastName, contact, position, password } = req.body;
+    const { firstName, lastName, contact, position, password, assignedCourse, assignedYear } = req.body;
 
     // Update in users collection
     const userDoc = await db.collection("users").doc(id).get();
@@ -82,6 +86,8 @@ const update = async (req, res) => {
         lastName,
         contact: contact || "",
         position: position || "",
+        assignedCourse: assignedCourse !== undefined ? assignedCourse : userDoc.data().assignedCourse || "",
+        assignedYear: assignedYear !== undefined ? assignedYear : userDoc.data().assignedYear || "",
         updatedAt: new Date(),
       }, { merge: true });
     }
@@ -92,10 +98,12 @@ const update = async (req, res) => {
       const doc = await docRef.get();
       if (doc.exists) {
         await docRef.set({
-          firstname: firstName,
-          lastname: lastName,
+          firstName: firstName,
+          lastName: lastName,
           contact: contact || "",
           position: position || "",
+          assignedCourse: assignedCourse !== undefined ? assignedCourse : doc.data().assignedCourse || "",
+          assignedYear: assignedYear !== undefined ? assignedYear : doc.data().assignedYear || "",
         }, { merge: true });
         break;
       }

@@ -10,7 +10,7 @@ import {
   MdNotifications, MdPeople, MdFolderOpen, MdSettings,
   MdChevronLeft, MdChevronRight, MdExpandMore, MdExpandLess,
   MdBuild, MdWarning, MdMenuBook, MdHistory, MdAssessment, MdAccountCircle,
-  MdAttachMoney, MdAssignment
+  MdAttachMoney, MdAssignment, MdTimer
 } from "react-icons/md";
 import { FaExchangeAlt } from "react-icons/fa";
 import "../../styles/pages/layout.css";
@@ -19,7 +19,8 @@ const navSections = [
   {
     label: "HOME",
     items: [
-      { path: "/home", label: "Home", icon: MdHome, roles: ["student", "faculty", "admin"] },
+      { path: "/home", label: "Home", icon: MdHome, roles: ["student", "admin"] },
+      { path: "/lab-sessions", label: "Lab Activity", icon: MdTimer, roles: ["student", "admin"] },
       { path: "/usage-logs", label: "My Activity", icon: MdHistory, roles: ["student"] },
       { path: "/reports", label: "Reports", icon: MdAssessment, roles: ["admin"] },
     ],
@@ -27,33 +28,33 @@ const navSections = [
   {
     label: "TOOLS",
     items: [
-      { path: "/scanner", label: "Scan Borrow/Return", icon: MdQrCodeScanner, roles: ["student", "faculty", "admin"] },
-      { path: "/transactions", label: "Transactions", icon: FaExchangeAlt, roles: ["student", "faculty", "admin"] },
-      { path: "/borrow-requests", label: "Borrow Requests", icon: MdAssignment, roles: ["faculty", "admin"] },
+      { path: "/scanner", label: "Scan Borrow/Return", icon: MdQrCodeScanner, roles: ["student"] },
+      { path: "/transactions", label: "Transactions", icon: FaExchangeAlt, roles: ["student", "admin"] },
+      { path: "/borrow-requests", label: "Borrow Requests", icon: MdAssignment, roles: ["admin"] },
       { path: "/my-requests", label: "My Requests", icon: MdAssignment, roles: ["student"] },
-      { path: "/catalog", label: "Catalog", icon: MdInventory, roles: ["faculty", "admin"] },
-      { path: "/maintenance", label: "Maintenance", icon: MdBuild, roles: ["admin", "faculty"] },
+      { path: "/catalog", label: "Catalog", icon: MdInventory, roles: ["admin"] },
+      { path: "/maintenance", label: "Maintenance", icon: MdBuild, roles: ["admin"] },
     ],
   },
   {
     label: "SYSTEM",
     items: [
-      { path: "/notifications", label: "Notifications", icon: MdNotifications, roles: ["student", "faculty", "admin"] },
-      { path: "/incidents", label: "Incidents", icon: MdWarning, roles: ["admin", "faculty", "student"] },
-      { path: "/fines", label: "Fines", icon: MdAttachMoney, roles: ["admin", "faculty"] },
-      { path: "/manuals", label: "Lab Manuals", icon: MdMenuBook, roles: ["student", "faculty", "admin"] },
+      { path: "/notifications", label: "Notifications", icon: MdNotifications, roles: ["student", "admin"] },
+      { path: "/incidents", label: "Incidents", icon: MdWarning, roles: ["admin", "student"] },
+      { path: "/fines", label: "Fines", icon: MdAttachMoney, roles: ["admin"] },
+      { path: "/manuals", label: "Lab Manuals", icon: MdMenuBook, roles: ["student", "admin"] },
       { path: "/members", label: "Members", icon: MdPeople, roles: ["admin"] },
-      { path: "/documents", label: "Documents", icon: MdFolderOpen, roles: ["faculty", "admin"] },
+      { path: "/documents", label: "Documents", icon: MdFolderOpen, roles: ["admin"] },
       { path: "/settings", label: "Settings", icon: MdSettings, roles: ["admin"] },
     ],
   },
   {
     label: "OTHER",
     items: [
-      { path: "/profile", label: "My Profile", icon: MdAccountCircle, roles: ["student", "faculty", "admin"] },
-      { path: "/persona", label: "Persona", icon: MdPerson, roles: ["faculty", "admin"] },
+      { path: "/profile", label: "My Profile", icon: MdAccountCircle, roles: ["student", "admin"] },
+      { path: "/persona", label: "Persona", icon: MdPerson, roles: ["admin"] },
       { path: "/admin", label: "Admin", icon: MdAdminPanelSettings, roles: ["admin"] },
-      { path: "/about", label: "About", icon: MdInfo, roles: ["student", "faculty", "admin"] },
+      { path: "/about", label: "About", icon: MdInfo, roles: ["student", "admin"] },
     ],
   },
 ];

@@ -16,7 +16,7 @@ const DEFAULTS = {
   requirePasswordChange: false,
   sessionTimeout: 30,
   maxLoginAttempts: 5,
-  defaultRole: "Faculty",
+  defaultRole: "Student",
   finePerDay: 5,
   fineRestrictionThreshold: 50,
 };
@@ -32,9 +32,9 @@ const SETTING_META = {
   },
   maintenanceMode: {
     label: "Maintenance Mode",
-    desc: "Locks the system so only admins can access it. Students and faculty will be unable to log in.",
+    desc: "Locks the system so only admins can access it. Students will be unable to log in.",
     critical: true,
-    confirmMessage: "Enabling Maintenance Mode will prevent students and faculty from logging in. Are you sure you want to continue?",
+    confirmMessage: "Enabling Maintenance Mode will prevent students from logging in. Are you sure you want to continue?",
   },
   allowStudentRegistration: {
     label: "Allow Student Registration",
@@ -316,8 +316,6 @@ export default function SettingsTab() {
               value={settings.defaultRole}
               onChange={(e) => handleChange("defaultRole", e.target.value)}
             >
-              <option value="Faculty">Faculty</option>
-              <option value="Staff">Staff</option>
               <option value="student">Student</option>
             </select>
           </label>

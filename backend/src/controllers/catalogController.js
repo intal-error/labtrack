@@ -45,7 +45,7 @@ const create = async (req, res) => {
       const notifPromises = usersSnap.docs
         .filter((doc) => {
           const role = doc.data().role;
-          return role === "student" || role === "faculty";
+          return role === "student";
         })
         .map((doc) =>
           db.collection("notifications").add({

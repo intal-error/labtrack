@@ -65,10 +65,9 @@ export default function UsageLogsTab() {
 
   async function load() {
     try {
-      const [b, r] = await Promise.all([api.getBorrowed(), api.getReturned()]);
-      const userId = user?.uid;
-      setBorrowed(b.filter((t) => t.userId === userId));
-      setReturned(r.filter((t) => t.userId === userId));
+      const [b, r] = await Promise.all([api.getMyBorrowed(), api.getMyReturned()]);
+      setBorrowed(b || []);
+      setReturned(r || []);
     } catch {
       toast.error("Failed to load activity");
     } finally {

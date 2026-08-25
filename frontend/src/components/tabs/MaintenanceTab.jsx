@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import { filterBySearch } from "../../utils/search";
 import "../../styles/pages/tabs.css";
 import "../../styles/pages/catalog.css";
-import { MdBuild, MdAdd, MdEdit, MdDelete, MdCalendarToday, MdWarning, MdSearch, MdCheckCircle, MdSchedule, MdPlayArrow, MdAssignment, MdCameraAlt, MdImage, MdGridOn, MdList } from "react-icons/md";
+import { MdBuild, MdAdd, MdEdit, MdDelete, MdCalendarToday, MdWarning, MdSearch, MdCheckCircle, MdSchedule, MdPlayArrow, MdAssignment, MdCameraAlt, MdImage, MdGridOn, MdList, MdClose, MdInfo } from "react-icons/md";
 
 const STATUS_COLORS = {
   scheduled: "#1976d2",
@@ -251,59 +251,101 @@ export default function MaintenanceTab() {
         </div>
       </div>
 
-      {showForm && (
-        <div className="modal-overlay" onClick={() => setShowForm(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3>{editing ? "Edit Maintenance" : "Schedule Maintenance"}</h3>
-            <form onSubmit={handleSubmit}>
-              <div className="form-group">
-                <label>Lab Item</label>
-                <select value={form.catalogId} onChange={(e) => handleItemChange(e.target.value)} required>
-                  <option value="">Select item</option>
-                  {catalog.map((c) => <option key={c.id} value={c.id}>{c.itemName}</option>)}
-                </select>
+      <div className={`lab-slide-panel ${showForm ? "open" : ""}`}>
+        <div className="lab-slide-header">
+          <h2>{editing ? "Edit Maintenance" : "Schedule Maintenance"}</h2>
+          <button className="lab-slide-close" onClick={() => setShowForm(false)}>
+            <MdClose size={20} />
+          </button>
+        </div>
+        <div className="lab-slide-body">
+          <div className="lab-slide-accent" />
+          <form onSubmit={handleSubmit}>
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon inc-details"><MdBuild size={14} /></div>
+                <span className="lab-form-section-title">Task Info</span>
               </div>
-              <div className="form-row">
-                <div className="form-group">
+              <div className="lab-form-field">
+                <label>Lab Item <span className="lab-required" /></label>
+                <div className="lab-input-wrap">
+                  <select value={form.catalogId} onChange={(e) => handleItemChange(e.target.value)} required>
+                    <option value="">Select item</option>
+                    {catalog.map((c) => <option key={c.id} value={c.id}>{c.itemName}</option>)}
+                  </select>
+                  <MdAssignment size={16} />
+                </div>
+              </div>
+              <div className="lab-form-row">
+                <div className="lab-form-field">
                   <label>Type</label>
-                  <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-                    <option value="preventive">Preventive</option>
-                    <option value="corrective">Corrective</option>
-                  </select>
+                  <div className="lab-input-wrap">
+                    <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+                      <option value="preventive">Preventive</option>
+                      <option value="corrective">Corrective</option>
+                    </select>
+                    <MdBuild size={16} />
+                  </div>
                 </div>
-                <div className="form-group">
+                <div className="lab-form-field">
                   <label>Priority</label>
-                  <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="critical">Critical</option>
-                  </select>
+                  <div className="lab-input-wrap">
+                    <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                      <option value="critical">Critical</option>
+                    </select>
+                    <MdWarning size={16} />
+                  </div>
                 </div>
               </div>
-              <div className="form-row">
-                <div className="form-group">
+            </div>
+
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon inc-classification"><MdSchedule size={14} /></div>
+                <span className="lab-form-section-title">Schedule</span>
+              </div>
+              <div className="lab-form-row">
+                <div className="lab-form-field">
                   <label>Status</label>
-                  <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                    <option value="scheduled">Scheduled</option>
-                    <option value="in-progress">In Progress</option>
-                    <option value="completed">Completed</option>
-                  </select>
+                  <div className="lab-input-wrap">
+                    <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                      <option value="scheduled">Scheduled</option>
+                      <option value="in-progress">In Progress</option>
+                      <option value="completed">Completed</option>
+                    </select>
+                    <MdInfo size={16} />
+                  </div>
                 </div>
-                <div className="form-group">
+                <div className="lab-form-field">
                   <label>Scheduled Date</label>
-                  <input type="date" value={form.scheduledDate} onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })} />
+                  <div className="lab-input-wrap">
+                    <input type="date" value={form.scheduledDate} onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })} />
+                    <MdCalendarToday size={16} />
+                  </div>
                 </div>
               </div>
-              <div className="form-group">
+              <div className="lab-form-field">
+                <label>Assigned To</label>
+                <div className="lab-input-wrap">
+                  <input type="text" value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })} placeholder="Technician name" />
+                  <MdInfo size={16} />
+                </div>
+              </div>
+            </div>
+
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon inc-description"><MdInfo size={14} /></div>
+                <span className="lab-form-section-title">Details</span>
+              </div>
+              <div className="lab-form-field">
                 <label>Description</label>
                 <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} placeholder="Describe the maintenance task..." />
               </div>
-              <div className="form-group">
-                <label>Assigned To</label>
-                <input type="text" value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })} placeholder="Technician name" />
-              </div>
-              <div className="form-group">
+              <div className="lab-form-field">
                 <label>Photo (optional)</label>
                 <div className="maintenance-photo-upload">
                   {form.photoURL ? (
@@ -319,14 +361,16 @@ export default function MaintenanceTab() {
                   )}
                 </div>
               </div>
-              <div className="form-actions">
-                <button type="button" className="btn btn-outline" onClick={() => setShowForm(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">{editing ? "Update" : "Schedule"}</button>
-              </div>
-            </form>
-          </div>
+            </div>
+
+            <div className="lab-form-actions">
+              <button type="button" className="lab-form-cancel-btn" onClick={() => setShowForm(false)}>Cancel</button>
+              <button type="submit" className="lab-form-submit-btn">{editing ? "Update" : "Schedule"}</button>
+            </div>
+          </form>
         </div>
-      )}
+      </div>
+      {showForm && <div className="lab-slide-backdrop" onClick={() => setShowForm(false)} />}
 
       {stats.overdue > 0 && (
         <div className="borrow-overdue-banner">

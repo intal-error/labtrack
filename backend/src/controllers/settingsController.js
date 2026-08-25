@@ -11,7 +11,7 @@ const DEFAULTS = {
   requirePasswordChange: false,
   sessionTimeout: 30,
   maxLoginAttempts: 5,
-  defaultRole: "Faculty",
+  defaultRole: "Student",
   finePerDay: 5,
   fineRestrictionThreshold: 50,
 };

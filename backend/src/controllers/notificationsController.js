@@ -47,12 +47,21 @@ const getByUser = async (req, res) => {
 
 const create = async (req, res) => {
   try {
-    if (!["admin", "faculty"].includes(req.user.role)) {
+    if (req.user.role !== "admin") {
       return res.status(403).json({ error: "Insufficient permissions" });
     }
 
+    const { targetUserId, type, title, message, link } = req.body;
+    if (!targetUserId || !type || !title || !message) {
+      return res.status(400).json({ error: "targetUserId, type, title, and message are required" });
+    }
+
     const data = {
-      ...req.body,
+      targetUserId,
+      type,
+      title,
+      message,
+      link: link || "",
       read: false,
       dismissedBy: [],
       createdAt: new Date(),
@@ -67,6 +76,14 @@ const create = async (req, res) => {
 const markRead = async (req, res) => {
   try {
     const { id } = req.params;
+    const userId = req.user.uid;
+    const doc = await db.collection(COLLECTION).doc(id).get();
+    if (!doc.exists) {
+      return res.status(404).json({ error: "Notification not found" });
+    }
+    if (doc.data().targetUserId !== userId) {
+      return res.status(403).json({ error: "Not authorized to mark this notification" });
+    }
     await db.collection(COLLECTION).doc(id).set(
       { read: true, readAt: new Date() },
       { merge: true }

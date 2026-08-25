@@ -31,7 +31,11 @@ function getAvailableQuantity(item) {
 const getAllRequests = async (req, res) => {
   try {
     const snap = await db.collection(REQUESTS).orderBy("createdAt", "desc").get();
-    const requests = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    let requests = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    // Filter by course for admin users with assigned course
+    if (req.adminAssignment?.assignedCourse) {
+      requests = requests.filter((r) => r.course === req.adminAssignment.assignedCourse);
+    }
     res.json(requests);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -106,6 +110,7 @@ const createRequest = async (req, res) => {
       firstName: user.firstName || "",
       lastName: user.lastName || "",
       course: user.course || "",
+      year: user.year || "",
       email: user.email || "",
       role: user.role || "student",
       catalogId: itemId,
@@ -119,7 +124,17 @@ const createRequest = async (req, res) => {
 
     const docRef = await db.collection(REQUESTS).add(requestData);
 
-    const adminsSnap = await db.collection(USERS).where("role", "in", ["admin", "faculty"]).get();
+    // Notify admins assigned to the student's course, fallback to all admins
+    let adminsSnap;
+    if (user.course) {
+      adminsSnap = await db.collection(USERS)
+        .where("role", "==", "admin")
+        .where("assignedCourse", "==", user.course)
+        .get();
+    }
+    if (!adminsSnap || adminsSnap.empty) {
+      adminsSnap = await db.collection(USERS).where("role", "==", "admin").get();
+    }
     for (const adminDoc of adminsSnap.docs) {
       await db.collection(NOTIF).add({
         targetUserId: adminDoc.id,
@@ -141,7 +156,7 @@ const createRequest = async (req, res) => {
 
 const approveRequest = async (req, res) => {
   try {
-    if (!["admin", "faculty"].includes(req.user.role)) {
+    if (req.user.role !== "admin") {
       return res.status(403).json({ error: "Insufficient permissions" });
     }
 
@@ -155,6 +170,11 @@ const approveRequest = async (req, res) => {
 
     const request = requestSnap.data();
     if (request.status !== "pending") return res.status(400).json({ error: "Request already processed" });
+
+    // Course-based access control: admin can only approve requests from their assigned course
+    if (req.adminAssignment?.assignedCourse && request.course !== req.adminAssignment.assignedCourse) {
+      return res.status(403).json({ error: "You do not have permission to approve requests for this course" });
+    }
 
     const reviewerSnap = await db.collection(USERS).doc(reviewerId).get();
     const reviewer = reviewerSnap.exists ? reviewerSnap.data() : {};
@@ -191,6 +211,7 @@ const approveRequest = async (req, res) => {
         firstName: request.firstName,
         lastName: request.lastName,
         course: request.course,
+        year: request.year || "",
         email: request.email,
         userId: request.userId,
         dueDate: request.dueDate,
@@ -250,7 +271,7 @@ const approveRequest = async (req, res) => {
 
 const rejectRequest = async (req, res) => {
   try {
-    if (!["admin", "faculty"].includes(req.user.role)) {
+    if (req.user.role !== "admin") {
       return res.status(403).json({ error: "Insufficient permissions" });
     }
 
@@ -264,6 +285,11 @@ const rejectRequest = async (req, res) => {
 
     const request = requestSnap.data();
     if (request.status !== "pending") return res.status(400).json({ error: "Request already processed" });
+
+    // Course-based access control: admin can only reject requests from their assigned course
+    if (req.adminAssignment?.assignedCourse && request.course !== req.adminAssignment.assignedCourse) {
+      return res.status(403).json({ error: "You do not have permission to reject requests for this course" });
+    }
 
     const reviewerSnap = await db.collection(USERS).doc(reviewerId).get();
     const reviewer = reviewerSnap.exists ? reviewerSnap.data() : {};

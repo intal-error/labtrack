@@ -33,7 +33,7 @@ export default function FinesTab() {
 
   async function load() {
     try {
-      const data = role === "admin" || role === "faculty" ? await api.getFines() : await api.getMyFines();
+      const data = role === "admin" ? await api.getFines() : await api.getMyFines();
       setFines(data || []);
     } catch {
       toast.error("Failed to load fines");
@@ -179,7 +179,7 @@ export default function FinesTab() {
                 <p className="maintenance-desc">Issued: {new Date(fine.createdAt?.toDate?.() || fine.createdAt).toLocaleDateString()}</p>
               )}
             </div>
-            {fine.status === "pending" && (role === "admin" || role === "faculty") && (
+            {fine.status === "pending" && role === "admin" && (
               <div className="maintenance-card-actions">
                 <button className="btn btn-sm btn-primary" onClick={(e) => { e.stopPropagation(); handlePay(fine.id); }}>
                   <MdCheckCircle size={14} /> Mark Paid
@@ -244,7 +244,7 @@ export default function FinesTab() {
                 )}
               </div>
             </div>
-            {selectedFine.status === "pending" && (role === "admin" || role === "faculty") && (
+            {selectedFine.status === "pending" && role === "admin" && (
               <div className="txn-detail-section">
                 <h5>Waive Fine</h5>
                 <div className="form-group">
