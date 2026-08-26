@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import { filterBySearch } from "../../utils/search";
 import "../../styles/pages/tabs.css";
 import "../../styles/pages/catalog.css";
-import { MdAssignment, MdSearch, MdCheckCircle, MdCancel, MdSchedule, MdPerson, MdInventory, MdSort } from "react-icons/md";
+import { MdAssignment, MdSearch, MdCheckCircle, MdCancel, MdSchedule, MdPerson, MdInventory, MdSort, MdSwapHoriz } from "react-icons/md";
 
 const STATUS_COLORS = {
   pending: "#f57c00",
@@ -64,6 +64,7 @@ export default function BorrowRequestsTab() {
   const { role, userProfile } = useAuth();
   const [requests, setRequests] = useState([]);
   const [catalog, setCatalog] = useState([]);
+  const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("pending");
   const [search, setSearch] = useState("");
@@ -72,14 +73,24 @@ export default function BorrowRequestsTab() {
   const [processing, setProcessing] = useState(null);
   const [viewMode, setViewMode] = useState("grid");
   const [sortBy, setSortBy] = useState("newest");
+  // Reassignment state
+  const [reassignTarget, setReassignTarget] = useState(null);
+  const [reassignAdminId, setReassignAdminId] = useState("");
+  const [reassignReason, setReassignReason] = useState("");
+  const [reassignLoading, setReassignLoading] = useState(false);
 
   useEffect(() => { load(); }, []);
 
   async function load() {
     try {
-      const [reqs, cat] = await Promise.all([api.getBorrowRequests(), api.getCatalog()]);
+      const [reqs, cat, adminList] = await Promise.all([
+        api.getBorrowRequests(),
+        api.getCatalog(),
+        api.getActiveAdmins().catch(() => []),
+      ]);
       setRequests(reqs || []);
       setCatalog(Array.isArray(cat) ? cat : []);
+      setAdmins(Array.isArray(adminList) ? adminList : []);
     } catch {
       toast.error("Failed to load requests");
     } finally {
@@ -127,6 +138,26 @@ export default function BorrowRequestsTab() {
     }
   }
 
+  async function handleReassign() {
+    if (!reassignAdminId || !reassignTarget) return;
+    setReassignLoading(true);
+    try {
+      await api.reassignBorrowRequest(reassignTarget.id, {
+        newAdminId: reassignAdminId,
+        reason: reassignReason,
+      });
+      toast.success("Request reassigned");
+      setReassignTarget(null);
+      setReassignAdminId("");
+      setReassignReason("");
+      load();
+    } catch (err) {
+      toast.error(err.message || "Failed to reassign");
+    } finally {
+      setReassignLoading(false);
+    }
+  }
+
   const stats = useMemo(() => {
     const total = requests.length;
     const pending = requests.filter((r) => r.status === "pending").length;
@@ -143,7 +174,7 @@ export default function BorrowRequestsTab() {
   const filtered = useMemo(() => {
     let result = requests;
     if (filter !== "all") result = result.filter((r) => r.status === filter);
-    if (search.trim()) result = filterBySearch(result, search, ["firstName", "lastName", "itemName", "schoolID"]);
+    if (search.trim()) result = filterBySearch(result, search, ["firstName", "lastName", "itemName", "schoolID", "assigned_admin_name"]);
     result = [...result].sort((a, b) => {
       if (sortBy === "oldest") return (toDate(a.createdAt)?.getTime() || 0) - (toDate(b.createdAt)?.getTime() || 0);
       if (sortBy === "due-date") {
@@ -231,6 +262,7 @@ export default function BorrowRequestsTab() {
           {filtered.map((req) => {
             const dueInfo = getDueDateInfo(toDate(req.dueDate));
             const thumb = catalogImageMap[req.catalogId];
+            const isCrossCourse = req.equipment_course && req.course && req.equipment_course !== req.course;
             return (
               <div className={`maintenance-card ${dueInfo && dueInfo.days < 0 && req.status !== "rejected" && req.status !== "cancelled" ? "card-overdue" : ""}`} key={req.id} onClick={() => setSelectedRequest(req)}>
                 <div className="maintenance-card-header">
@@ -260,6 +292,16 @@ export default function BorrowRequestsTab() {
                       <MdSchedule size={14} /> {timeAgo(req.createdAt)}
                     </span>
                   </div>
+                  {isCrossCourse && (
+                    <div className="cross-course-badge" style={{ color: "#f57c00", fontSize: 11, fontWeight: 600, marginTop: 4 }}>
+                      Cross-course: Student {req.course} borrowing {req.equipment_course} equipment
+                    </div>
+                  )}
+                  {req.assigned_admin_name && (
+                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                      Assigned to: <strong>{req.assigned_admin_name}</strong>
+                    </div>
+                  )}
                   {req.purpose && <p className="maintenance-desc">Purpose: {req.purpose}</p>}
                   <div className="maintenance-meta">
                     {dueInfo && (
@@ -274,6 +316,9 @@ export default function BorrowRequestsTab() {
                   <div className="maintenance-card-actions">
                     <button className="btn btn-sm btn-primary" onClick={(e) => { e.stopPropagation(); setSelectedRequest(req); }}>
                       <MdCheckCircle size={14} /> Review
+                    </button>
+                    <button className="btn btn-sm btn-secondary" onClick={(e) => { e.stopPropagation(); setReassignTarget(req); }} title="Reassign">
+                      <MdSwapHoriz size={14} /> Reassign
                     </button>
                   </div>
                 )}
@@ -290,6 +335,8 @@ export default function BorrowRequestsTab() {
                 <th>School ID</th>
                 <th>Item</th>
                 <th>Qty</th>
+                <th>Equipment Course</th>
+                <th>Assigned Admin</th>
                 <th>Due Date</th>
                 <th>Status</th>
                 <th>Actions</th>
@@ -298,12 +345,21 @@ export default function BorrowRequestsTab() {
             <tbody>
               {filtered.map((req) => {
                 const dueInfo = getDueDateInfo(toDate(req.dueDate));
+                const isCrossCourse = req.equipment_course && req.course && req.equipment_course !== req.course;
                 return (
                   <tr key={req.id} onClick={() => setSelectedRequest(req)} style={{ cursor: "pointer" }}>
                     <td>{req.firstName} {req.lastName}</td>
                     <td>{req.schoolID || "-"}</td>
                     <td>{req.itemName}</td>
                     <td>{req.quantity}</td>
+                    <td>
+                      {isCrossCourse ? (
+                        <span style={{ color: "#f57c00", fontWeight: 600 }}>{req.equipment_course} *</span>
+                      ) : (
+                        <span>{req.equipment_course || req.course || "-"}</span>
+                      )}
+                    </td>
+                    <td>{req.assigned_admin_name || <span style={{ color: "var(--text-muted)" }}>Unassigned</span>}</td>
                     <td>
                       <span className={dueInfo ? `maintenance-date-badge ${dueInfo.cls}` : ""}>
                         {req.dueDate ? new Date(req.dueDate?.toDate?.() || req.dueDate).toLocaleDateString() : "-"}
@@ -312,8 +368,13 @@ export default function BorrowRequestsTab() {
                     </td>
                     <td><span className="badge" style={{ background: `${STATUS_COLORS[req.status] || "#666"}20`, color: STATUS_COLORS[req.status] || "#666" }}>{STATUS_LABELS[req.status] || req.status}</span></td>
                     <td>
-                {req.status === "pending" && role === "admin" && (
-                        <button className="btn btn-sm btn-primary" onClick={(e) => { e.stopPropagation(); setSelectedRequest(req); }}>Review</button>
+                      {req.status === "pending" && role === "admin" && (
+                        <div style={{ display: "flex", gap: 4 }}>
+                          <button className="btn btn-sm btn-primary" onClick={(e) => { e.stopPropagation(); setSelectedRequest(req); }}>Review</button>
+                          <button className="btn btn-sm btn-secondary" onClick={(e) => { e.stopPropagation(); setReassignTarget(req); }} title="Reassign">
+                            <MdSwapHoriz size={14} />
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -324,6 +385,7 @@ export default function BorrowRequestsTab() {
         </div>
       )}
 
+      {/* Request Detail Modal */}
       {selectedRequest && (
         <Modal title="Borrow Request Details" onClose={() => { setSelectedRequest(null); setReviewNotes(""); }}>
           <div className="txn-detail-modal">
@@ -338,13 +400,24 @@ export default function BorrowRequestsTab() {
                   <span className="txn-detail-value">{selectedRequest.schoolID || "-"}</span>
                 </div>
                 <div className="txn-detail-row">
-                  <span className="txn-detail-label">Course</span>
+                  <span className="txn-detail-label">Student Course</span>
                   <span className="txn-detail-value">{selectedRequest.course || "-"}{selectedRequest.year ? ` - ${selectedRequest.year}` : ""}</span>
                 </div>
                 <div className="txn-detail-row">
                   <span className="txn-detail-label">Item</span>
                   <span className="txn-detail-value">{selectedRequest.itemName}</span>
                 </div>
+                {selectedRequest.equipment_course && (
+                  <div className="txn-detail-row">
+                    <span className="txn-detail-label">Equipment Course</span>
+                    <span className="txn-detail-value">
+                      {selectedRequest.equipment_course}
+                      {selectedRequest.equipment_course !== selectedRequest.course && (
+                        <span style={{ color: "#f57c00", fontSize: 11, marginLeft: 6 }}>(Cross-course)</span>
+                      )}
+                    </span>
+                  </div>
+                )}
                 <div className="txn-detail-row">
                   <span className="txn-detail-label">Quantity</span>
                   <span className="txn-detail-value">{selectedRequest.quantity}</span>
@@ -365,6 +438,12 @@ export default function BorrowRequestsTab() {
                     {STATUS_LABELS[selectedRequest.status]}
                   </span>
                 </div>
+                {selectedRequest.assigned_admin_name && (
+                  <div className="txn-detail-row">
+                    <span className="txn-detail-label">Assigned Admin</span>
+                    <span className="txn-detail-value">{selectedRequest.assigned_admin_name}</span>
+                  </div>
+                )}
                 {selectedRequest.reviewerName && (
                   <div className="txn-detail-row">
                     <span className="txn-detail-label">Reviewed By</span>
@@ -375,6 +454,19 @@ export default function BorrowRequestsTab() {
                   <div className="txn-detail-row">
                     <span className="txn-detail-label">Review Notes</span>
                     <span className="txn-detail-value">{selectedRequest.reviewNotes}</span>
+                  </div>
+                )}
+                {selectedRequest.reassignment_history && selectedRequest.reassignment_history.length > 0 && (
+                  <div className="txn-detail-row" style={{ gridColumn: "1 / -1" }}>
+                    <span className="txn-detail-label">Reassignment History</span>
+                    <div className="txn-detail-value">
+                      {selectedRequest.reassignment_history.map((entry, i) => (
+                        <div key={i} style={{ fontSize: 11, marginBottom: 4, color: "var(--text-muted)" }}>
+                          {entry.previousAdminName || "Unassigned"} → <strong>{entry.newAdminName}</strong> by {entry.reassignedByName} ({toDate(entry.date)?.toLocaleDateString()})
+                          {entry.reason && ` — ${entry.reason}`}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -408,6 +500,59 @@ export default function BorrowRequestsTab() {
                 </div>
               </div>
             )}
+          </div>
+        </Modal>
+      )}
+
+      {/* Reassignment Modal */}
+      {reassignTarget && (
+        <Modal title="Reassign Request" onClose={() => { setReassignTarget(null); setReassignAdminId(""); setReassignReason(""); }}>
+          <div className="txn-detail-modal">
+            <div className="txn-detail-section">
+              <div className="txn-detail-grid">
+                <div className="txn-detail-row">
+                  <span className="txn-detail-label">Request</span>
+                  <span className="txn-detail-value">{reassignTarget.firstName} {reassignTarget.lastName} — {reassignTarget.itemName}</span>
+                </div>
+                <div className="txn-detail-row">
+                  <span className="txn-detail-label">Current Admin</span>
+                  <span className="txn-detail-value">{reassignTarget.assigned_admin_name || "Unassigned"}</span>
+                </div>
+              </div>
+            </div>
+            <div className="txn-detail-section">
+              <h5>Reassign to:</h5>
+              <div className="form-group">
+                <select value={reassignAdminId} onChange={(e) => setReassignAdminId(e.target.value)}>
+                  <option value="">Select admin...</option>
+                  {admins.map((admin) => (
+                    <option key={admin.id} value={admin.id}>
+                      {admin.firstName} {admin.lastName} {admin.assignedCourse ? `(${admin.assignedCourse})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <textarea
+                  placeholder="Reason for reassignment (optional)"
+                  value={reassignReason}
+                  onChange={(e) => setReassignReason(e.target.value)}
+                  rows={2}
+                />
+              </div>
+              <div className="form-actions">
+                <button
+                  className="btn btn-primary"
+                  onClick={handleReassign}
+                  disabled={!reassignAdminId || reassignLoading}
+                >
+                  <MdSwapHoriz size={14} /> {reassignLoading ? "Reassigning..." : "Reassign"}
+                </button>
+                <button className="btn btn-secondary" onClick={() => { setReassignTarget(null); setReassignAdminId(""); setReassignReason(""); }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
           </div>
         </Modal>
       )}

@@ -2,7 +2,7 @@ import { auth } from "./firebase";
 import { getIdToken } from "firebase/auth";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
-const TIMEOUT_MS = 8000;
+const TIMEOUT_MS = 30000;
 
 async function request(path, options = {}) {
   let headers = { "Content-Type": "application/json", ...options.headers };
@@ -193,10 +193,17 @@ export const api = {
   approveBorrowRequest: (id, reviewNotes) => request(`/borrow-requests/${id}/approve`, { method: "PUT", body: JSON.stringify({ reviewNotes }) }),
   rejectBorrowRequest: (id, reviewNotes) => request(`/borrow-requests/${id}/reject`, { method: "PUT", body: JSON.stringify({ reviewNotes }) }),
   cancelBorrowRequest: (id) => request(`/borrow-requests/${id}/cancel`, { method: "PUT" }),
+  reassignBorrowRequest: (id, data) => request(`/borrow-requests/${id}/reassign`, { method: "PUT", body: JSON.stringify(data) }),
+
+  // Admin Management
+  getActiveAdmins: () => request("/admin/active"),
+  toggleAdminStatus: (id) => request(`/admin/${id}/toggle-status`, { method: "PUT" }),
 
   // Backup
   exportBackup: () => request("/backup/export", { method: "POST" }),
   downloadBackup: async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     let headers = {};
     if (auth.currentUser) {
       try {
@@ -204,21 +211,30 @@ export const api = {
         headers["Authorization"] = `Bearer ${token}`;
       } catch {}
     }
-    const res = await fetch(`${API_URL}/backup/download`, { headers });
-    if (!res.ok) throw new Error("Download failed");
-    const blob = await res.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `labtrack_backup_${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    window.URL.revokeObjectURL(url);
+    try {
+      const res = await fetch(`${API_URL}/backup/download`, { headers, signal: controller.signal });
+      clearTimeout(timer);
+      if (!res.ok) throw new Error("Download failed");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `labtrack_backup_${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      clearTimeout(timer);
+      if (err.name === "AbortError") throw new Error("Request timed out");
+      throw err;
+    }
   },
   importBackup: (backupData, overwrite) => request("/backup/import", { method: "POST", body: JSON.stringify({ backupData, overwrite }) }),
   getBackupHistory: () => request("/backup/history"),
 
   // Condition Photo Upload
   uploadConditionPhoto: async (file) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     const formData = new FormData();
     formData.append("file", file);
     let headers = {};
@@ -228,19 +244,70 @@ export const api = {
         headers["Authorization"] = `Bearer ${token}`;
       } catch {}
     }
-    const res = await fetch(`${API_URL}/upload/condition-photo`, { method: "POST", headers, body: formData });
-    if (!res.ok) throw new Error("Upload failed");
-    return res.json();
+    try {
+      const res = await fetch(`${API_URL}/upload/condition-photo`, { method: "POST", headers, body: formData, signal: controller.signal });
+      clearTimeout(timer);
+      if (!res.ok) throw new Error("Upload failed");
+      return res.json();
+    } catch (err) {
+      clearTimeout(timer);
+      if (err.name === "AbortError") throw new Error("Request timed out");
+      throw err;
+    }
   },
 
-  // Lab Activities
-  getLabActivities: () => request("/lab-activities"),
-  getMyLabActivities: () => request("/lab-activities/student"),
-  createLabActivity: (data) => request("/lab-activities", { method: "POST", body: JSON.stringify(data) }),
-  updateLabActivity: (id, data) => request(`/lab-activities/${id}`, { method: "PUT", body: JSON.stringify(data) }),
-  deleteLabActivity: (id) => request(`/lab-activities/${id}`, { method: "DELETE" }),
-  joinLabSession: (activityId) => request(`/lab-activities/${activityId}/join`, { method: "POST" }),
-  getSessionAttendees: (activityId) => request(`/lab-activities/${activityId}/attendees`),
-  getSessionNonAttendees: (activityId) => request(`/lab-activities/${activityId}/non-attendees`),
+  // Lab Attendance
+  lookupStudent: (schoolId) => request(`/attendance/lookup-student/${schoolId}`),
+  timeIn: (data) => request("/attendance/time-in", { method: "POST", body: JSON.stringify(data) }),
+  timeOut: (data) => request("/attendance/time-out", { method: "POST", body: JSON.stringify(data) }),
+  autoScan: (data) => request("/attendance/auto-scan", { method: "POST", body: JSON.stringify(data) }),
+  getActiveStudents: () => request("/attendance/active"),
+  getTodayAttendance: () => request("/attendance/today"),
+  getDailyLog: (date) => request(`/attendance/daily-log/${date}`),
+  getAttendanceHistory: (params) => request(`/attendance/history?${params}`),
+  getRoomAttendanceHistory: (roomId, params) => request(`/attendance/room/${roomId}/history?${params}`),
+  getStudentAttendance: (schoolId) => request(`/attendance/my/${schoolId}`),
+  getAttendanceStats: () => request("/attendance/stats"),
+  updateAttendance: (id, data) => request(`/attendance/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteAttendance: (id) => request(`/attendance/${id}`, { method: "DELETE" }),
+  exportAttendance: async (params) => {
+    let headers = {};
+    if (auth.currentUser) {
+      try {
+        const token = await getIdToken(auth.currentUser);
+        headers["Authorization"] = `Bearer ${token}`;
+      } catch {}
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    let res;
+    try {
+      res = await fetch(`${API_URL}/attendance/export?${params}`, { headers, signal: controller.signal });
+    } catch {
+      throw new Error("Server is offline. Please try again later.");
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!res.ok) throw new Error("Export failed");
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `lab_attendance.xlsx`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  },
+
+  // Lab Rooms
+  getRooms: () => request("/attendance/rooms"),
+  createRoom: (data) => request("/attendance/rooms", { method: "POST", body: JSON.stringify(data) }),
+  updateRoom: (id, data) => request(`/attendance/rooms/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteRoom: (id) => request(`/attendance/rooms/${id}`, { method: "DELETE" }),
+  getRoomQR: (id) => request(`/attendance/rooms/${id}/qr`),
+
+  // Student QR
+  getStudentQR: (schoolId) => request(`/attendance/student-qr/${schoolId}`),
+
+
 
 };

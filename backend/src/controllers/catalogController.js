@@ -26,6 +26,17 @@ const create = async (req, res) => {
   try {
     const data = req.body;
     const quantity = Number(data.quantity) || 0;
+    const adminId = req.user?.uid || "";
+    let adminName = "";
+    if (adminId) {
+      try {
+        const adminDoc = await db.collection("users").doc(adminId).get();
+        if (adminDoc.exists) {
+          const ad = adminDoc.data();
+          adminName = `${ad.firstName || ""} ${ad.lastName || ""}`.trim();
+        }
+      } catch {}
+    }
     const docRef = await db.collection(COLLECTION).add({
       itemName: data.itemName,
       category: data.category,
@@ -37,6 +48,9 @@ const create = async (req, res) => {
       barcode: data.barcode || "",
       availableQuantity: data.status === "Available" ? quantity : 0,
       available: data.status === "Available" && quantity > 0,
+      // Admin tracking
+      created_by_admin_id: adminId,
+      created_by_admin_name: adminName,
       createdAt: new Date(),
     });
 
@@ -83,8 +97,14 @@ const update = async (req, res) => {
     const previousBorrowed = Math.max(0, Number(current.quantity || 0) - Number(current.availableQuantity || 0));
     const availableQuantity = Math.max(0, quantity - previousBorrowed);
 
+    const allowed = ["itemName", "category", "course", "condition", "status", "imageUrl", "barcode"];
+    const sanitized = {};
+    for (const key of allowed) {
+      if (data[key] !== undefined) sanitized[key] = data[key];
+    }
+
     await docRef.set({
-      ...data,
+      ...sanitized,
       quantity,
       availableQuantity,
       available: availableQuantity > 0,

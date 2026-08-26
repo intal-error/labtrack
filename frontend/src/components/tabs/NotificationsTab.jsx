@@ -32,7 +32,7 @@ export default function NotificationsTab() {
   async function loadNotifications() {
     try {
       const data = await api.getMyNotifications();
-      setNotifications(data);
+      setNotifications(Array.isArray(data) ? data : []);
     } catch {
       setNotifications([]);
     } finally {
@@ -43,10 +43,12 @@ export default function NotificationsTab() {
   async function dismissNotification(id) {
     try {
       await api.dismissNotification(id);
-    } catch { /* ignore */ }
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
-    setSelectedNotif((prev) => (prev?.id === id ? null : prev));
-    toast.success("Notification dismissed");
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+      setSelectedNotif((prev) => (prev?.id === id ? null : prev));
+      toast.success("Notification dismissed");
+    } catch {
+      toast.error("Failed to dismiss notification");
+    }
   }
 
   async function markRead(id) {

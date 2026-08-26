@@ -7,7 +7,7 @@ import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Modal from "../components/ui/Modal";
 import toast from "react-hot-toast";
 import "../styles/pages/catalog.css";
-import "../styles/pages/lab-activity.css";
+import "../styles/pages/shared-form-panel.css";
 import { MdClose, MdAdd, MdEdit, MdInfo, MdImage, MdAssignment, MdTag, MdQrCode } from "react-icons/md";
 
 export default function CatalogPage() {
@@ -252,7 +252,11 @@ export default function CatalogPage() {
                   <div className="catalog-card-meta">
                     {item.category && <span className="category-pill">{item.category}</span>}
                     {item.condition && <span className={`condition-badge ${conditionClass(item.condition)}`}>{item.condition}</span>}
+                    {item.course && <span className="category-pill" style={{ background: "#e3f2fd", color: "#1565c0" }}>{item.course}</span>}
                   </div>
+                  {item.created_by_admin_name && (
+                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>Created by: {item.created_by_admin_name}</div>
+                  )}
                   <div className="catalog-card-quantity">
                     <div className="qty-info">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>

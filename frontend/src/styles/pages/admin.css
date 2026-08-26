@@ -96,6 +96,30 @@
 .admin-table-actions{display:flex;gap:6px}
 .admin-table-actions .admin-btn-edit,.admin-table-actions .admin-btn-delete{flex:none;padding:6px 10px;font-size:11px}
 
+/* Permission Chips */
+.perm-section{margin-top:4px}
+
+/* Course Assignment Toggle */
+.course-assign-section{margin-top:4px;border:1.5px solid var(--border);border-radius:12px;overflow:hidden;transition:all .25s}
+.course-assign-section:has(.course-toggle-header.active){border-color:var(--green)}
+.course-toggle-header{width:100%;display:flex;align-items:center;gap:10px;padding:12px 16px;border:none;background:var(--bg);color:var(--text-muted);font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;font-family:inherit;text-align:left}
+.course-toggle-header:hover{background:var(--bg-card);color:var(--text)}
+.course-toggle-header.active{color:var(--green);background:rgba(46,125,50,.04)}
+.course-toggle-switch{margin-left:auto;width:36px;height:20px;border-radius:10px;background:var(--border);position:relative;transition:all .25s}
+.course-toggle-switch::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:all .25s;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.course-toggle-switch.on{background:var(--green)}
+.course-toggle-switch.on::after{left:18px}
+.course-toggle-fields{padding:0 16px 14px;animation:fadeInUp .25s ease}
+.course-toggle-fields select{width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;background:var(--bg);color:var(--text);cursor:pointer;transition:all .2s}
+.course-toggle-fields select:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(46,125,50,.1)}
+.course-assign-hint{font-size:11px;color:var(--text-muted);margin:8px 0 0;line-height:1.4}
+.perm-section-label{font-size:13px;font-weight:600;color:var(--text-muted);margin-bottom:10px;display:block}
+.perm-grid{display:flex;flex-wrap:wrap;gap:8px}
+.perm-chip{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:10px;font-size:13px;font-weight:500;border:1.5px solid var(--border);background:var(--bg);color:var(--text-muted);cursor:pointer;transition:all .2s ease;font-family:inherit}
+.perm-chip:hover{border-color:var(--green);color:var(--text)}
+.perm-chip.active{background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border-color:var(--green);color:#2e7d32;font-weight:600}
+.perm-chip svg{flex-shrink:0}
+
 /* Animations */
 @keyframes fadeInUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
 .fade-in-up{animation:fadeInUp .5s ease}
@@ -143,3 +167,12 @@ body.dark .admin-table th{background:#0a0a0a;border-color:rgba(255,255,255,.1);c
 body.dark .admin-table td{border-color:rgba(255,255,255,.05)}
 body.dark .admin-table tr:hover td{background:#131313}
 body.dark .admin-table-name{color:#fff}
+body.dark .perm-chip{background:#0a0a0a;border-color:rgba(255,255,255,.1);color:#888}
+body.dark .perm-chip:hover{border-color:var(--green);color:#fff}
+body.dark .perm-chip.active{background:rgba(46,125,50,.15);border-color:var(--green);color:var(--green)}
+body.dark .course-assign-section{border-color:rgba(255,255,255,.1)}
+body.dark .course-toggle-header{background:#0a0a0a;color:#888}
+body.dark .course-toggle-header:hover{color:#fff}
+body.dark .course-toggle-header.active{color:var(--green);background:rgba(46,125,50,.08)}
+body.dark .course-toggle-switch{background:rgba(255,255,255,.15)}
+body.dark .course-toggle-fields select{background:#0a0a0a;border-color:rgba(255,255,255,.1);color:#fff}

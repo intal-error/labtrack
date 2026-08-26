@@ -16,7 +16,6 @@ import HomePage from "./pages/HomePage";
 
 import NotificationsTab from "./components/tabs/NotificationsTab";
 import SettingsTab from "./components/tabs/SettingsTab";
-import MembersTab from "./components/tabs/MembersTab";
 import DocumentsTab from "./components/tabs/DocumentsTab";
 import MaintenanceTab from "./components/tabs/MaintenanceTab";
 import IncidentTab from "./components/tabs/IncidentTab";
@@ -27,7 +26,11 @@ import FinesTab from "./components/tabs/FinesTab";
 import BorrowRequestsTab from "./components/tabs/BorrowRequestsTab";
 import MyRequestsPage from "./pages/MyRequestsPage";
 import ProfilePage from "./pages/ProfilePage";
-import LabActivityPage from "./pages/LabActivityPage";
+import AttendanceKioskPage from "./pages/AttendanceKioskPage";
+import AttendanceLogsPage from "./pages/AttendanceLogsPage";
+import RoomAttendancePage from "./pages/RoomAttendancePage";
+import MyAttendancePage from "./pages/MyAttendancePage";
+
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -89,6 +92,7 @@ function App() {
           <Routes>
             <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
             <Route path="/register" element={<GuestRoute><RegisterPage /></GuestRoute>} />
+            <Route path="/attend/kiosk" element={<AttendanceKioskPage />} />
             <Route path="/" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
               <Route index element={<IndexRedirect />} />
               <Route path="home" element={<HomePage />} />
@@ -96,7 +100,6 @@ function App() {
 
               <Route path="notifications" element={<NotificationsTab />} />
               <Route path="settings" element={<RoleRoute allowed={["admin"]}><SettingsTab /></RoleRoute>} />
-              <Route path="members" element={<RoleRoute allowed={["admin"]}><MembersTab /></RoleRoute>} />
               <Route path="documents" element={<DocumentsTab />} />
               <Route path="scanner" element={<RoleRoute allowed={["student"]}><ScannerPage /></RoleRoute>} />
               <Route path="transactions" element={<TransactionsPage />} />
@@ -112,9 +115,12 @@ function App() {
               <Route path="reports" element={<RoleRoute allowed={["admin"]}><ReportsTab /></RoleRoute>} />
               <Route path="fines" element={<RoleRoute allowed={["admin"]}><FinesTab /></RoleRoute>} />
               <Route path="borrow-requests" element={<RoleRoute allowed={["admin"]}><BorrowRequestsTab /></RoleRoute>} />
+              <Route path="attendance" element={<RoleRoute allowed={["admin"]}><AttendanceLogsPage /></RoleRoute>} />
+              <Route path="attendance/room/:roomId" element={<RoleRoute allowed={["admin"]}><RoomAttendancePage /></RoleRoute>} />
+              <Route path="my-attendance" element={<RoleRoute allowed={["student"]}><MyAttendancePage /></RoleRoute>} />
               <Route path="my-requests" element={<MyRequestsPage />} />
               <Route path="profile" element={<ProfilePage />} />
-              <Route path="lab-sessions" element={<LabActivityPage />} />
+
               <Route path="about" element={<AboutPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/home" replace />} />

@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { api } from "../services/api";
-import { db } from "../services/firebase";
-import { getDocs, collection, query, where } from "firebase/firestore";
 import { toDate, numOr, getAvailableQuantity, isOpenBorrow, normalize } from "../utils/helpers";
 import { resolveUser } from "../components/scanner/BorrowerLookup";
 import { resolveItem } from "../components/scanner/ItemLookup";
@@ -47,6 +45,8 @@ export default function ScannerPage() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [step1Collapsed, setStep1Collapsed] = useState(false);
   const [step2Collapsed, setStep2Collapsed] = useState(false);
+  const [admins, setAdmins] = useState([]);
+  const [selectedAdminId, setSelectedAdminId] = useState("");
 
   const step2Ref = useRef(null);
   const borrowPhotoRef = useRef(null);
@@ -54,6 +54,10 @@ export default function ScannerPage() {
 
   useEffect(() => {
     setDueDate(defaultDueDate());
+    // Load active admins for student borrow selection
+    if (!isAdmin) {
+      api.getActiveAdmins().then((data) => setAdmins(Array.isArray(data) ? data : [])).catch(() => {});
+    }
   }, []);
 
   useEffect(() => {
@@ -127,7 +131,7 @@ export default function ScannerPage() {
     setSelectedItem(item);
     const d = item.data;
     const avail = getAvailableQuantity(d);
-    setItemResult({ name: d.itemName, available: avail, total: numOr(d.quantity), condition: d.condition, category: d.category });
+    setItemResult({ name: d.itemName, available: avail, total: numOr(d.quantity), condition: d.condition, category: d.category, course: d.course || "" });
     setTxStatus("Item found."); setTxStatusType("success");
     setStep2Collapsed(true);
   };
@@ -177,6 +181,7 @@ export default function ScannerPage() {
             quantity: qty,
             dueDate: due.toISOString(),
             purpose: purpose.trim(),
+            assigned_admin_id: selectedAdminId || undefined,
           });
           toast.success("Borrow request submitted! Awaiting approval.");
         } else {
@@ -191,10 +196,10 @@ export default function ScannerPage() {
           toast.success("Borrow recorded!");
         }
       } else {
-        const borrowSnap = await getDocs(query(collection(db, "transactions"), where("action", "==", "borrowed")));
+        const allBorrowed = await api.getBorrowed();
         const normalizedSid = normalize(schoolId);
-        const match = borrowSnap.docs
-          .map((d) => ({ id: d.id, data: d.data() }))
+        const match = (allBorrowed || [])
+          .map((d) => ({ id: d.id, data: d }))
           .filter(({ data }) => isOpenBorrow(data))
           .filter(({ data }) => normalize(data.schoolID) === normalizedSid)
           .filter(({ data }) => (data.catalogId || data.itemId) === selectedItem.id)
@@ -442,6 +447,11 @@ export default function ScannerPage() {
                   <span className={`scanner-collapsed-stock ${itemResult.available <= 0 ? "stock-out" : itemResult.available <= 2 ? "stock-low" : ""}`}>
                     {itemResult.available} of {itemResult.total} available
                   </span>
+                  {itemResult.course && (
+                    <span className="scanner-collapsed-course" style={{ fontSize: 11, color: "#f57c00", fontWeight: 600, marginLeft: 8 }}>
+                      {itemResult.course}
+                    </span>
+                  )}
                 </div>
               </div>
             ) : (
@@ -474,7 +484,15 @@ export default function ScannerPage() {
                       </span>
                       {itemResult.condition && <span>{itemResult.condition}</span>}
                       {itemResult.category && <span>{itemResult.category}</span>}
+                      {itemResult.course && (
+                        <span style={{ color: "#f57c00", fontWeight: 600 }}>{itemResult.course}</span>
+                      )}
                     </div>
+                    {borrowerResult?.course && itemResult.course && borrowerResult.course !== itemResult.course && (
+                      <div style={{ fontSize: 11, color: "#f57c00", marginTop: 4, fontWeight: 600 }}>
+                        Cross-course: Student ({borrowerResult.course}) borrowing from {itemResult.course}
+                      </div>
+                    )}
                   </div>
                   <svg className="scanner-result-check" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>
                 </div>
@@ -526,6 +544,17 @@ export default function ScannerPage() {
                   <div className="scanner-field" style={{ marginTop: 12 }}>
                     <label>Purpose of Borrowing</label>
                     <input type="text" placeholder="e.g. Lab experiment, thesis project..." value={purpose} onChange={(e) => setPurpose(e.target.value)} />
+                  </div>
+                )}
+                {!isAdmin && userProfile?.role === "student" && admins.length > 0 && (
+                  <div className="scanner-field" style={{ marginTop: 12 }}>
+                    <label>Approving Admin</label>
+                    <select value={selectedAdminId} onChange={(e) => setSelectedAdminId(e.target.value)}>
+                      <option value="">Auto-assign (Recommended)</option>
+                      {admins.map((a) => (
+                        <option key={a.id} value={a.id}>{a.firstName} {a.lastName}{a.assignedCourse ? ` — ${a.assignedCourse}` : ""}</option>
+                      ))}
+                    </select>
                   </div>
                 )}
               </>

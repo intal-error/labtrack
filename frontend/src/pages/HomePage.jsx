@@ -57,7 +57,7 @@ export default function HomePage() {
   const isStudent = role === "student";
 
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({ total: 0, borrowed: 0, overdue: 0, available: 0 });
+  const [stats, setStats] = useState([]);
   const [activity, setActivity] = useState([]);
   const [notifs, setNotifs] = useState([]);
 
@@ -92,17 +92,19 @@ export default function HomePage() {
           ]);
           setActivity(mine.slice(0, 5));
         } else {
-          const [countsData, chartDataRes, activityData] = await Promise.all([
+          const [countsData, chartDataRes, activityData, borrowRequests] = await Promise.all([
             api.getDashboardCounts(),
             api.getChartData(),
             api.getRecentActivity(),
+            api.getBorrowRequests().catch(() => []),
           ]);
           if (cancelled) return;
+          const pendingRequests = (borrowRequests || []).filter((r) => r.status === "pending").length;
           setStats([
             { key: "inventory", label: "Total Items", value: chartDataRes.inventory ?? 0, icon: MdInventory2, tone: "purple" },
             { key: "available", label: "Available", value: chartDataRes.available ?? 0, icon: MdCheckCircle, tone: "green" },
             { key: "borrowed", label: "Borrowed", value: countsData.borrowed ?? 0, icon: MdHistory, tone: "orange" },
-            { key: "returned", label: "Returned", value: countsData.returned ?? 0, icon: MdSwapHoriz, tone: "blue" },
+            { key: "pending-requests", label: "Pending Requests", value: pendingRequests, icon: MdAssignment, tone: "blue" },
           ]);
           setActivity((activityData || []).slice(0, 6));
         }

@@ -76,8 +76,8 @@ export default function MaintenanceTab() {
   async function load() {
     try {
       const [m, c] = await Promise.all([api.getMaintenance(), api.getCatalog()]);
-      setItems(m);
-      setCatalog(c);
+      setItems(Array.isArray(m) ? m : []);
+      setCatalog(Array.isArray(c) ? c : []);
     } catch {
       toast.error("Failed to load maintenance data");
     } finally {
@@ -181,7 +181,7 @@ export default function MaintenanceTab() {
   }, [items]);
 
   const filtered = useMemo(() => {
-    let result = items;
+    let result = [...items];
     if (filter !== "all") {
       result = result.filter((i) => i.status === filter);
     }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { filterBySearch } from "../../utils/search";
@@ -103,10 +104,10 @@ export default function UsageLogsTab() {
           <h2><MdHistory size={24} /> My Activity</h2>
           <p className="activity-page-subtitle">Track your borrowed and returned equipment</p>
         </div>
-        <a href="/scanner" className="activity-scan-btn">
+        <Link to="/scanner" className="activity-scan-btn">
           <MdQrCodeScanner size={18} />
           Scan to Return
-        </a>
+        </Link>
       </div>
 
       <div className="activity-stats">

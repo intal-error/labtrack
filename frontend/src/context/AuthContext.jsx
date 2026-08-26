@@ -63,14 +63,22 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = async () => {
-    await signOut(auth);
+    try {
+      await signOut(auth);
+    } catch {
+      // sign out failed, continue cleanup
+    }
     setRole(null);
     setUserProfile(null);
     const savedEmail = localStorage.getItem("slsu_remembered_email");
+    const savedTheme = localStorage.getItem("theme");
     localStorage.clear();
     sessionStorage.clear();
     if (savedEmail) {
       localStorage.setItem("slsu_remembered_email", savedEmail);
+    }
+    if (savedTheme) {
+      localStorage.setItem("theme", savedTheme);
     }
   };
 

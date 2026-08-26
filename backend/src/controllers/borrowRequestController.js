@@ -28,14 +28,52 @@ function getAvailableQuantity(item) {
   return (item?.status || "").toLowerCase() === "borrowed" ? 0 : quantity;
 }
 
+async function getActiveAdminsList() {
+  const snap = await db.collection(USERS)
+    .where("role", "==", "admin")
+    .get();
+  return snap.docs
+    .map((doc) => ({ id: doc.id, ...doc.data() }))
+    .filter((a) => (a.status || "active") === "active");
+}
+
+async function autoAssignAdmin(equipmentCourse) {
+  try {
+    const admins = await getActiveAdminsList();
+    if (admins.length === 0) return null;
+
+    // Prefer admin whose assignedCourse matches the equipment's course
+    let candidates = admins;
+    if (equipmentCourse) {
+      const matched = admins.filter((a) => a.assignedCourse === equipmentCourse);
+      if (matched.length > 0) candidates = matched;
+    }
+
+    // Count pending requests per admin to balance load
+    const pendingSnap = await db.collection(REQUESTS)
+      .where("status", "==", "pending")
+      .get();
+    const pendingCounts = {};
+    pendingSnap.docs.forEach((doc) => {
+      const data = doc.data();
+      if (data.assigned_admin_id) {
+        pendingCounts[data.assigned_admin_id] = (pendingCounts[data.assigned_admin_id] || 0) + 1;
+      }
+    });
+
+    // Pick admin with fewest pending requests
+    candidates.sort((a, b) => (pendingCounts[a.id] || 0) - (pendingCounts[b.id] || 0));
+    return candidates[0];
+  } catch {
+    return null;
+  }
+}
+
 const getAllRequests = async (req, res) => {
   try {
     const snap = await db.collection(REQUESTS).orderBy("createdAt", "desc").get();
-    let requests = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    // Filter by course for admin users with assigned course
-    if (req.adminAssignment?.assignedCourse) {
-      requests = requests.filter((r) => r.course === req.adminAssignment.assignedCourse);
-    }
+    const requests = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    // All admins see all requests — no course filtering
     res.json(requests);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -63,7 +101,7 @@ const getMyRequests = async (req, res) => {
 
 const createRequest = async (req, res) => {
   try {
-    const { itemId, quantity, dueDate, purpose } = req.body;
+    const { itemId, quantity, dueDate, purpose, assigned_admin_id } = req.body;
     const uid = req.user.uid;
 
     const userSnap = await db.collection(USERS).doc(uid).get();
@@ -104,6 +142,23 @@ const createRequest = async (req, res) => {
       return res.status(400).json({ error: `Your account is restricted due to unpaid fines (₱${totalPendingFines}). Please settle your fines first.` });
     }
 
+    // Admin assignment: use manual selection if provided, otherwise auto-assign
+    const equipmentCourse = item.course || "";
+    let assignedAdmin = null;
+    if (assigned_admin_id) {
+      // Verify the selected admin exists and is active
+      const selectedAdminDoc = await db.collection(USERS).doc(assigned_admin_id).get();
+      if (selectedAdminDoc.exists) {
+        const sa = selectedAdminDoc.data();
+        if (sa.role === "admin" && (sa.status || "active") === "active") {
+          assignedAdmin = { id: selectedAdminDoc.id, ...sa };
+        }
+      }
+    }
+    if (!assignedAdmin) {
+      assignedAdmin = await autoAssignAdmin(equipmentCourse);
+    }
+
     const requestData = {
       userId: uid,
       schoolID: user.schoolId || user.employeeId || user.schoolID || "",
@@ -119,25 +174,23 @@ const createRequest = async (req, res) => {
       dueDate: new Date(dueDate),
       purpose: purpose || "",
       status: "pending",
+      // Equipment info (separate from student course)
+      equipment_course: equipmentCourse,
+      equipment_category: item.category || "",
+      // Admin assignment
+      assigned_admin_id: assignedAdmin?.id || "",
+      assigned_admin_name: assignedAdmin ? `${assignedAdmin.firstName || ""} ${assignedAdmin.lastName || ""}`.trim() : "",
+      // Reassignment history
+      reassignment_history: [],
       createdAt: new Date(),
     };
 
     const docRef = await db.collection(REQUESTS).add(requestData);
 
-    // Notify admins assigned to the student's course, fallback to all admins
-    let adminsSnap;
-    if (user.course) {
-      adminsSnap = await db.collection(USERS)
-        .where("role", "==", "admin")
-        .where("assignedCourse", "==", user.course)
-        .get();
-    }
-    if (!adminsSnap || adminsSnap.empty) {
-      adminsSnap = await db.collection(USERS).where("role", "==", "admin").get();
-    }
-    for (const adminDoc of adminsSnap.docs) {
+    // Notify the assigned admin, or all admins if no assignment
+    if (assignedAdmin) {
       await db.collection(NOTIF).add({
-        targetUserId: adminDoc.id,
+        targetUserId: assignedAdmin.id,
         type: "info",
         title: "New Borrow Request",
         message: `${user.firstName} ${user.lastName} requested to borrow "${item.itemName}" (Qty: ${quantity})`,
@@ -146,6 +199,21 @@ const createRequest = async (req, res) => {
         link: "/borrow-requests",
         createdAt: new Date(),
       });
+    } else {
+      // Fallback: notify all admins
+      const adminsSnap = await db.collection(USERS).where("role", "==", "admin").get();
+      for (const adminDoc of adminsSnap.docs) {
+        await db.collection(NOTIF).add({
+          targetUserId: adminDoc.id,
+          type: "info",
+          title: "New Borrow Request",
+          message: `${user.firstName} ${user.lastName} requested to borrow "${item.itemName}" (Qty: ${quantity})`,
+          read: false,
+          dismissedBy: [],
+          link: "/borrow-requests",
+          createdAt: new Date(),
+        });
+      }
     }
 
     res.status(201).json({ message: "Borrow request submitted", id: docRef.id });
@@ -171,13 +239,13 @@ const approveRequest = async (req, res) => {
     const request = requestSnap.data();
     if (request.status !== "pending") return res.status(400).json({ error: "Request already processed" });
 
-    // Course-based access control: admin can only approve requests from their assigned course
-    if (req.adminAssignment?.assignedCourse && request.course !== req.adminAssignment.assignedCourse) {
-      return res.status(403).json({ error: "You do not have permission to approve requests for this course" });
+    // Only the assigned admin (or super admin) can approve
+    const reviewerDoc = await db.collection(USERS).doc(reviewerId).get();
+    const reviewer = reviewerDoc.exists ? reviewerDoc.data() : {};
+    const isSuperAdmin = reviewer.role === "admin" && !reviewer.assignedCourse;
+    if (request.assigned_admin_id && request.assigned_admin_id !== reviewerId && !isSuperAdmin) {
+      return res.status(403).json({ error: "Only the assigned admin can approve this request" });
     }
-
-    const reviewerSnap = await db.collection(USERS).doc(reviewerId).get();
-    const reviewer = reviewerSnap.exists ? reviewerSnap.data() : {};
 
     await db.runTransaction(async (t) => {
       const catalogRef = db.collection(CATALOG).doc(request.catalogId);
@@ -219,6 +287,9 @@ const approveRequest = async (req, res) => {
         borrowedAt: new Date(),
         approvedBy: reviewerId,
         approvedAt: new Date(),
+        // Equipment and admin info
+        equipment_course: request.equipment_course || "",
+        assigned_admin_id: request.assigned_admin_id || reviewerId,
       };
       t.set(borrowRef, loanData);
 
@@ -286,13 +357,13 @@ const rejectRequest = async (req, res) => {
     const request = requestSnap.data();
     if (request.status !== "pending") return res.status(400).json({ error: "Request already processed" });
 
-    // Course-based access control: admin can only reject requests from their assigned course
-    if (req.adminAssignment?.assignedCourse && request.course !== req.adminAssignment.assignedCourse) {
-      return res.status(403).json({ error: "You do not have permission to reject requests for this course" });
+    // Only the assigned admin (or super admin) can reject
+    const reviewerDoc = await db.collection(USERS).doc(reviewerId).get();
+    const reviewer = reviewerDoc.exists ? reviewerDoc.data() : {};
+    const isSuperAdmin = reviewer.role === "admin" && !reviewer.assignedCourse;
+    if (request.assigned_admin_id && request.assigned_admin_id !== reviewerId && !isSuperAdmin) {
+      return res.status(403).json({ error: "Only the assigned admin can reject this request" });
     }
-
-    const reviewerSnap = await db.collection(USERS).doc(reviewerId).get();
-    const reviewer = reviewerSnap.exists ? reviewerSnap.data() : {};
 
     await requestRef.set({
       status: "rejected",
@@ -340,4 +411,76 @@ const cancelRequest = async (req, res) => {
   }
 };
 
-module.exports = { getAllRequests, getMyRequests, createRequest, approveRequest, rejectRequest, cancelRequest };
+const reassignRequest = async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "Insufficient permissions" });
+    }
+
+    const { id } = req.params;
+    const { newAdminId, reason } = req.body;
+    const reassignedBy = req.user.uid;
+
+    if (!newAdminId) return res.status(400).json({ error: "New admin ID is required" });
+
+    const requestRef = db.collection(REQUESTS).doc(id);
+    const requestSnap = await requestRef.get();
+    if (!requestSnap.exists) return res.status(404).json({ error: "Request not found" });
+
+    const request = requestSnap.data();
+    if (request.status !== "pending") return res.status(400).json({ error: "Can only reassign pending requests" });
+
+    // Verify new admin exists and is active
+    const newAdminDoc = await db.collection(USERS).doc(newAdminId).get();
+    if (!newAdminDoc.exists) return res.status(404).json({ error: "Admin not found" });
+    const newAdminData = newAdminDoc.data();
+    if (newAdminData.role !== "admin") return res.status(400).json({ error: "Target user is not an admin" });
+    if (newAdminData.status === "inactive") return res.status(400).json({ error: "Cannot assign to inactive admin" });
+
+    // Record reassignment history
+    const historyEntry = {
+      previousAdminId: request.assigned_admin_id || "",
+      previousAdminName: request.assigned_admin_name || "",
+      newAdminId: newAdminId,
+      newAdminName: `${newAdminData.firstName || ""} ${newAdminData.lastName || ""}`.trim(),
+      reassignedBy: reassignedBy,
+      reassignedByName: "", // will be filled below
+      date: new Date(),
+      reason: reason || "",
+    };
+
+    // Get reassignedBy name
+    const reassignerDoc = await db.collection(USERS).doc(reassignedBy).get();
+    if (reassignerDoc.exists) {
+      const rd = reassignerDoc.data();
+      historyEntry.reassignedByName = `${rd.firstName || ""} ${rd.lastName || ""}`.trim();
+    }
+
+    const reassignmentHistory = [...(request.reassignment_history || []), historyEntry];
+
+    await requestRef.set({
+      assigned_admin_id: newAdminId,
+      assigned_admin_name: historyEntry.newAdminName,
+      reassignment_history: reassignmentHistory,
+      updatedAt: new Date(),
+    }, { merge: true });
+
+    // Notify new admin
+    await db.collection(NOTIF).add({
+      targetUserId: newAdminId,
+      type: "info",
+      title: "Request Reassigned to You",
+      message: `A borrow request from ${request.firstName} ${request.lastName} for "${request.itemName}" has been reassigned to you.`,
+      read: false,
+      dismissedBy: [],
+      link: "/borrow-requests",
+      createdAt: new Date(),
+    });
+
+    res.json({ message: "Request reassigned successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+module.exports = { getAllRequests, getMyRequests, createRequest, approveRequest, rejectRequest, cancelRequest, reassignRequest };

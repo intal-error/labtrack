@@ -7,10 +7,10 @@ import { FiMenu, FiX } from "react-icons/fi";
 import {
   MdQrCodeScanner, MdInventory, MdPerson, MdAdminPanelSettings, MdInfo,
   MdLogout, MdDarkMode, MdLightMode, MdHome,
-  MdNotifications, MdPeople, MdFolderOpen, MdSettings,
+  MdNotifications, MdFolderOpen, MdSettings,
   MdChevronLeft, MdChevronRight, MdExpandMore, MdExpandLess,
   MdBuild, MdWarning, MdMenuBook, MdHistory, MdAssessment, MdAccountCircle,
-  MdAttachMoney, MdAssignment, MdTimer
+  MdAttachMoney, MdAssignment, MdEventAvailable, MdQrCode
 } from "react-icons/md";
 import { FaExchangeAlt } from "react-icons/fa";
 import "../../styles/pages/layout.css";
@@ -20,8 +20,10 @@ const navSections = [
     label: "HOME",
     items: [
       { path: "/home", label: "Home", icon: MdHome, roles: ["student", "admin"] },
-      { path: "/lab-sessions", label: "Lab Activity", icon: MdTimer, roles: ["student", "admin"] },
+
       { path: "/usage-logs", label: "My Activity", icon: MdHistory, roles: ["student"] },
+      { path: "/my-attendance", label: "My Attendance", icon: MdEventAvailable, roles: ["student"] },
+      { path: "/attendance", label: "Attendance Logs", icon: MdEventAvailable, roles: ["admin"] },
       { path: "/reports", label: "Reports", icon: MdAssessment, roles: ["admin"] },
     ],
   },
@@ -43,7 +45,6 @@ const navSections = [
       { path: "/incidents", label: "Incidents", icon: MdWarning, roles: ["admin", "student"] },
       { path: "/fines", label: "Fines", icon: MdAttachMoney, roles: ["admin"] },
       { path: "/manuals", label: "Lab Manuals", icon: MdMenuBook, roles: ["student", "admin"] },
-      { path: "/members", label: "Members", icon: MdPeople, roles: ["admin"] },
       { path: "/documents", label: "Documents", icon: MdFolderOpen, roles: ["admin"] },
       { path: "/settings", label: "Settings", icon: MdSettings, roles: ["admin"] },
     ],

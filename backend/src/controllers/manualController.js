@@ -32,10 +32,15 @@ const getAll = async (req, res) => {
 
 const create = async (req, res) => {
   try {
+    const { title, description, category, fileUrl, fileName } = req.body;
     const data = {
-      ...req.body,
+      title: title || "",
+      description: description || "",
+      category: category || "",
+      fileUrl: fileUrl || "",
+      fileName: fileName || "",
       uploadedBy: req.user.uid,
-      createdAt: new Date().toISOString(),
+      createdAt: new Date(),
     };
     const ref = await db.collection(COLLECTION).add(data);
     res.status(201).json({ id: ref.id, ...data });
@@ -49,15 +54,15 @@ const update = async (req, res) => {
     const { id } = req.params;
     const doc = await db.collection(COLLECTION).doc(id).get();
     if (!doc.exists) return res.status(404).json({ error: "Manual not found" });
+    const updates = {};
     const { title, description, category, fileUrl, fileName } = req.body;
-    await db.collection(COLLECTION).doc(id).update({
-      title,
-      description,
-      category,
-      fileUrl,
-      fileName,
-      updatedAt: new Date().toISOString(),
-    });
+    if (title !== undefined) updates.title = title;
+    if (description !== undefined) updates.description = description;
+    if (category !== undefined) updates.category = category;
+    if (fileUrl !== undefined) updates.fileUrl = fileUrl;
+    if (fileName !== undefined) updates.fileName = fileName;
+    updates.updatedAt = new Date();
+    await db.collection(COLLECTION).doc(id).update(updates);
     res.json({ message: "Manual updated" });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -67,6 +72,8 @@ const update = async (req, res) => {
 const remove = async (req, res) => {
   try {
     const { id } = req.params;
+    const doc = await db.collection(COLLECTION).doc(id).get();
+    if (!doc.exists) return res.status(404).json({ error: "Manual not found" });
     await db.collection(COLLECTION).doc(id).delete();
     res.json({ message: "Manual deleted" });
   } catch (err) {

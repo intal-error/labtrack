@@ -19,7 +19,8 @@ const manualRoutes = require("./src/routes/manuals");
 const finesRoutes = require("./src/routes/fines");
 const backupRoutes = require("./src/routes/backup");
 const borrowRequestRoutes = require("./src/routes/borrowRequests");
-const labActivityRoutes = require("./src/routes/labActivities");
+const attendanceRoutes = require("./src/routes/attendance");
+
 const { checkOverdueTransactions } = require("./src/utils/overdueChecker");
 
 const app = express();
@@ -33,6 +34,7 @@ app.use(express.json());
 
 // Public routes
 app.use("/api/auth", authRoutes);
+app.use("/api/attendance", attendanceRoutes);
 app.get("/api/health", (req, res) => res.json({ status: "ok", timestamp: new Date().toISOString() }));
 
 // Protected routes (any authenticated user)
@@ -49,7 +51,7 @@ app.use("/api/manuals", verifyToken, manualRoutes);
 app.use("/api/fines", verifyToken, finesRoutes);
 app.use("/api/backup", verifyToken, authorize("admin"), backupRoutes);
 app.use("/api/borrow-requests", verifyToken, borrowRequestRoutes);
-app.use("/api/lab-activities", verifyToken, labActivityRoutes);
+
 
 // Admin-only routes
 app.use("/api/admin", verifyToken, authorize("admin"), adminRoutes);

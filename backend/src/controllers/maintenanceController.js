@@ -15,12 +15,14 @@ const getAll = async (req, res) => {
 
 const create = async (req, res) => {
   try {
-    const data = {
-      ...req.body,
-      createdBy: req.user.uid,
-      createdAt: new Date(),
-    };
-    const ref = await db.collection(COLLECTION).add(data);
+    const allowed = ["title", "description", "scheduledDate", "type", "status", "priority", "assignedTo", "catalogId", "itemName", "photoURL"];
+    const sanitized = {};
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) sanitized[key] = req.body[key];
+    }
+    sanitized.createdBy = req.user.uid;
+    sanitized.createdAt = new Date();
+    const ref = await db.collection(COLLECTION).add(sanitized);
     res.status(201).json({ id: ref.id, message: "Maintenance scheduled" });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -30,8 +32,13 @@ const create = async (req, res) => {
 const update = async (req, res) => {
   try {
     const { id } = req.params;
-    const data = { ...req.body, updatedAt: new Date() };
-    await db.collection(COLLECTION).doc(id).set(data, { merge: true });
+    const allowed = ["title", "description", "scheduledDate", "type", "status", "priority", "assignedTo", "catalogId", "itemName", "photoURL"];
+    const sanitized = {};
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) sanitized[key] = req.body[key];
+    }
+    sanitized.updatedAt = new Date();
+    await db.collection(COLLECTION).doc(id).set(sanitized, { merge: true });
     res.json({ message: "Maintenance updated" });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -41,6 +48,8 @@ const update = async (req, res) => {
 const remove = async (req, res) => {
   try {
     const { id } = req.params;
+    const doc = await db.collection(COLLECTION).doc(id).get();
+    if (!doc.exists) return res.status(404).json({ error: "Maintenance record not found" });
     await db.collection(COLLECTION).doc(id).delete();
     res.json({ message: "Maintenance deleted" });
   } catch (err) {

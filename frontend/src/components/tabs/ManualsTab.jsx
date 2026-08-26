@@ -32,7 +32,9 @@ function getFileType(fileName) {
 
 function timeAgo(date) {
   if (!date) return "";
+  if (typeof date?.toDate === "function") return timeAgo(date.toDate());
   const d = typeof date === "string" ? new Date(date) : date;
+  if (!(d instanceof Date) || isNaN(d.getTime())) return "";
   const now = new Date();
   const diff = now - d;
   const mins = Math.floor(diff / 60000);

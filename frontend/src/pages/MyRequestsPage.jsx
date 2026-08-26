@@ -158,6 +158,16 @@ export default function MyRequestsPage() {
                   </div>
                 </div>
                 <div className="transaction-card-details">
+                  {req.equipment_course && req.course && req.equipment_course !== req.course && (
+                    <div className="transaction-detail" style={{ color: "#f57c00", fontWeight: 600 }}>
+                      <span>Cross-course: {req.course} → {req.equipment_course}</span>
+                    </div>
+                  )}
+                  {req.assigned_admin_name && (
+                    <div className="transaction-detail">
+                      <span>Assigned Admin: {req.assigned_admin_name}</span>
+                    </div>
+                  )}
                   <div className="transaction-detail">
                     <span>Due: {req.dueDate ? new Date(req.dueDate?.toDate?.() || req.dueDate).toLocaleDateString() : "-"}</span>
                   </div>
@@ -224,6 +234,23 @@ export default function MyRequestsPage() {
                   <span className="txn-detail-label">Item</span>
                   <span className="txn-detail-value">{selectedRequest.itemName}</span>
                 </div>
+                {selectedRequest.equipment_course && (
+                  <div className="txn-detail-row">
+                    <span className="txn-detail-label">Equipment Course</span>
+                    <span className="txn-detail-value">
+                      {selectedRequest.equipment_course}
+                      {selectedRequest.equipment_course !== selectedRequest.course && (
+                        <span style={{ color: "#f57c00", fontSize: 11, marginLeft: 6 }}>(Cross-course)</span>
+                      )}
+                    </span>
+                  </div>
+                )}
+                {selectedRequest.assigned_admin_name && (
+                  <div className="txn-detail-row">
+                    <span className="txn-detail-label">Assigned Admin</span>
+                    <span className="txn-detail-value">{selectedRequest.assigned_admin_name}</span>
+                  </div>
+                )}
                 <div className="txn-detail-row">
                   <span className="txn-detail-label">Quantity</span>
                   <span className="txn-detail-value">{selectedRequest.quantity}</span>

@@ -158,12 +158,12 @@ export default function TransactionsPage() {
   const filterItems = useCallback((items) => {
     let result = items;
     if (filterCourse !== "All") {
-      result = result.filter((item) => item.course === filterCourse);
+      result = result.filter((item) => item.course === filterCourse || item.equipment_course === filterCourse);
     }
     if (dateRange !== "all") {
       result = result.filter((item) => matchesDateRange(toDate(item.timestamp), dateRange));
     }
-    if (search) result = filterBySearch(result, search, ["schoolID", "firstName", "lastName", "itemName", "course", "year"]);
+    if (search) result = filterBySearch(result, search, ["schoolID", "firstName", "lastName", "itemName", "course", "year", "equipment_course", "assigned_admin_id"]);
     return sortItems(result, sortBy);
   }, [filterCourse, dateRange, search, sortBy]);
 
@@ -174,9 +174,9 @@ export default function TransactionsPage() {
   const allCount = useMemo(() => {
     const all = activeTab === "borrowed" ? borrowed : returned;
     let result = all;
-    if (filterCourse !== "All") result = result.filter((i) => i.course === filterCourse);
+    if (filterCourse !== "All") result = result.filter((i) => i.course === filterCourse || i.equipment_course === filterCourse);
     if (dateRange !== "all") result = result.filter((i) => matchesDateRange(toDate(i.timestamp), dateRange));
-    if (search) result = filterBySearch(result, search, ["schoolID", "firstName", "lastName", "itemName", "course", "year"]);
+    if (search) result = filterBySearch(result, search, ["schoolID", "firstName", "lastName", "itemName", "course", "year", "equipment_course"]);
     return result.length;
   }, [activeTab, borrowed, returned, filterCourse, dateRange, search]);
 
@@ -395,12 +395,17 @@ export default function TransactionsPage() {
                     )}
                   </div>
                   {item.course && <span className="transaction-course-tag">{item.course}{item.year ? ` - ${item.year}` : ""}</span>}
-                  {isBorrowed && item.quantity > 0 && (
+                  {item.equipment_course && item.equipment_course !== item.course && (
+                    <span className="transaction-course-tag" style={{ marginLeft: 4, background: "#f57c0020", color: "#f57c00" }}>
+                      Equipment: {item.equipment_course}
+                    </span>
+                  )}
+                  {isBorrowed && item.quantity > 0 && remaining >= 0 && (
                     <div className="transaction-progress">
                       <div className="progress-bar">
-                        <div className="progress-fill" style={{ width: `${((item.quantity - remaining) / item.quantity) * 100}%` }} />
+                        <div className="progress-fill" style={{ width: `${item.quantity > 0 ? Math.max(0, ((item.quantity - remaining) / item.quantity) * 100) : 0}%` }} />
                       </div>
-                      <span className="progress-label">{item.quantity - remaining} of {item.quantity} returned</span>
+                      <span className="progress-label">{Math.max(0, item.quantity - remaining)} of {item.quantity} returned</span>
                     </div>
                   )}
                 </div>
@@ -415,10 +420,9 @@ export default function TransactionsPage() {
               <tr>
                 <th>Name</th>
                 <th>School ID</th>
-                {activeTab === "borrowed" && <th>Course</th>}
-                {activeTab === "borrowed" && <th>Year</th>}
                 <th>Item</th>
                 <th>Qty</th>
+                <th>Equipment Course</th>
                 <th>Date</th>
                 {activeTab === "borrowed" && <th>Due Date</th>}
                 <th>Status</th>
@@ -448,10 +452,15 @@ export default function TransactionsPage() {
                       </div>
                     </td>
                     <td>{item.schoolID || "-"}</td>
-                    {isBorrowed && <td>{item.course || "-"}</td>}
-                    {isBorrowed && <td>{item.year || "-"}</td>}
                     <td>{item.itemName || "-"}</td>
                     <td>{isBorrowed ? `${remaining} / ${item.quantity || 0}` : (item.quantity || 0)}</td>
+                    <td>
+                      {item.equipment_course ? (
+                        <span style={item.equipment_course !== item.course ? { color: "#f57c00", fontWeight: 600 } : {}}>
+                          {item.equipment_course}
+                        </span>
+                      ) : "-"}
+                    </td>
                     <td>{date ? timeAgo(date) : "-"}</td>
                     {isBorrowed && (
                       <td style={{ color: overdue ? "var(--red)" : undefined, fontWeight: overdue ? 600 : undefined }}>
@@ -514,6 +523,17 @@ export default function TransactionsPage() {
                       <span className="txn-detail-label">Item</span>
                       <span className="txn-detail-value">{item.itemName || "-"}</span>
                     </div>
+                    {item.equipment_course && (
+                      <div className="txn-detail-row">
+                        <span className="txn-detail-label">Equipment Course</span>
+                        <span className="txn-detail-value">
+                          {item.equipment_course}
+                          {item.equipment_course !== item.course && (
+                            <span style={{ color: "#f57c00", fontSize: 11, marginLeft: 6 }}>(Cross-course)</span>
+                          )}
+                        </span>
+                      </div>
+                    )}
                     <div className="txn-detail-row">
                       <span className="txn-detail-label">Quantity</span>
                       <span className="txn-detail-value">

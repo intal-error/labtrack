@@ -29,7 +29,7 @@ export default function FinesTab() {
   const [waiveReason, setWaiveReason] = useState("");
   const [sortBy, setSortBy] = useState("oldest");
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { if (role) load(); }, [role]);
 
   async function load() {
     try {

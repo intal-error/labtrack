@@ -47,8 +47,13 @@ const create = async (req, res) => {
 const update = async (req, res) => {
   try {
     const { id } = req.params;
-    const data = { ...req.body, updatedAt: new Date().toISOString() };
-    await db.collection(COLLECTION).doc(id).set(data, { merge: true });
+    const allowed = ["status", "description", "severity", "assignedTo", "resolution", "title", "category"];
+    const sanitized = {};
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) sanitized[key] = req.body[key];
+    }
+    sanitized.updatedAt = new Date();
+    await db.collection(COLLECTION).doc(id).set(sanitized, { merge: true });
     res.json({ message: "Incident updated" });
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -2,17 +2,28 @@ import { useState, useEffect } from "react";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { MdAdd, MdList, MdLogout, MdPerson, MdLock, MdPhone, MdWork, MdEmail, MdArrowBack, MdShield, MdEdit, MdDelete, MdGridView, MdViewList } from "react-icons/md";
+import { MdAdd, MdList, MdLogout, MdPerson, MdLock, MdPhone, MdWork, MdEmail, MdArrowBack, MdShield, MdEdit, MdDelete, MdGridView, MdViewList, MdVisibility, MdEditNote, MdAssignment, MdSwapHoriz, MdSchool } from "react-icons/md";
 import { COURSES } from "../constants/courses";
+
 import EmptyState from "../components/ui/EmptyState";
 import ErrorState from "../components/ui/ErrorState";
 import toast from "react-hot-toast";
 import "../styles/pages/admin.css";
 
+const PERMISSIONS = [
+  { key: "view_catalog", label: "View Catalog", icon: MdVisibility },
+  { key: "manage_catalog", label: "Manage Catalog", icon: MdEditNote },
+  { key: "view_transactions", label: "View Transactions", icon: MdVisibility },
+  { key: "view_requests", label: "View Requests", icon: MdVisibility },
+  { key: "process_requests", label: "Process Requests", icon: MdAssignment },
+  { key: "admin_management", label: "Admin Management", icon: MdShield },
+  { key: "reassign_requests", label: "Reassign Requests", icon: MdSwapHoriz },
+];
+
 export default function AdminPage() {
   const [view, setView] = useState("main");
   const [admins, setAdmins] = useState([]);
-  const [form, setForm] = useState({ firstName: "", lastName: "", password: "", contact: "", position: "", email: "", assignedCourse: "", assignedYear: "" });
+  const [form, setForm] = useState({ firstName: "", lastName: "", password: "", contact: "", position: "", email: "", assignCourse: false, assignedCourse: "", assignedYear: "", permissions: ["view_catalog", "manage_catalog", "view_transactions", "view_requests", "process_requests"] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [displayMode, setDisplayMode] = useState("grid");
@@ -33,16 +44,24 @@ export default function AdminPage() {
     try {
       await api.createAdmin(form);
       toast.success("Admin created!");
-      setForm({ firstName: "", lastName: "", password: "", contact: "", position: "", email: "", assignedCourse: "", assignedYear: "" });
+      setForm({ firstName: "", lastName: "", password: "", contact: "", position: "", email: "", assignCourse: false, assignedCourse: "", assignedYear: "", permissions: ["view_catalog", "manage_catalog", "view_transactions", "view_requests", "process_requests"] });
       setView("list");
     } catch (err) { toast.error(err.message); }
     finally { setLoading(false); }
   };
 
   const handleDelete = async (id) => {
-    if (!confirm("Delete this account?")) return;
-    try { await api.deleteAdmin(id); toast.success("Deleted!"); loadAdmins(); }
+    if (!confirm("Deactivate this admin account?")) return;
+    try { await api.deleteAdmin(id); toast.success("Admin deactivated!"); loadAdmins(); }
     catch (err) { toast.error(err.message); }
+  };
+
+  const handleToggleStatus = async (id) => {
+    try {
+      const result = await api.toggleAdminStatus(id);
+      toast.success(`Admin ${result.status}`);
+      loadAdmins();
+    } catch (err) { toast.error(err.message); }
   };
 
   const handleUpdate = async (id) => {
@@ -64,6 +83,15 @@ export default function AdminPage() {
   };
 
   const handleLogout = async () => { await logout(); navigate("/login"); };
+
+  const togglePermission = (perm) => {
+    setForm((f) => ({
+      ...f,
+      permissions: f.permissions.includes(perm)
+        ? f.permissions.filter((p) => p !== perm)
+        : [...f.permissions, perm],
+    }));
+  };
 
   const getAdminInitials = (a) => `${(a.firstName || a.firstname || "")[0] || ""}${(a.lastName || a.lastname || "")[0] || ""}`.toUpperCase() || "?";
 
@@ -136,18 +164,46 @@ export default function AdminPage() {
                 <input type="text" placeholder="Position" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} />
               </div>
             </div>
-            <div className="admin-form-row">
-              <div className="admin-input-wrap">
-                <select value={form.assignedCourse} onChange={(e) => setForm({ ...form, assignedCourse: e.target.value })} required>
-                  <option value="" disabled>Assigned Course</option>
-                  {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div className="admin-input-wrap">
-                <select value={form.assignedYear} onChange={(e) => setForm({ ...form, assignedYear: e.target.value })} required>
-                  <option value="" disabled>Assigned Year</option>
-                  {["1st Year", "2nd Year", "3rd Year", "4th Year", "5th Year"].map((y) => <option key={y} value={y}>{y}</option>)}
-                </select>
+            <div className="course-assign-section">
+              <button type="button" className={`course-toggle-header ${form.assignCourse ? "active" : ""}`} onClick={() => setForm({ ...form, assignCourse: !form.assignCourse, assignedCourse: form.assignCourse ? "" : form.assignedCourse, assignedYear: form.assignCourse ? "" : form.assignedYear })}>
+                <MdSchool size={18} />
+                <span>Assign to Course for Approvals</span>
+                <span className={`course-toggle-switch ${form.assignCourse ? "on" : ""}`} />
+              </button>
+              {form.assignCourse && (
+                <div className="course-toggle-fields">
+                  <div className="admin-form-row">
+                    <div className="admin-input-wrap">
+                      <select value={form.assignedCourse} onChange={(e) => setForm({ ...form, assignedCourse: e.target.value })}>
+                        <option value="">Select Course</option>
+                        {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <div className="admin-input-wrap">
+                      <select value={form.assignedYear} onChange={(e) => setForm({ ...form, assignedYear: e.target.value })}>
+                        <option value="">Select Year</option>
+                        {["1st Year", "2nd Year", "3rd Year", "4th Year", "5th Year"].map((y) => <option key={y} value={y}>{y}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <p className="course-assign-hint">Admin will approve borrow requests from students of this course.</p>
+                </div>
+              )}
+            </div>
+            <div className="perm-section">
+              <label className="perm-section-label">Permissions</label>
+              <div className="perm-grid">
+                {PERMISSIONS.map(({ key, label, icon: Icon }) => (
+                  <button
+                    type="button"
+                    key={key}
+                    className={`perm-chip ${form.permissions.includes(key) ? "active" : ""}`}
+                    onClick={() => togglePermission(key)}
+                  >
+                    <Icon size={14} />
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
             <div className="admin-form-actions">
@@ -203,6 +259,9 @@ export default function AdminPage() {
                           <div className="admin-account-info">
                             <h4 className="admin-account-name">{a.firstName || a.firstname || ""} {a.lastName || a.lastname || ""}</h4>
                             <p className="admin-account-position">{a.position || "Admin"}</p>
+                            <span className={`admin-status-badge ${(a.status || "active") === "active" ? "status-active" : "status-inactive"}`}>
+                              {(a.status || "active") === "active" ? "Active" : "Inactive"}
+                            </span>
                           </div>
                         </div>
                         <div className="admin-account-details">
@@ -227,6 +286,9 @@ export default function AdminPage() {
                           <button className="admin-btn-edit" onClick={() => handleUpdate(a.id)}>
                             <MdEdit size={14} /> Edit
                           </button>
+                          <button className="admin-btn-edit" onClick={() => handleToggleStatus(a.id)} style={{ color: (a.status || "active") === "active" ? "#f57c00" : "#43A047" }}>
+                            {(a.status || "active") === "active" ? "Deactivate" : "Activate"}
+                          </button>
                           <button className="admin-btn-delete" onClick={() => handleDelete(a.id)}>
                             <MdDelete size={14} /> Delete
                           </button>
@@ -245,6 +307,7 @@ export default function AdminPage() {
                         <th>Contact</th>
                         <th>Course - Year</th>
                         <th>Position</th>
+                        <th>Status</th>
                         <th>Actions</th>
                       </tr>
                     </thead>
@@ -262,9 +325,17 @@ export default function AdminPage() {
                           <td>{(a.assignedCourse || a.assignedYear) ? `${a.assignedCourse || "No Course"} - ${a.assignedYear || "No Year"}` : "-"}</td>
                           <td>{a.position || "Admin"}</td>
                           <td>
+                            <span className={`admin-status-badge ${(a.status || "active") === "active" ? "status-active" : "status-inactive"}`}>
+                              {(a.status || "active") === "active" ? "Active" : "Inactive"}
+                            </span>
+                          </td>
+                          <td>
                             <div className="admin-table-actions">
                               <button className="admin-btn-edit" onClick={() => handleUpdate(a.id)}>
                                 <MdEdit size={14} />
+                              </button>
+                              <button className="admin-btn-edit" onClick={() => handleToggleStatus(a.id)} style={{ color: (a.status || "active") === "active" ? "#f57c00" : "#43A047", fontSize: 12 }}>
+                                {(a.status || "active") === "active" ? "Deactivate" : "Activate"}
                               </button>
                               <button className="admin-btn-delete" onClick={() => handleDelete(a.id)}>
                                 <MdDelete size={14} />

@@ -124,11 +124,17 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
-    // Lab Attendance - anyone authenticated can read/create; admin can manage
+    // Lab Attendance - public kiosk can read/create; admin can manage
     match /labAttendance/{attendanceId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
+      allow read: if true;
+      allow create: if true;
       allow update, delete: if isAdmin();
+    }
+
+    // Lab Rooms - anyone authenticated can read; admin can manage
+    match /labRooms/{roomId} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if isAdmin();
     }
   }
 }

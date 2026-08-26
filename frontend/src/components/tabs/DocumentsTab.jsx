@@ -113,8 +113,7 @@ export default function DocumentsTab() {
       setDocuments((prev) => prev.filter((d) => d.id !== doc.id));
       toast.success("Document deleted");
     } catch {
-      setDocuments((prev) => prev.filter((d) => d.id !== doc.id));
-      toast.success("Document deleted");
+      toast.error("Failed to delete document");
     }
   }
 
