@@ -261,7 +261,7 @@ export const api = {
   timeIn: (data) => request("/attendance/time-in", { method: "POST", body: JSON.stringify(data) }),
   timeOut: (data) => request("/attendance/time-out", { method: "POST", body: JSON.stringify(data) }),
   autoScan: (data) => request("/attendance/auto-scan", { method: "POST", body: JSON.stringify(data) }),
-  getActiveStudents: () => request("/attendance/active"),
+  getActiveStudents: (params = "") => request(`/attendance/active${params ? "?" + params : ""}`),
   getTodayAttendance: () => request("/attendance/today"),
   getDailyLog: (date) => request(`/attendance/daily-log/${date}`),
   getAttendanceHistory: (params) => request(`/attendance/history?${params}`),

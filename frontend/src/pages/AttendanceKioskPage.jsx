@@ -7,8 +7,10 @@ import { formatDuration } from "../utils/attendanceHelpers";
 import "../styles/pages/attendance-kiosk.css";
 
 const STEPS = {
-  SCAN_STUDENT: "scan_student",
-  CONFIRM_INFO: "confirm_info",
+  SCAN: "scan",
+  MODE_SELECT: "mode_select",
+  TIME_IN_FORM: "time_in_form",
+  TIME_OUT_FORM: "time_out_form",
   SUCCESS: "success",
   ERROR: "error",
 };
@@ -17,7 +19,9 @@ export default function AttendanceKioskPage() {
   const [searchParams] = useSearchParams();
   const roomName = searchParams.get("room") || "Laboratory";
 
-  const [step, setStep] = useState(STEPS.SCAN_STUDENT);
+  const [step, setStep] = useState(STEPS.SCAN);
+  const [mode, setMode] = useState(null);
+  const [schoolIdInput, setSchoolIdInput] = useState("");
   const [studentData, setStudentData] = useState(null);
   const [subject, setSubject] = useState("");
   const [professor, setProfessor] = useState("");
@@ -25,12 +29,10 @@ export default function AttendanceKioskPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [clock, setClock] = useState(new Date());
-  const [scanType, setScanType] = useState(null);
 
   const scannerRef = useRef(null);
   const runningRef = useRef(false);
 
-  // Clock
   useEffect(() => {
     const timer = setInterval(() => setClock(new Date()), 1000);
     return () => clearInterval(timer);
@@ -90,11 +92,12 @@ export default function AttendanceKioskPage() {
   }, [stopScanner]);
 
   useEffect(() => {
-    if (step === STEPS.SCAN_STUDENT) {
+    if (step === STEPS.SCAN) {
       setStudentData(null);
       setSubject("");
       setProfessor("");
-      setScanType(null);
+      setSchoolIdInput("");
+      setMode(null);
       setTimeout(() => startScanner(), 100);
     }
   }, [step, startScanner]);
@@ -102,46 +105,37 @@ export default function AttendanceKioskPage() {
   const handleScan = async (decodedText) => {
     const text = decodedText.trim();
 
-    // Check if it's a student QR code
     if (text.startsWith("SLSU-STUDENT:")) {
       const schoolId = text.replace("SLSU-STUDENT:", "").trim();
-      setScanType("student");
-      try {
-        const data = await api.lookupStudent(schoolId);
-        setStudentData(data);
-        setStep(STEPS.CONFIRM_INFO);
-      } catch (err) {
-        setErrorMessage(err.message || "Student not found");
-        setStep(STEPS.ERROR);
-      }
+      setSchoolIdInput(schoolId);
+      setStep(STEPS.MODE_SELECT);
       return;
     }
 
-    // Check if it's a room QR code
     if (text.startsWith("LABROOM:")) {
-      // Already on the correct room page, just restart scanner
-      setTimeout(() => startScanner(), 100);
+      setStep(STEPS.MODE_SELECT);
       return;
     }
 
-    // Try as raw school ID
-    setScanType("student");
-    try {
-      const data = await api.lookupStudent(text);
-      setStudentData(data);
-      setStep(STEPS.CONFIRM_INFO);
-    } catch (err) {
-      setErrorMessage(err.message || "Student not found. Please scan a valid student QR code.");
-      setStep(STEPS.ERROR);
+    setSchoolIdInput(text);
+    setStep(STEPS.MODE_SELECT);
+  };
+
+  const handleModeSelect = (selectedMode) => {
+    setMode(selectedMode);
+    if (selectedMode === "time_in") {
+      setStep(STEPS.TIME_IN_FORM);
+    } else {
+      setStep(STEPS.TIME_OUT_FORM);
     }
   };
 
   const handleTimeIn = async () => {
-    if (!studentData || !subject || !professor) return;
+    if (!schoolIdInput || !subject || !professor) return;
     setSubmitting(true);
     try {
       const result = await api.timeIn({
-        schoolId: studentData.schoolId,
+        schoolId: schoolIdInput,
         subject,
         professor,
         labRoom: roomName,
@@ -158,11 +152,10 @@ export default function AttendanceKioskPage() {
   };
 
   const handleTimeOut = async () => {
+    if (!schoolIdInput) return;
     setSubmitting(true);
     try {
-      const result = await api.timeOut({
-        schoolId: studentData.schoolId,
-      });
+      const result = await api.timeOut({ schoolId: schoolIdInput });
       setResultData(result.record);
       setStep(STEPS.SUCCESS);
     } catch (err) {
@@ -174,13 +167,14 @@ export default function AttendanceKioskPage() {
   };
 
   const resetToScan = () => {
-    setStep(STEPS.SCAN_STUDENT);
+    setStep(STEPS.SCAN);
+    setMode(null);
+    setSchoolIdInput("");
     setStudentData(null);
     setResultData(null);
     setErrorMessage("");
     setSubject("");
     setProfessor("");
-    setScanType(null);
   };
 
   const clockStr = clock.toLocaleTimeString("en-US", {
@@ -216,10 +210,10 @@ export default function AttendanceKioskPage() {
       </div>
 
       <div className="kiosk-body">
-        {step === STEPS.SCAN_STUDENT && (
+        {step === STEPS.SCAN && (
           <div className="kiosk-scan-prompt kiosk-step-enter" key="scan">
-            <h2>Scan Your QR Code</h2>
-            <p>Position your student QR code in front of the camera</p>
+            <h2>Scan Room QR Code</h2>
+            <p>Position the room QR code in front of the camera</p>
             <div className="kiosk-scanner-area">
               <div className="kiosk-scanner-corners" />
               <div id="kiosk-qr-reader" />
@@ -227,29 +221,53 @@ export default function AttendanceKioskPage() {
           </div>
         )}
 
-        {step === STEPS.CONFIRM_INFO && studentData && (
-          <div className="kiosk-student-card kiosk-step-enter" key="confirm">
-            <div className="kiosk-student-header">
-              <div className="kiosk-student-avatar">
-                {(studentData.firstName || "?")[0]}{(studentData.lastName || "?")[0]}
+        {step === STEPS.MODE_SELECT && (
+          <div className="kiosk-mode-select kiosk-step-enter" key="mode">
+            <h2>Welcome to {roomName}</h2>
+            <p>Choose your action</p>
+            {schoolIdInput && (
+              <div className="kiosk-scanned-id">
+                Scanned ID: <strong>{schoolIdInput}</strong>
               </div>
-              <div className="kiosk-student-info">
-                <p className="kiosk-student-name">
-                  {studentData.firstName} {studentData.lastName}
-                </p>
-                <p className="kiosk-student-id">ID: {studentData.schoolId}</p>
-              </div>
+            )}
+            <div className="kiosk-mode-buttons">
+              <button
+                className="kiosk-mode-btn time-in"
+                onClick={() => handleModeSelect("time_in")}
+              >
+                <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                TIME-IN
+              </button>
+              <button
+                className="kiosk-mode-btn time-out"
+                onClick={() => handleModeSelect("time_out")}
+              >
+                <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H6a2 2 0 01-2-2V7a2 2 0 012-2h5a2 2 0 012 2v1" />
+                </svg>
+                TIME-OUT
+              </button>
             </div>
+            <button className="kiosk-cancel-btn" onClick={resetToScan}>
+              Cancel / Scan Again
+            </button>
+          </div>
+        )}
 
-            <div className="kiosk-form-grid">
-              <div className="kiosk-form-row">
-                <label>Course</label>
-                <input type="text" value={studentData.course || ""} readOnly />
-              </div>
-              <div className="kiosk-form-row">
-                <label>Year Level</label>
-                <input type="text" value={studentData.year || ""} readOnly />
-              </div>
+        {step === STEPS.TIME_IN_FORM && (
+          <div className="kiosk-student-card kiosk-step-enter" key="timein">
+            <h2 className="kiosk-form-title">Time-In Form</h2>
+
+            <div className="kiosk-form-row">
+              <label>School ID *</label>
+              <input
+                type="text"
+                placeholder="Enter School ID"
+                value={schoolIdInput}
+                onChange={(e) => setSchoolIdInput(e.target.value)}
+              />
             </div>
 
             <div className="kiosk-form-row">
@@ -275,7 +293,7 @@ export default function AttendanceKioskPage() {
             <button
               className="kiosk-confirm-btn time-in"
               onClick={handleTimeIn}
-              disabled={!subject || !professor || submitting}
+              disabled={!schoolIdInput || !subject || !professor || submitting}
             >
               {submitting ? (
                 <span className="spinner" />
@@ -294,8 +312,46 @@ export default function AttendanceKioskPage() {
           </div>
         )}
 
+        {step === STEPS.TIME_OUT_FORM && (
+          <div className="kiosk-student-card kiosk-step-enter" key="timeout">
+            <h2 className="kiosk-form-title">Time-Out</h2>
+            <p className="kiosk-form-subtitle">Enter your School ID to log out</p>
+
+            <div className="kiosk-form-row">
+              <label>School ID *</label>
+              <input
+                type="text"
+                placeholder="Enter School ID"
+                value={schoolIdInput}
+                onChange={(e) => setSchoolIdInput(e.target.value)}
+                autoFocus
+              />
+            </div>
+
+            <button
+              className="kiosk-confirm-btn time-out"
+              onClick={handleTimeOut}
+              disabled={!schoolIdInput || submitting}
+            >
+              {submitting ? (
+                <span className="spinner" />
+              ) : (
+                <>
+                  <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  CONFIRM TIME-OUT
+                </>
+              )}
+            </button>
+            <button className="kiosk-cancel-btn" onClick={resetToScan}>
+              Cancel / Scan Again
+            </button>
+          </div>
+        )}
+
         {step === STEPS.SUCCESS && resultData && (
-          <div className="kiosk-status inside kiosk-step-enter" key="success">
+          <div className={`kiosk-status ${resultData.status === "active" ? "inside" : "timed-out"} kiosk-step-enter`} key="success">
             <div className="kiosk-status-icon success">
               {resultData.status === "active" ? (
                 <svg width="36" height="36" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>

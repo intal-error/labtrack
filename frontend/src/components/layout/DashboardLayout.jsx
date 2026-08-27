@@ -23,6 +23,7 @@ const navSections = [
 
       { path: "/usage-logs", label: "My Activity", icon: MdHistory, roles: ["student"] },
       { path: "/my-attendance", label: "My Attendance", icon: MdEventAvailable, roles: ["student"] },
+      { path: "/attendance-scan", label: "Scan Attendance", icon: MdQrCodeScanner, roles: ["student"] },
       { path: "/attendance", label: "Attendance Logs", icon: MdEventAvailable, roles: ["admin"] },
       { path: "/reports", label: "Reports", icon: MdAssessment, roles: ["admin"] },
     ],

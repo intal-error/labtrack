@@ -1,14 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import { Html5Qrcode } from "html5-qrcode";
+import { useState, useEffect, useMemo } from "react";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
-import { formatDuration, formatTime } from "../utils/attendanceHelpers";
-import { SUBJECTS } from "../constants/subjects";
-import { MdQrCodeScanner, MdCheckCircle, MdLogin, MdLogout } from "react-icons/md";
-import toast from "react-hot-toast";
+import { formatDuration, formatTime, getTodayString } from "../utils/attendanceHelpers";
+import { MdEventNote, MdSearch, MdToday, MdFileDownload } from "react-icons/md";
 import "../styles/pages/attendance.css";
-
-const emptyForm = { firstName: "", lastName: "", schoolId: "", course: "", yearSection: "", subject: "", professor: "" };
 
 export default function MyAttendancePage() {
   const { userProfile } = useAuth();
@@ -16,206 +11,53 @@ export default function MyAttendancePage() {
   const [summary, setSummary] = useState({ totalSessions: 0, totalTimeIn: 0, totalMinutes: 0, totalHours: 0 });
   const [loading, setLoading] = useState(true);
 
-  // Scanner state
-  const [scannerActive, setScannerActive] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [scanLoading, setScanLoading] = useState(false);
-  const [scanResult, setScanResult] = useState(null);
-
-  // Form state
-  const [needForm, setNeedForm] = useState(false);
-  const [form, setForm] = useState(emptyForm);
-  const [roomCode, setRoomCode] = useState("");
-  const [labRoom, setLabRoom] = useState("");
-  const [lastSchoolId, setLastSchoolId] = useState("");
-
-  const scannerRef = useRef(null);
-  const runningRef = useRef(false);
+  const [filterSubject, setFilterSubject] = useState("");
+  const [filterDate, setFilterDate] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const schoolId = userProfile?.schoolId || userProfile?.schoolID;
 
   useEffect(() => {
-    if (!schoolId) {
-      setLoading(false);
-      return;
-    }
+    if (!schoolId) { setLoading(false); return; }
     loadAttendance();
   }, [schoolId]);
-
-  useEffect(() => {
-    return () => { stopScanner(); };
-  }, []);
 
   async function loadAttendance() {
     setLoading(true);
     try {
       const data = await api.getStudentAttendance(schoolId);
       setRecords(data.records || []);
-      setSummary(data.summary || {});
+      setSummary((prev) => ({ ...prev, ...(data.summary || {}) }));
     } catch {
-      // silently fail
     } finally {
       setLoading(false);
     }
   }
 
-  const stopScanner = useCallback(async () => {
-    const s = scannerRef.current;
-    scannerRef.current = null;
-    runningRef.current = false;
-    if (s) {
-      try { await s.stop(); } catch {}
-      try { await s.clear(); } catch {}
-    }
-  }, []);
+  const todayStr = getTodayString();
+  const todayRecords = useMemo(() => records.filter((r) => r.date === todayStr), [records, todayStr]);
 
-  const startScanner = useCallback(async () => {
-    await stopScanner();
-    try {
-      const scanner = new Html5Qrcode("my-attendance-qr");
-      scannerRef.current = scanner;
-      await scanner.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1 },
-        async (decodedText) => {
-          if (!runningRef.current) return;
-          runningRef.current = false;
-          await stopScanner();
-          handleScan(decodedText);
-        },
-        () => {}
+  const subjects = useMemo(() => {
+    const set = new Set(records.map((r) => r.subject).filter(Boolean));
+    return [...set].sort();
+  }, [records]);
+
+  const filteredRecords = useMemo(() => {
+    let result = records;
+    if (filterSubject) result = result.filter((r) => r.subject === filterSubject);
+    if (filterDate) result = result.filter((r) => r.date === filterDate);
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter((r) =>
+        (r.subject || "").toLowerCase().includes(q) ||
+        (r.professor || "").toLowerCase().includes(q) ||
+        (r.labRoom || "").toLowerCase().includes(q) ||
+        (r.date || "").toLowerCase().includes(q)
       );
-      runningRef.current = true;
-    } catch {
-      try {
-        await stopScanner();
-        const scanner = new Html5Qrcode("my-attendance-qr");
-        scannerRef.current = scanner;
-        await scanner.start(
-          { facingMode: "user" },
-          { fps: 10, qrbox: { width: 250, height: 250 } },
-          async (decodedText) => {
-            if (!runningRef.current) return;
-            runningRef.current = false;
-            await stopScanner();
-            handleScan(decodedText);
-          },
-          () => {}
-        );
-        runningRef.current = true;
-      } catch {
-        toast.error("Camera unavailable. Please try again.");
-        setScannerActive(false);
-      }
     }
-  }, [stopScanner]);
+    return result;
+  }, [records, filterSubject, filterDate, searchQuery]);
 
-  useEffect(() => {
-    if (scannerActive) {
-      setTimeout(() => startScanner(), 100);
-    }
-  }, [scannerActive, startScanner]);
-
-  const handleScan = async (decodedText) => {
-    const text = decodedText.trim();
-    setScannerActive(false);
-
-    // Parse room QR code
-    let parsedRoom = "";
-    let parsedCode = "";
-    if (text.startsWith("LABROOM:")) {
-      parsedCode = text.split(":")[1] || "";
-      parsedRoom = parsedCode.replace(/-/g, " ").trim();
-    } else if (text.includes("lab") || text.includes("room") || text.includes("computer")) {
-      parsedRoom = text;
-      parsedCode = text.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-    } else {
-      toast.error("Please scan a room QR code");
-      return;
-    }
-
-    setRoomCode(parsedCode);
-    setLabRoom(parsedRoom);
-
-    // If we have a lastSchoolId from previous time-in, try time-out
-    if (lastSchoolId) {
-      setScanLoading(true);
-      try {
-        const result = await api.autoScan({ schoolId: lastSchoolId, roomCode: parsedCode, labRoom: parsedRoom });
-        setScanResult(result);
-        if (result.type === "time_out") {
-          toast.success("Timed out successfully!");
-          setLastSchoolId("");
-          loadAttendance();
-        } else if (result.type === "need_form") {
-          // Shouldn't happen since we sent schoolId, but fallback to form
-          setNeedForm(true);
-        }
-      } catch (err) {
-        // If error (e.g., no active session), show form for new time-in
-        setNeedForm(true);
-      } finally {
-        setScanLoading(false);
-      }
-      return;
-    }
-
-    // No lastSchoolId — first scan, show form
-    setNeedForm(true);
-  };
-
-  const handleFormSubmit = async (e) => {
-    e.preventDefault();
-    if (!form.firstName || !form.lastName || !form.schoolId || !form.course || !form.yearSection || !form.subject || !form.professor) {
-      toast.error("Please fill in all fields");
-      return;
-    }
-    setSubmitting(true);
-    try {
-      const result = await api.autoScan({
-        schoolId: form.schoolId.trim(),
-        firstName: form.firstName.trim(),
-        lastName: form.lastName.trim(),
-        course: form.course.trim(),
-        year: form.yearSection.trim(),
-        subject: form.subject,
-        professor: form.professor.trim(),
-        roomCode,
-        labRoom,
-      });
-      setScanResult(result);
-      setLastSchoolId(form.schoolId.trim());
-      setNeedForm(false);
-      setForm(emptyForm);
-      toast.success("Timed in successfully!");
-      loadAttendance();
-    } catch (err) {
-      toast.error(err.message || "Failed to record attendance");
-      setScanResult({ error: err.message });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const openScanner = () => {
-    setScanResult(null);
-    setNeedForm(false);
-    setScannerActive(true);
-  };
-
-  const closeScanner = () => {
-    stopScanner();
-    setScannerActive(false);
-  };
-
-  const closeForm = () => {
-    setNeedForm(false);
-    setForm(emptyForm);
-    setRoomCode("");
-    setLabRoom("");
-  };
-
-  // Group records by month
   const grouped = {};
   records.forEach((r) => {
     const d = r.date || "Unknown";
@@ -230,6 +72,25 @@ export default function MyAttendancePage() {
     totalMinutes: recs.reduce((sum, r) => sum + (r.totalDuration || 0), 0),
   })).slice(0, 6);
 
+  const recentRecords = useMemo(() => records.slice(0, 3), [records]);
+
+  const exportCSV = () => {
+    if (!filteredRecords.length) return;
+    const headers = ["Date", "Time-In", "Time-Out", "Subject", "Professor", "Room", "Duration (min)", "Status"];
+    const rows = filteredRecords.map((r) => [
+      r.date, formatTime(r.timeIn), formatTime(r.timeOut), r.subject, r.professor, r.labRoom,
+      r.totalDuration != null ? r.totalDuration : "", r.status === "active" ? "Inside" : "Timed Out",
+    ]);
+    const csv = [headers, ...rows].map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `attendance-${todayStr}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="attendance-page">
       <div className="attendance-header">
@@ -238,115 +99,32 @@ export default function MyAttendancePage() {
       </div>
 
       <div className="attendance-shell">
-        {/* Scan to Log Attendance */}
-        <div className="scan-attendance-card">
-          {!needForm && !scannerActive && (
-            <div className="scan-attendance-top">
-              <div className="scan-attendance-info">
-                <h3><MdQrCodeScanner size={20} /> Scan to Log Attendance</h3>
-                <p>Scan the room QR code to log your attendance</p>
-              </div>
-              <button className="scan-attendance-btn" onClick={openScanner}>
-                <MdQrCodeScanner size={18} /> {lastSchoolId ? "Scan to Time Out" : "Scan Room QR"}
-              </button>
-            </div>
-          )}
 
-          {scannerActive && (
-            <>
-              <div className="scan-attendance-top" style={{ marginBottom: 12 }}>
-                <div className="scan-attendance-info">
-                  <h3><MdQrCodeScanner size={20} /> Scanning...</h3>
-                  <p>Point camera at room QR code</p>
+        {/* Today's Status */}
+        <div className="today-status-card">
+          <div className="today-status-header">
+            <MdToday size={18} />
+            <h3>Today's Status</h3>
+          </div>
+          {todayRecords.length === 0 ? (
+            <p className="today-no-record">No attendance recorded today</p>
+          ) : (
+            <div className="today-records-list">
+              {todayRecords.map((r, i) => (
+                <div key={r.id || i} className="today-record-item">
+                  <div className="today-record-main">
+                    <span className="today-record-subject">{r.subject || "N/A"}</span>
+                    <span className="today-record-room">{r.labRoom || "Lab"}</span>
+                  </div>
+                  <div className="today-record-times">
+                    <span>In: {formatTime(r.timeIn)}</span>
+                    {r.timeOut && <span>Out: {formatTime(r.timeOut)}</span>}
+                    {r.totalDuration != null && (
+                      <span className="duration-badge">{formatDuration(r.totalDuration)}</span>
+                    )}
+                  </div>
                 </div>
-                <button className="scan-attendance-btn cancel" onClick={closeScanner}>Cancel</button>
-              </div>
-              <div className="scan-viewfinder">
-                <div className="scan-viewfinder-corners" />
-                <div id="my-attendance-qr" />
-              </div>
-            </>
-          )}
-
-          {needForm && (
-            <form onSubmit={handleFormSubmit} className="scan-form">
-              <div className="scan-form-header">
-                <h3>Log Attendance</h3>
-                <p>Room: <strong>{labRoom}</strong></p>
-              </div>
-              <div className="scan-form-grid">
-                <div className="scan-form-field">
-                  <label>First Name</label>
-                  <input type="text" placeholder="Juan" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} required />
-                </div>
-                <div className="scan-form-field">
-                  <label>Last Name</label>
-                  <input type="text" placeholder="Dela Cruz" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} required />
-                </div>
-                <div className="scan-form-field">
-                  <label>Student ID</label>
-                  <input type="text" placeholder="2024-00001" value={form.schoolId} onChange={(e) => setForm({ ...form, schoolId: e.target.value })} required />
-                </div>
-                <div className="scan-form-field">
-                  <label>Course</label>
-                  <input type="text" placeholder="BIT, CT, MT, etc." value={form.course} onChange={(e) => setForm({ ...form, course: e.target.value })} required />
-                </div>
-                <div className="scan-form-field">
-                  <label>Year / Section</label>
-                  <input type="text" placeholder="3A, 2B, etc." value={form.yearSection} onChange={(e) => setForm({ ...form, yearSection: e.target.value })} required />
-                </div>
-                <div className="scan-form-field">
-                  <label>Subject</label>
-                  <select value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} required>
-                    <option value="">Select Subject</option>
-                    {SUBJECTS.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-                <div className="scan-form-field full-width">
-                  <label>Professor</label>
-                  <input type="text" placeholder="Enter professor name" value={form.professor} onChange={(e) => setForm({ ...form, professor: e.target.value })} required />
-                </div>
-              </div>
-              <div className="scan-form-actions">
-                <button type="submit" className="scan-attendance-btn" disabled={submitting}>
-                  {submitting ? "Recording..." : "Submit & Log Attendance"}
-                </button>
-                <button type="button" className="scan-attendance-btn cancel" onClick={closeForm}>Cancel</button>
-              </div>
-            </form>
-          )}
-
-          {submitting && (
-            <div className="scan-loading">
-              <div className="spinner-lg" />
-              <span>Recording attendance...</span>
-            </div>
-          )}
-
-          {scanResult && !scanResult.error && !needForm && (
-            <div className={`scan-result-card ${scanResult.type}`}>
-              <div className={`scan-result-icon ${scanResult.type}`}>
-                {scanResult.type === "time_in" ? <MdLogin size={28} /> : <MdLogout size={28} />}
-              </div>
-              <div className="scan-result-info">
-                <h4>{scanResult.type === "time_in" ? "Time In Recorded" : "Time Out Recorded"}</h4>
-                <p>
-                  {scanResult.type === "time_in"
-                    ? `Checked in at ${scanResult.record?.labRoom || "Lab"}`
-                    : `Duration: ${scanResult.record?.totalDuration || 0} minutes`}
-                </p>
-              </div>
-              <MdCheckCircle size={24} className="scan-result-check" />
-            </div>
-          )}
-
-          {scanResult?.error && !needForm && (
-            <div className="scan-result-card error">
-              <div className="scan-result-icon error">✕</div>
-              <div className="scan-result-info">
-                <h4>Scan Failed</h4>
-                <p>{scanResult.error}</p>
-              </div>
+              ))}
             </div>
           )}
         </div>
@@ -386,25 +164,66 @@ export default function MyAttendancePage() {
               <span className="attendance-stat-label">Currently Active</span>
             </div>
           </div>
+          <div className="attendance-stat">
+            <div className="attendance-stat-icon purple">
+              <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="attendance-stat-info">
+              <span className="attendance-stat-value">
+                {(() => {
+                  const completed = records.filter((r) => r.status === "timed_out").length;
+                  const total = records.length;
+                  return total > 0 ? Math.round((completed / total) * 100) : 0;
+                })()}%
+              </span>
+              <span className="attendance-stat-label">Completion Rate</span>
+            </div>
+          </div>
         </div>
+
+        {/* Recent Records */}
+        {recentRecords.length > 0 && (
+          <div className="recent-records-section">
+            <h3 className="attendance-section-heading">Recent Activity</h3>
+            <div className="recent-records-grid">
+              {recentRecords.map((r, i) => (
+                <div key={r.id || i} className="recent-record-card">
+                  <div className="recent-record-date">{r.date}</div>
+                  <div className="recent-record-subject">{r.subject || "N/A"}</div>
+                  <div className="recent-record-meta">
+                    <span>{r.labRoom || "Lab"}</span>
+                    <span>{formatTime(r.timeIn)}{r.timeOut ? ` - ${formatTime(r.timeOut)}` : ""}</span>
+                  </div>
+                  <div className="recent-record-footer">
+                    {r.totalDuration != null ? (
+                      <span className="duration-badge">{formatDuration(r.totalDuration)}</span>
+                    ) : (
+                      <span className={`status-badge ${r.status}`}>{r.status === "active" ? "Inside" : "Timed Out"}</span>
+                    )}
+                    <span className="recent-record-professor">{r.professor}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Monthly Breakdown */}
         {monthlyData.length > 0 && (
-          <div style={{ marginBottom: 20 }}>
-            <h3 style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", margin: "0 0 12px" }}>Monthly Summary</h3>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10 }}>
+          <div className="monthly-summary-section">
+            <h3>Monthly Summary</h3>
+            <div className="monthly-summary-grid">
               {monthlyData.map((m) => (
-                <div key={m.month} style={{
-                  padding: "14px 16px", background: "var(--bg)", borderRadius: 12,
-                  border: "1px solid var(--border)", textAlign: "center"
-                }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
+                <div key={m.month} className="monthly-summary-card">
+                  <div className="month-label">
                     {new Date(m.month + "-01").toLocaleDateString("en-US", { month: "short", year: "numeric" })}
                   </div>
-                  <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+                  <div className="session-count">
                     {m.sessions} session{m.sessions !== 1 ? "s" : ""}
                   </div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: "var(--green)", marginTop: 4 }}>
+                  <div className="duration-value">
                     {formatDuration(m.totalMinutes)}
                   </div>
                 </div>
@@ -413,57 +232,141 @@ export default function MyAttendancePage() {
           </div>
         )}
 
-        {/* Records Table */}
-        <h3 style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", margin: "0 0 12px" }}>Attendance History</h3>
+        {/* Attendance History */}
+        <div className="attendance-toolbar">
+          <div className="attendance-toolbar-left">
+            <h3 className="attendance-section-heading" style={{ margin: 0 }}>Attendance History</h3>
+            <span className="attendance-result-count">{filteredRecords.length} record{filteredRecords.length !== 1 ? "s" : ""}</span>
+          </div>
+          <div className="attendance-toolbar-right">
+            <div className="attendance-search">
+              <MdSearch size={16} className="search-icon" />
+              <input
+                type="text"
+                placeholder="Search records..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            {subjects.length > 0 && (
+              <select
+                className="attendance-filter-select"
+                value={filterSubject}
+                onChange={(e) => setFilterSubject(e.target.value)}
+              >
+                <option value="">All Subjects</option>
+                {subjects.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            )}
+            <input
+              type="date"
+              className="attendance-date-filter"
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+            />
+            <button className="scan-attendance-btn" onClick={exportCSV} style={{ padding: "8px 14px", fontSize: 12 }}>
+              <MdFileDownload size={16} /> Export
+            </button>
+          </div>
+        </div>
+
         {loading ? (
-          <div style={{ textAlign: "center", padding: 40 }}><div className="spinner-lg" /></div>
+          <div className="attendance-loading"><div className="spinner-lg" /></div>
         ) : records.length === 0 ? (
           <div className="attendance-empty">
-            <div className="attendance-empty-icon">📋</div>
+            <div className="attendance-empty-icon">
+              <MdEventNote size={28} />
+            </div>
             <h3>No Records Yet</h3>
             <p>Your attendance records will appear here after you scan your QR code in the laboratory</p>
           </div>
-        ) : (
-          <div className="attendance-table-wrap">
-            <div className="attendance-table-scroll">
-              <table className="attendance-table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Time-In</th>
-                    <th>Time-Out</th>
-                    <th>Subject</th>
-                    <th>Professor</th>
-                    <th>Room</th>
-                    <th>Duration</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {records.map((r) => (
-                    <tr key={r.id}>
-                      <td style={{ fontWeight: 600 }}>{r.date}</td>
-                      <td>{formatTime(r.timeIn)}</td>
-                      <td>{formatTime(r.timeOut)}</td>
-                      <td style={{ textAlign: "left" }}>{r.subject}</td>
-                      <td style={{ textAlign: "left" }}>{r.professor}</td>
-                      <td>{r.labRoom}</td>
-                      <td>
-                        {r.totalDuration != null ? (
-                          <span className="duration-badge">{formatDuration(r.totalDuration)}</span>
-                        ) : "-"}
-                      </td>
-                      <td>
-                        <span className={`status-badge ${r.status}`}>
-                          {r.status === "active" ? "Inside" : "Timed Out"}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        ) : filteredRecords.length === 0 ? (
+          <div className="attendance-empty">
+            <div className="attendance-empty-icon">
+              <MdSearch size={28} />
             </div>
+            <h3>No Matching Records</h3>
+            <p>Try adjusting your search or filter criteria</p>
           </div>
+        ) : (
+          <>
+            <div className="attendance-table-wrap desktop-only">
+              <div className="attendance-table-scroll">
+                <table className="attendance-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Time-In</th>
+                      <th>Time-Out</th>
+                      <th>Subject</th>
+                      <th>Professor</th>
+                      <th>Room</th>
+                      <th>Duration</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRecords.map((r, i) => (
+                      <tr key={r.id || i}>
+                        <td style={{ fontWeight: 600 }}>{r.date}</td>
+                        <td>{formatTime(r.timeIn)}</td>
+                        <td>{formatTime(r.timeOut)}</td>
+                        <td>{r.subject}</td>
+                        <td>{r.professor}</td>
+                        <td>{r.labRoom}</td>
+                        <td>
+                          {r.totalDuration != null ? (
+                            <span className="duration-badge">{formatDuration(r.totalDuration)}</span>
+                          ) : "-"}
+                        </td>
+                        <td>
+                          <span className={`status-badge ${r.status}`}>
+                            {r.status === "active" ? "Inside" : "Timed Out"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="mobile-cards mobile-only">
+              {filteredRecords.map((r, i) => (
+                <div key={r.id || i} className="mobile-record-card">
+                  <div className="mobile-record-header">
+                    <span className="mobile-record-date">{r.date}</span>
+                    <span className={`status-badge ${r.status}`}>
+                      {r.status === "active" ? "Inside" : "Timed Out"}
+                    </span>
+                  </div>
+                  <div className="mobile-record-body">
+                    <div className="mobile-record-row">
+                      <span className="mobile-record-label">Subject</span>
+                      <span className="mobile-record-value">{r.subject || "N/A"}</span>
+                    </div>
+                    <div className="mobile-record-row">
+                      <span className="mobile-record-label">Professor</span>
+                      <span className="mobile-record-value">{r.professor || "N/A"}</span>
+                    </div>
+                    <div className="mobile-record-row">
+                      <span className="mobile-record-label">Room</span>
+                      <span className="mobile-record-value">{r.labRoom || "N/A"}</span>
+                    </div>
+                    <div className="mobile-record-row">
+                      <span className="mobile-record-label">Time</span>
+                      <span className="mobile-record-value">{formatTime(r.timeIn)}{r.timeOut ? ` - ${formatTime(r.timeOut)}` : ""}</span>
+                    </div>
+                  </div>
+                  {r.totalDuration != null && (
+                    <div className="mobile-record-footer">
+                      <span className="duration-badge">{formatDuration(r.totalDuration)}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>

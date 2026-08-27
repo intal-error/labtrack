@@ -18,6 +18,10 @@ export default function RoomAttendancePage() {
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [filterYear, setFilterYear] = useState("");
+  const [filterCourse, setFilterCourse] = useState("");
+  const [years, setYears] = useState([]);
+  const [courses, setCourses] = useState([]);
 
   const loadRecords = useCallback(async () => {
     setLoading(true);
@@ -26,6 +30,8 @@ export default function RoomAttendancePage() {
       if (dateFrom) params.set("from", dateFrom);
       if (dateTo) params.set("to", dateTo);
       if (search) params.set("student", search);
+      if (filterYear) params.set("year", filterYear);
+      if (filterCourse) params.set("course", filterCourse);
       params.set("page", page);
       params.set("limit", "50");
       const data = await api.getRoomAttendanceHistory(roomId, params.toString());
@@ -33,22 +39,36 @@ export default function RoomAttendancePage() {
       setTotal(data.total || 0);
       setTotalPages(data.totalPages || 1);
       if (data.roomName) setRoomName(data.roomName);
+      if (data.years) setYears(data.years);
+      if (data.courses) setCourses(data.courses);
     } catch (err) {
       toast.error(err.message || "Failed to load room attendance");
     } finally {
       setLoading(false);
     }
-  }, [roomId, dateFrom, dateTo, search, page]);
+  }, [roomId, dateFrom, dateTo, search, filterYear, filterCourse, page]);
 
   useEffect(() => {
     loadRecords();
   }, [loadRecords]);
+
+  // Reset filters when roomId changes
+  useEffect(() => {
+    setPage(1);
+    setSearch("");
+    setDateFrom("");
+    setDateTo("");
+    setFilterYear("");
+    setFilterCourse("");
+  }, [roomId]);
 
   function handleExport() {
     const params = new URLSearchParams();
     if (dateFrom) params.set("from", dateFrom);
     if (dateTo) params.set("to", dateTo);
     if (search) params.set("student", search);
+    if (filterYear) params.set("year", filterYear);
+    if (filterCourse) params.set("course", filterCourse);
     api.exportAttendance(params.toString()).catch(() => toast.error("Export failed"));
   }
 
@@ -96,8 +116,28 @@ export default function RoomAttendancePage() {
               <label>To:</label>
               <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1); }} />
             </div>
-            {(search || dateFrom || dateTo) && (
-              <button className="btn btn-secondary" onClick={() => { setSearch(""); setDateFrom(""); setDateTo(""); setPage(1); }}>
+            {years.length > 0 && (
+              <select
+                className="attendance-filter-select"
+                value={filterYear}
+                onChange={(e) => { setFilterYear(e.target.value); setPage(1); }}
+              >
+                <option value="">All Years</option>
+                {years.map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
+            )}
+            {courses.length > 0 && (
+              <select
+                className="attendance-filter-select"
+                value={filterCourse}
+                onChange={(e) => { setFilterCourse(e.target.value); setPage(1); }}
+              >
+                <option value="">All Courses</option>
+                {courses.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            )}
+            {(search || dateFrom || dateTo || filterYear || filterCourse) && (
+              <button className="btn btn-secondary" onClick={() => { setSearch(""); setDateFrom(""); setDateTo(""); setFilterYear(""); setFilterCourse(""); setPage(1); }}>
                 Clear Filters
               </button>
             )}

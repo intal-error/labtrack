@@ -1,8 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
-import { COURSES } from "../constants/courses";
-import { SUBJECTS } from "../constants/subjects";
 import { formatDuration, formatTime, getTodayString } from "../utils/attendanceHelpers";
 import RoomManagementTab from "../components/tabs/RoomManagementTab";
 import toast from "react-hot-toast";
@@ -11,22 +9,19 @@ import "../styles/pages/attendance.css";
 import {
   MdPeople,
   MdEventNote,
-  MdHistory,
   MdQrCodeScanner,
-  MdSearch,
   MdRefresh,
   MdFileDownload,
   MdEdit,
   MdDelete,
-  MdPersonOff,
-  MdFilterList,
+  MdAccessTime,
+  MdGroup,
   MdMeetingRoom,
 } from "react-icons/md";
 
 const TABS = [
   { key: "active", label: "Currently Inside", icon: MdPeople },
   { key: "today", label: "Today's Log", icon: MdEventNote },
-  { key: "history", label: "History", icon: MdHistory },
   { key: "roomAttendance", label: "Room Attendance", icon: MdMeetingRoom },
   { key: "rooms", label: "Room QR Codes", icon: MdQrCodeScanner },
 ];
@@ -36,16 +31,13 @@ export default function AttendanceLogsPage() {
   const [stats, setStats] = useState(null);
   const [activeStudents, setActiveStudents] = useState([]);
   const [todayRecords, setTodayRecords] = useState([]);
-  const [historyData, setHistoryData] = useState({ records: [], total: 0, page: 1, totalPages: 1 });
   const [loading, setLoading] = useState(true);
 
-  // Filters
-  const [search, setSearch] = useState("");
-  const [filterCourse, setFilterCourse] = useState("");
-  const [filterYear, setFilterYear] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [historyPage, setHistoryPage] = useState(1);
+  // Room filter for Currently Inside
+  const [rooms, setRooms] = useState([]);
+  const [filterRoom, setFilterRoom] = useState("");
+  const filterRoomRef = useRef("");
+  filterRoomRef.current = filterRoom;
 
   // Edit modal
   const [editModal, setEditModal] = useState(null);
@@ -63,7 +55,9 @@ export default function AttendanceLogsPage() {
 
   const loadActive = useCallback(async () => {
     try {
-      const data = await api.getActiveStudents();
+      const params = new URLSearchParams();
+      if (filterRoomRef.current) params.set("room", filterRoomRef.current);
+      const data = await api.getActiveStudents(params.toString());
       setActiveStudents(data);
     } catch (err) {
       console.error("Failed to load active students:", err);
@@ -79,35 +73,26 @@ export default function AttendanceLogsPage() {
     }
   }, []);
 
-  const loadHistory = useCallback(async () => {
-    setLoading(true);
+  const loadRooms = useCallback(async () => {
     try {
-      const params = new URLSearchParams();
-      if (dateFrom) params.set("from", dateFrom);
-      if (dateTo) params.set("to", dateTo);
-      if (filterCourse) params.set("course", filterCourse);
-      if (filterYear) params.set("year", filterYear);
-      if (search) params.set("student", search);
-      params.set("page", historyPage);
-      params.set("limit", "50");
-      const data = await api.getAttendanceHistory(params.toString());
-      setHistoryData(data);
+      const data = await api.getRooms();
+      setRooms(data);
     } catch (err) {
-      toast.error(err.message || "Failed to load history");
-    } finally {
-      setLoading(false);
+      console.error("Failed to load rooms:", err);
     }
-  }, [dateFrom, dateTo, filterCourse, filterYear, search, historyPage]);
+  }, []);
 
   useEffect(() => {
     loadStats();
     loadActive();
     loadToday();
+    loadRooms();
   }, [loadStats, loadActive, loadToday]);
 
+  // Refetch rooms when switching to active tab (picks up newly created rooms)
   useEffect(() => {
-    if (activeTab === "history") loadHistory();
-  }, [activeTab, loadHistory]);
+    if (activeTab === "active") loadRooms();
+  }, [activeTab]);
 
   // Auto-refresh active every 30s
   useEffect(() => {
@@ -115,16 +100,6 @@ export default function AttendanceLogsPage() {
     const interval = setInterval(loadActive, 30000);
     return () => clearInterval(interval);
   }, [activeTab, loadActive]);
-
-  function handleExport() {
-    const params = new URLSearchParams();
-    if (dateFrom) params.set("from", dateFrom);
-    if (dateTo) params.set("to", dateTo);
-    if (filterCourse) params.set("course", filterCourse);
-    if (filterYear) params.set("year", filterYear);
-    if (search) params.set("student", search);
-    api.exportAttendance(params.toString()).catch(() => toast.error("Export failed"));
-  }
 
   function handleExportToday() {
     const today = getTodayString();
@@ -144,7 +119,6 @@ export default function AttendanceLogsPage() {
       toast.success("Record updated");
       setEditModal(null);
       loadToday();
-      loadHistory();
     } catch (err) {
       toast.error(err.message || "Failed to update");
     }
@@ -156,7 +130,6 @@ export default function AttendanceLogsPage() {
       await api.deleteAttendance(id);
       toast.success("Record deleted");
       loadToday();
-      loadHistory();
       loadStats();
     } catch (err) {
       toast.error(err.message || "Failed to delete");
@@ -195,9 +168,7 @@ export default function AttendanceLogsPage() {
             </div>
             <div className="attendance-stat">
               <div className="attendance-stat-icon orange">
-                <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+                <MdAccessTime size={20} />
               </div>
               <div className="attendance-stat-info">
                 <span className="attendance-stat-value">{formatDuration(stats.totalMinutesToday)}</span>
@@ -206,9 +177,7 @@ export default function AttendanceLogsPage() {
             </div>
             <div className="attendance-stat">
               <div className="attendance-stat-icon purple">
-                <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
+                <MdGroup size={20} />
               </div>
               <div className="attendance-stat-info">
                 <span className="attendance-stat-value">{stats.uniqueStudentsThisWeek}</span>
@@ -250,6 +219,18 @@ export default function AttendanceLogsPage() {
                   <span className="attendance-live-dot" />
                   Live
                 </span>
+                {rooms.length > 0 && (
+                  <select
+                    className="attendance-filter-select"
+                    value={filterRoom}
+                    onChange={(e) => setFilterRoom(e.target.value)}
+                  >
+                    <option value="">All Rooms</option>
+                    {rooms.map((r) => (
+                      <option key={r.id} value={r.roomCode}>{r.roomName}</option>
+                    ))}
+                  </select>
+                )}
                 <span className="attendance-result-count">
                   {activeStudents.length} student{activeStudents.length !== 1 ? "s" : ""} currently inside
                 </span>
@@ -354,12 +335,12 @@ export default function AttendanceLogsPage() {
                       <tr key={r.id}>
                         <td>{formatTime(r.timeIn)}</td>
                         <td>{formatTime(r.timeOut)}</td>
-                        <td style={{ textAlign: "left", fontWeight: 600 }}>{r.firstName} {r.lastName}</td>
+                        <td className="cell-name">{r.firstName} {r.lastName}</td>
                         <td>{r.studentSchoolId}</td>
                         <td>{r.course}</td>
                         <td>{r.year}</td>
-                        <td style={{ textAlign: "left" }}>{r.subject}</td>
-                        <td style={{ textAlign: "left" }}>{r.professor}</td>
+                        <td className="cell-muted">{r.subject}</td>
+                        <td className="cell-muted">{r.professor}</td>
                         <td>{r.labRoom}</td>
                         <td>
                           {r.totalDuration != null ? (
@@ -390,149 +371,6 @@ export default function AttendanceLogsPage() {
           </>
         )}
 
-        {/* History Tab */}
-        {activeTab === "history" && (
-          <>
-            <div className="attendance-toolbar">
-              <div className="attendance-toolbar-left">
-                <div className="attendance-search">
-                  <MdSearch className="search-icon" size={16} />
-                  <input
-                    type="text"
-                    placeholder="Search student name or ID..."
-                    value={search}
-                    onChange={(e) => { setSearch(e.target.value); setHistoryPage(1); }}
-                  />
-                </div>
-                <select className="attendance-filter-select" value={filterCourse} onChange={(e) => { setFilterCourse(e.target.value); setHistoryPage(1); }}>
-                  <option value="">All Courses</option>
-                  {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <select className="attendance-filter-select" value={filterYear} onChange={(e) => { setFilterYear(e.target.value); setHistoryPage(1); }}>
-                  <option value="">All Years</option>
-                  <option value="1">1st Year</option>
-                  <option value="2">2nd Year</option>
-                  <option value="3">3rd Year</option>
-                  <option value="4">4th Year</option>
-                </select>
-              </div>
-              <div className="attendance-toolbar-right">
-                <button className="btn btn-primary" onClick={handleExport}>
-                  <MdFileDownload size={14} /> Export Excel
-                </button>
-              </div>
-            </div>
-
-            <div className="attendance-toolbar" style={{ marginTop: -8 }}>
-              <div className="attendance-toolbar-left">
-                <div className="attendance-date-filter">
-                  <label>From:</label>
-                  <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setHistoryPage(1); }} />
-                </div>
-                <div className="attendance-date-filter">
-                  <label>To:</label>
-                  <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setHistoryPage(1); }} />
-                </div>
-                {(search || filterCourse || filterYear || dateFrom || dateTo) && (
-                  <button className="btn btn-secondary" onClick={() => {
-                    setSearch(""); setFilterCourse(""); setFilterYear(""); setDateFrom(""); setDateTo(""); setHistoryPage(1);
-                  }}>
-                    Clear Filters
-                  </button>
-                )}
-              </div>
-              <div className="attendance-toolbar-left">
-                <span className="attendance-result-count">
-                  {historyData.total} record{historyData.total !== 1 ? "s" : ""} found
-                </span>
-              </div>
-            </div>
-
-            {loading ? (
-              <div className="attendance-empty">
-                <div className="spinner-lg" />
-                <h3>Loading records...</h3>
-              </div>
-            ) : historyData.records.length === 0 ? (
-              <div className="attendance-empty">
-                <div className="attendance-empty-icon">
-                  <MdHistory size={28} />
-                </div>
-                <h3>No Records Found</h3>
-                <p>Try adjusting your filters or date range to find attendance records</p>
-              </div>
-            ) : (
-              <>
-                <div className="attendance-table-wrapper">
-                  <table className="attendance-table">
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Time-In</th>
-                        <th>Time-Out</th>
-                        <th>Student Name</th>
-                        <th>Student ID</th>
-                        <th>Course</th>
-                        <th>Year</th>
-                        <th>Subject</th>
-                        <th>Professor</th>
-                        <th>Room</th>
-                        <th>Duration</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {historyData.records.map((r) => (
-                        <tr key={r.id}>
-                          <td>{r.date}</td>
-                          <td>{formatTime(r.timeIn)}</td>
-                          <td>{formatTime(r.timeOut)}</td>
-                          <td style={{ textAlign: "left", fontWeight: 600 }}>{r.firstName} {r.lastName}</td>
-                          <td>{r.studentSchoolId}</td>
-                          <td>{r.course}</td>
-                          <td>{r.year}</td>
-                          <td style={{ textAlign: "left" }}>{r.subject}</td>
-                          <td style={{ textAlign: "left" }}>{r.professor}</td>
-                          <td>{r.labRoom}</td>
-                          <td>
-                            {r.totalDuration != null ? (
-                              <span className="duration-badge">{formatDuration(r.totalDuration)}</span>
-                            ) : "-"}
-                          </td>
-                          <td>
-                            <span className={`attendance-status-badge ${r.status}`}>
-                              {r.status === "active" ? "Inside" : "Timed Out"}
-                            </span>
-                          </td>
-                          <td>
-                            <div className="attendance-actions-cell">
-                              <button className="attendance-action-btn" title="Edit" onClick={() => openEditModal(r)}>
-                                <MdEdit size={14} />
-                              </button>
-                              <button className="attendance-action-btn danger" title="Delete" onClick={() => handleDeleteRecord(r.id)}>
-                                <MdDelete size={14} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {historyData.totalPages > 1 && (
-                  <div className="attendance-pagination">
-                    <button disabled={historyPage <= 1} onClick={() => setHistoryPage((p) => p - 1)}>Prev</button>
-                    <span className="page-info">Page {historyData.page} of {historyData.totalPages}</span>
-                    <button disabled={historyPage >= historyData.totalPages} onClick={() => setHistoryPage((p) => p + 1)}>Next</button>
-                  </div>
-                )}
-              </>
-            )}
-          </>
-        )}
-
         {/* Room Attendance Tab */}
         {activeTab === "roomAttendance" && <RoomAttendanceView />}
 
@@ -545,15 +383,12 @@ export default function AttendanceLogsPage() {
         <div className="attendance-modal-overlay" onClick={() => setEditModal(null)}>
           <div className="attendance-modal" onClick={(e) => e.stopPropagation()}>
             <h2>Edit Attendance Record</h2>
-            <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "-8px 0 16px" }}>
+            <p className="edit-modal-subtitle">
               {editModal.firstName} {editModal.lastName} &mdash; {editModal.date}
             </p>
             <div className="attendance-edit-form">
               <label>Subject</label>
-              <select value={editSubject} onChange={(e) => setEditSubject(e.target.value)}>
-                <option value="">Select Subject</option>
-                {SUBJECTS.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
+              <input type="text" value={editSubject} onChange={(e) => setEditSubject(e.target.value)} placeholder="e.g. Computer Programming 1" />
               <label>Professor</label>
               <input type="text" value={editProfessor} onChange={(e) => setEditProfessor(e.target.value)} />
               <div className="attendance-edit-actions">

@@ -1,0 +1,89 @@
+/* Attendance Scanner Page — reuses scanner.css design tokens */
+.attendance-scan-page { max-width: 720px; margin: 0 auto; padding: 0 0 28px; }
+.attendance-scan-header { text-align: center; margin-bottom: 24px; }
+.attendance-scan-header h1 { color: var(--dark-green); font-size: 1.6rem; font-weight: 700; margin: 0 0 6px; }
+.attendance-scan-subtitle { font-size: 13px; color: var(--text-muted); margin: 0; }
+
+.attendance-scan-shell { background: var(--bg-card); border: 1.5px solid var(--border); border-radius: 16px; padding: 24px; box-shadow: var(--card-shadow); }
+
+/* Mode Toggle */
+.attendance-scan-mode { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: var(--bg); border-radius: 12px; padding: 4px; margin-bottom: 24px; }
+.attendance-scan-mode-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px 16px; border: none; border-radius: 10px; background: transparent;
+  color: var(--text-muted); font-size: 14px; font-weight: 600; cursor: pointer; transition: all .25s;
+}
+.attendance-scan-mode-btn:hover { color: var(--text); background: rgba(0,0,0,.03); }
+.attendance-scan-mode-btn.active { background: var(--green); color: #fff; box-shadow: 0 2px 8px rgba(46,125,50,.3); }
+.attendance-scan-mode-btn.active svg { stroke: #fff; }
+.attendance-scan-mode-btn.time-out.active { background: #1565c0; box-shadow: 0 2px 8px rgba(21,101,192,.3); }
+
+/* Step Cards — reuse .scanner-step-* classes directly */
+.attendance-scan-page .scanner-step-card { border: 1.5px solid var(--border); border-radius: 14px; overflow: hidden; margin-bottom: 16px; transition: all .25s; box-shadow: var(--card-shadow); }
+.attendance-scan-page .scanner-step-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.06); }
+
+/* Status Banner */
+.attendance-scan-status { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 12px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; line-height: 1.4; }
+.attendance-scan-status.success { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; }
+.attendance-scan-status.error { background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; }
+.attendance-scan-status:not(.success):not(.error) { background: #fff3e0; color: #ef6c00; border: 1px solid #ffe0b2; }
+
+/* Submit Button */
+.attendance-scan-submit {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; min-height: 50px; border: none; border-radius: 12px;
+  font-size: 15px; font-weight: 700; cursor: pointer; transition: all .25s; color: #fff;
+}
+.attendance-scan-submit.time-in { background: linear-gradient(135deg, var(--green), var(--green-dark)); color: #000; }
+.attendance-scan-submit.time-out { background: linear-gradient(135deg, #1565c0, #0d47a1); }
+.attendance-scan-submit:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,.2); }
+.attendance-scan-submit:disabled { opacity: .7; cursor: not-allowed; transform: none; }
+.attendance-scan-submit svg { stroke: #fff; }
+
+/* Success Card */
+.attendance-scan-result {
+  display: flex; align-items: center; gap: 14px; padding: 20px; margin-top: 16px;
+  border-radius: 14px; border: 1.5px solid #c8e6c9;
+  background: linear-gradient(135deg, #e8f5e9, #f1f8e9);
+  animation: attendFadeIn .35s ease;
+}
+.attendance-scan-result.time_out { border-color: #90caf9; background: linear-gradient(135deg, #e3f2fd, #e8eaf6); }
+.attendance-scan-result-icon {
+  width: 52px; height: 52px; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.attendance-scan-result-icon.success { background: linear-gradient(135deg, #4caf50, #66bb6a); color: #fff; }
+.attendance-scan-result-icon.time_out { background: linear-gradient(135deg, #1e88e5, #42a5f5); color: #fff; }
+.attendance-scan-result-info { flex: 1; }
+.attendance-scan-result-info h3 { font-size: 16px; font-weight: 700; color: var(--text); margin: 0 0 4px; }
+.attendance-scan-result-info p { font-size: 13px; color: var(--text-muted); margin: 0; }
+.attendance-scan-result-detail {
+  display: flex; justify-content: space-between; font-size: 13px; padding: 6px 0;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+}
+.attendance-scan-result-detail:last-child { border-bottom: none; }
+.attendance-scan-result-detail .label { color: var(--text-muted); }
+.attendance-scan-result-detail .value { color: var(--text); font-weight: 600; }
+
+/* Dark Mode */
+body.dark .attendance-scan-page h1 { color: #fff; }
+body.dark .attendance-scan-subtitle { color: #888; }
+body.dark .attendance-scan-shell { background: #131313; border-color: rgba(255,255,255,.1); }
+body.dark .attendance-scan-mode { background: #0a0a0a; }
+body.dark .attendance-scan-mode-btn { color: #888; }
+body.dark .attendance-scan-mode-btn:hover { color: #fff; background: rgba(255,255,255,.04); }
+body.dark .attendance-scan-mode-btn.active { background: var(--green); color: #fff; }
+body.dark .attendance-scan-mode-btn.time-out.active { background: #1565c0; }
+body.dark .attendance-scan-status.success { background: #1a1a1a; color: var(--green-light); border-color: #2e7d32; }
+body.dark .attendance-scan-status.error { background: #1a1a1a; color: #aaa; border-color: #c62828; }
+body.dark .attendance-scan-status:not(.success):not(.error) { background: #1a1a1a; color: #ccc; border-color: #ef6c00; }
+body.dark .attendance-scan-result { background: linear-gradient(135deg, #1a1a1a, #1a1a1a); border-color: #2e7d32; }
+body.dark .attendance-scan-result.time_out { border-color: #1e88e5; }
+body.dark .attendance-scan-result-info h3 { color: #fff; }
+body.dark .attendance-scan-result-info p { color: #888; }
+body.dark .attendance-scan-result-detail .label { color: #888; }
+body.dark .attendance-scan-result-detail .value { color: #fff; }
+
+@media (max-width: 600px) {
+  .attendance-scan-shell { padding: 16px; border-radius: 12px; }
+}

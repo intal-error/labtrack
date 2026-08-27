@@ -30,6 +30,7 @@ import AttendanceKioskPage from "./pages/AttendanceKioskPage";
 import AttendanceLogsPage from "./pages/AttendanceLogsPage";
 import RoomAttendancePage from "./pages/RoomAttendancePage";
 import MyAttendancePage from "./pages/MyAttendancePage";
+import AttendanceScannerPage from "./pages/AttendanceScannerPage";
 
 
 function ProtectedRoute({ children }) {
@@ -118,6 +119,7 @@ function App() {
               <Route path="attendance" element={<RoleRoute allowed={["admin"]}><AttendanceLogsPage /></RoleRoute>} />
               <Route path="attendance/room/:roomId" element={<RoleRoute allowed={["admin"]}><RoomAttendancePage /></RoleRoute>} />
               <Route path="my-attendance" element={<RoleRoute allowed={["student"]}><MyAttendancePage /></RoleRoute>} />
+              <Route path="attendance-scan" element={<RoleRoute allowed={["student"]}><AttendanceScannerPage /></RoleRoute>} />
               <Route path="my-requests" element={<MyRequestsPage />} />
               <Route path="profile" element={<ProfilePage />} />
 

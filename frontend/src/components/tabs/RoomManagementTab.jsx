@@ -9,7 +9,6 @@ import {
   MdQrCodeScanner,
   MdLocationOn,
   MdDownload,
-  MdPersonAdd,
   MdOutlineQrCode,
   MdOutlineBusiness,
   MdVisibility,
@@ -25,10 +24,6 @@ export default function RoomManagementTab() {
   const [location, setLocation] = useState("");
   const [qrModal, setQrModal] = useState(null);
   const [qrImage, setQrImage] = useState("");
-  const [studentQrModal, setStudentQrModal] = useState(false);
-  const [studentQrId, setStudentQrId] = useState("");
-  const [studentQrData, setStudentQrData] = useState(null);
-  const [generatingQr, setGeneratingQr] = useState(false);
 
   useEffect(() => { loadRooms(); }, []);
 
@@ -97,29 +92,12 @@ export default function RoomManagementTab() {
     }
   }
 
-  async function generateStudentQR() {
-    if (!studentQrId.trim()) return toast.error("Enter a student ID");
-    setGeneratingQr(true);
-    setStudentQrData(null);
-    try {
-      const data = await api.getStudentQR(studentQrId.trim());
-      setStudentQrData(data);
-    } catch (err) {
-      toast.error(err.message || "Student not found");
-    } finally {
-      setGeneratingQr(false);
-    }
-  }
-
   return (
     <div>
       {/* Header */}
       <div className="rooms-header">
         <h3>Lab Rooms</h3>
         <div className="rooms-header-actions">
-          <button className="btn btn-outline" onClick={() => setStudentQrModal(true)}>
-            <MdPersonAdd size={14} /> Generate Student QR
-          </button>
           <button className="btn btn-primary" onClick={openAddModal}>
             <MdAdd size={14} /> Add Room
           </button>
@@ -250,47 +228,6 @@ export default function RoomManagementTab() {
         </div>
       )}
 
-      {/* Student QR Modal */}
-      {studentQrModal && (
-        <div className="attendance-modal-overlay" onClick={() => { setStudentQrModal(false); setStudentQrData(null); setStudentQrId(""); }}>
-          <div className="attendance-modal student-qr-modal" onClick={(e) => e.stopPropagation()}>
-            <h2>Generate Student QR Code</h2>
-            <div className="form-group">
-              <label>Student ID Number *</label>
-              <input
-                type="text"
-                placeholder="Enter student ID"
-                value={studentQrId}
-                onChange={(e) => setStudentQrId(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && generateStudentQR()}
-              />
-            </div>
-            <button className="btn btn-primary" onClick={generateStudentQR} disabled={generatingQr} style={{ width: "100%", justifyContent: "center" }}>
-              {generatingQr ? "Generating..." : "Generate QR"}
-            </button>
-            {studentQrData && (
-              <>
-                <img src={studentQrData.dataUrl} alt={`QR - ${studentQrData.studentName}`} />
-                <p className="qr-label">{studentQrData.studentName} ({studentQrData.schoolId})</p>
-                <div className="qr-data-box">
-                  {studentQrData.qrData}
-                </div>
-                <button className="btn btn-primary" onClick={() => {
-                  const a = document.createElement("a");
-                  a.href = studentQrData.dataUrl;
-                  a.download = `qr_${studentQrData.schoolId}.png`;
-                  a.click();
-                }} style={{ width: "100%", justifyContent: "center", marginTop: 12 }}>
-                  <MdDownload size={14} /> Download QR
-                </button>
-              </>
-            )}
-            <div className="attendance-modal-actions">
-              <button className="btn-cancel" onClick={() => { setStudentQrModal(false); setStudentQrData(null); setStudentQrId(""); }}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

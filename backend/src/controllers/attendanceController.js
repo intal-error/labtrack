@@ -174,6 +174,9 @@ const timeOut = async (req, res) => {
     const data = activeDoc.data();
     const timeInDate = toDate(data.timeIn);
     const now = new Date();
+    if (!timeInDate) {
+      return res.status(500).json({ error: "Invalid time-in record. Cannot calculate duration." });
+    }
     const durationMinutes = Math.round((now.getTime() - timeInDate.getTime()) / 60000);
 
     await activeDoc.ref.update({
@@ -204,6 +207,7 @@ const timeOut = async (req, res) => {
 const getActiveStudents = async (req, res) => {
   try {
     const today = getTodayString();
+    const { room } = req.query;
 
     // Fetch all records, filter in memory (avoids composite index requirement)
     const snap = await db.collection(ATTENDANCE).get();
@@ -213,6 +217,12 @@ const getActiveStudents = async (req, res) => {
 
     if (req.adminAssignment?.assignedCourse) {
       records = records.filter((r) => r.course === req.adminAssignment.assignedCourse);
+    }
+
+    // Filter by room if specified
+    if (room) {
+      const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      records = records.filter((r) => norm(r.roomCode) === norm(room));
     }
 
     records.sort((a, b) => {
@@ -342,7 +352,7 @@ const getAttendanceHistory = async (req, res) => {
 const getRoomAttendanceHistory = async (req, res) => {
   try {
     const { roomId } = req.params;
-    const { from, to, student, page = 1, limit = 50 } = req.query;
+    const { from, to, student, year, course, page = 1, limit = 50 } = req.query;
 
     // Look up the room to get its roomCode
     const roomDoc = await db.collection(ROOMS).doc(roomId).get();
@@ -355,15 +365,22 @@ const getRoomAttendanceHistory = async (req, res) => {
     const snap = await db.collection(ATTENDANCE).get();
     let records = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
-    // Filter by roomCode
-    records = records.filter((r) => r.roomCode === roomCode);
+    // Filter by roomCode (normalize both sides to handle raw vs normalized mismatch)
+    const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    let roomRecords = records.filter((r) => norm(r.roomCode) === norm(roomCode));
+
+    // Collect unique years and courses for filter dropdowns (before applying filters)
+    const uniqueYears = [...new Set(roomRecords.map((r) => r.year).filter(Boolean))].sort();
+    const uniqueCourses = [...new Set(roomRecords.map((r) => r.course).filter(Boolean))].sort();
 
     // Additional filters
-    if (from) records = records.filter((r) => r.date >= from);
-    if (to) records = records.filter((r) => r.date <= to);
+    if (from) roomRecords = roomRecords.filter((r) => r.date >= from);
+    if (to) roomRecords = roomRecords.filter((r) => r.date <= to);
+    if (year) roomRecords = roomRecords.filter((r) => (r.year || "").toLowerCase() === year.toLowerCase());
+    if (course) roomRecords = roomRecords.filter((r) => (r.course || "").toLowerCase() === course.toLowerCase());
     if (student) {
       const s = student.toLowerCase();
-      records = records.filter((r) =>
+      roomRecords = roomRecords.filter((r) =>
         (r.firstName || "").toLowerCase().includes(s) ||
         (r.lastName || "").toLowerCase().includes(s) ||
         (r.studentSchoolId || "").toLowerCase().includes(s)
@@ -371,7 +388,7 @@ const getRoomAttendanceHistory = async (req, res) => {
     }
 
     // Sort by date desc, then time desc
-    records.sort((a, b) => {
+    roomRecords.sort((a, b) => {
       const dA = a.date || "";
       const dB = b.date || "";
       if (dA !== dB) return dB.localeCompare(dA);
@@ -380,13 +397,13 @@ const getRoomAttendanceHistory = async (req, res) => {
       return tB - tA;
     });
 
-    const total = records.length;
+    const total = roomRecords.length;
     const pageNum = parseInt(page, 10) || 1;
     const limitNum = parseInt(limit, 10) || 50;
     const start = (pageNum - 1) * limitNum;
-    const paged = records.slice(start, start + limitNum);
+    const paged = roomRecords.slice(start, start + limitNum);
 
-    res.json({ records: paged, total, page: pageNum, totalPages: Math.ceil(total / limitNum), roomName });
+    res.json({ records: paged, total, page: pageNum, totalPages: Math.ceil(total / limitNum), roomName, years: uniqueYears, courses: uniqueCourses });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -440,11 +457,12 @@ const getMyAttendance = async (req, res) => {
     // Verify the authenticated user owns this schoolId
     if (req.user?.uid) {
       const userDoc = await db.collection("users").doc(req.user.uid).get();
-      if (userDoc.exists) {
-        const profile = userDoc.data();
-        if (profile.schoolId && profile.schoolId !== schoolId) {
-          return res.status(403).json({ error: "Not authorized to view this record" });
-        }
+      if (!userDoc.exists) {
+        return res.status(403).json({ error: "Not authorized" });
+      }
+      const profile = userDoc.data();
+      if (profile.schoolId && profile.schoolId !== schoolId) {
+        return res.status(403).json({ error: "Not authorized to view this record" });
       }
     }
 
@@ -865,6 +883,9 @@ const autoScan = async (req, res) => {
       const data = activeSession.data();
       const timeInDate = toDate(data.timeIn);
       const now = new Date();
+      if (!timeInDate) {
+        return res.status(500).json({ error: "Invalid time-in record. Cannot calculate duration." });
+      }
       const durationMinutes = Math.round((now.getTime() - timeInDate.getTime()) / 60000);
 
       await activeSession.ref.update({
