@@ -2,10 +2,13 @@ import { useState, useEffect, useMemo } from "react";
 import { api } from "../../services/api";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
-import { MdAssessment, MdDownload, MdPeople, MdInventory, MdWarning, MdBuild, MdSchedule } from "react-icons/md";
 import {
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+  MdAssessment, MdDownload, MdPeople, MdInventory, MdWarning, MdBuild, MdSchedule,
+  MdAssignment, MdAttachMoney, MdEventAvailable, MdWarningAmber
+} from "react-icons/md";
+import {
+  BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from "recharts";
 
 const CONDITION_COLORS = {
@@ -13,8 +16,8 @@ const CONDITION_COLORS = {
   Damaged: "#ef6c00", "For Repair": "#7b1fa2", Missing: "#c62828", Unknown: "#888"
 };
 const INCIDENT_COLORS = { open: "#d32f2f", investigating: "#f57c00", resolved: "#43A047" };
-const MAINTENANCE_COLORS = { scheduled: "#1976d2", "in-progress": "#f57c00", completed: "#43A047" };
 const CATEGORY_COLORS = ["#1976d2", "#2E7D32", "#f57c00", "#7b1fa2", "#c62828", "#00838f"];
+const REQUEST_STATUS_COLORS = { pending: "#f9a825", approved: "#2E7D32", rejected: "#d32f2f", cancelled: "#888" };
 
 function toDate(value) {
   if (!value) return null;
@@ -25,22 +28,21 @@ function toDate(value) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function getWeekLabel(date) {
+function formatDate(date) {
+  const d = toDate(date);
+  if (!d) return "—";
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const start = new Date(date);
-  start.setDate(start.getDate() - start.getDay());
-  return `${months[start.getMonth()]} ${start.getDate()}`;
+  return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }
 
-function EmptyChart({ text }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 200, color: "var(--text-muted)", fontSize: 13 }}>
-      {text}
-    </div>
-  );
+function daysBetween(d1, d2) {
+  const a = toDate(d1);
+  const b = toDate(d2);
+  if (!a || !b) return 0;
+  return Math.ceil((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-const CustomTooltip = ({ active, payload, label }) => {
+const ChartTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
     <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 14px", boxShadow: "0 4px 12px rgba(0,0,0,.1)" }}>
@@ -52,6 +54,14 @@ const CustomTooltip = ({ active, payload, label }) => {
   );
 };
 
+function EmptyChart({ text }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 180, color: "var(--text-muted)", fontSize: 13 }}>
+      {text}
+    </div>
+  );
+}
+
 export default function ReportsTab() {
   const [counts, setCounts] = useState({ borrowed: 0, returned: 0, users: 0, students: 0 });
   const [catalog, setCatalog] = useState([]);
@@ -59,28 +69,38 @@ export default function ReportsTab() {
   const [maintenance, setMaintenance] = useState([]);
   const [returned, setReturned] = useState([]);
   const [borrowed, setBorrowed] = useState([]);
+  const [borrowRequests, setBorrowRequests] = useState([]);
+  const [fines, setFines] = useState([]);
+  const [todayAttendance, setTodayAttendance] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { load(); }, []);
 
   async function load() {
     try {
-      const [c, cat, inc, maint, ret, bor] = await Promise.all([
+      const results = await Promise.allSettled([
         api.getDashboardCounts(),
         api.getCatalog(),
         api.getIncidents(),
         api.getMaintenance(),
         api.getReturned(),
         api.getBorrowed(),
+        api.getBorrowRequests(),
+        api.getFines(),
+        api.getTodayAttendance(),
       ]);
-      setCounts(c);
-      setCatalog(Array.isArray(cat) ? cat : []);
-      setIncidents(Array.isArray(inc) ? inc : []);
-      setMaintenance(Array.isArray(maint) ? maint : []);
-      setReturned(Array.isArray(ret) ? ret : []);
-      setBorrowed(Array.isArray(bor) ? bor : []);
+      const get = (i) => results[i].status === "fulfilled" ? results[i].value : [];
+      setCounts(get(0));
+      setCatalog(Array.isArray(get(1)) ? get(1) : []);
+      setIncidents(Array.isArray(get(2)) ? get(2) : []);
+      setMaintenance(Array.isArray(get(3)) ? get(3) : []);
+      setReturned(Array.isArray(get(4)) ? get(4) : []);
+      setBorrowed(Array.isArray(get(5)) ? get(5) : []);
+      setBorrowRequests(Array.isArray(get(6)) ? get(6) : []);
+      setFines(Array.isArray(get(7)) ? get(7) : []);
+      setTodayAttendance(Array.isArray(get(8)) ? get(8) : []);
     } catch {
-      toast.error("Failed to load report data");
+      toast.error("Failed to load overview data");
     } finally {
       setLoading(false);
     }
@@ -101,186 +121,194 @@ export default function ReportsTab() {
     catalog: catalog.length,
     borrowed: counts.borrowed || 0,
     returned: counts.returned || 0,
-    incidents: incidents.length,
     openIncidents: incidents.filter((i) => i.status === "open").length,
-    maintenance: maintenance.length,
     scheduledMaintenance: maintenance.filter((m) => m.status === "scheduled").length,
-  }), [counts, catalog, incidents, maintenance]);
-
-  const trendData = useMemo(() => {
-    const allTransactions = [
-      ...returned.map((t) => ({ ...t, _type: "returned", _date: t.borrowedAt || t.timestamp })),
-      ...borrowed.map((t) => ({ ...t, _type: "borrowed", _date: t.timestamp })),
-    ];
-    const now = new Date();
-    const weeks = [];
-    for (let i = 11; i >= 0; i--) {
-      const weekStart = new Date(now);
-      weekStart.setDate(weekStart.getDate() - (i * 7) - weekStart.getDay());
-      weekStart.setHours(0, 0, 0, 0);
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekEnd.getDate() + 6, 23, 59, 59);
-      const borrows = allTransactions.filter((t) => t._type === "borrowed" && toDate(t._date)?.getTime() >= weekStart.getTime() && toDate(t._date)?.getTime() <= weekEnd.getTime()).length;
-      const returns = allTransactions.filter((t) => t._type === "returned" && toDate(t._date)?.getTime() >= weekStart.getTime() && toDate(t._date)?.getTime() <= weekEnd.getTime()).length;
-      weeks.push({ name: getWeekLabel(weekStart), Borrows: borrows, Returns: returns });
-    }
-    return weeks;
-  }, [returned, borrowed]);
+    pendingRequests: borrowRequests.filter((r) => r.status === "pending").length,
+    pendingFines: fines.filter((f) => f.status === "pending").length,
+    totalPendingFineAmount: fines.filter((f) => f.status === "pending").reduce((sum, f) => sum + (Number(f.totalFine) || 0), 0),
+    todaySessions: todayAttendance.length,
+  }), [counts, catalog, incidents, maintenance, borrowRequests, fines, todayAttendance]);
 
   const categoryData = useMemo(() => {
-    const counts = catalog.reduce((acc, item) => {
+    const c = catalog.reduce((acc, item) => {
       const cat = item.category || "Uncategorized";
       acc[cat] = (acc[cat] || 0) + 1;
       return acc;
     }, {});
-    return Object.entries(counts).map(([name, value]) => ({ name, value }));
+    return Object.entries(c).map(([name, value]) => ({ name, value }));
   }, [catalog]);
 
   const conditionData = useMemo(() => {
-    const counts = catalog.reduce((acc, item) => {
+    const c = catalog.reduce((acc, item) => {
       const cond = item.condition || "Unknown";
       acc[cond] = (acc[cond] || 0) + 1;
       return acc;
     }, {});
-    return Object.entries(counts).map(([name, value]) => ({ name, value }));
+    return Object.entries(c).map(([name, value]) => ({ name, value }));
   }, [catalog]);
 
   const topBorrowedData = useMemo(() => {
     const allTx = [...returned, ...borrowed];
-    const counts = allTx.reduce((acc, t) => {
+    const c = allTx.reduce((acc, t) => {
       const name = t.itemName || "Unknown";
       acc[name] = (acc[name] || 0) + (Number(t.quantity) || 1);
       return acc;
     }, {});
-    return Object.entries(counts)
-      .map(([name, value]) => ({ name: name.length > 18 ? name.slice(0, 16) + "..." : name, value }))
+    return Object.entries(c)
+      .map(([name, value]) => ({ name: name.length > 20 ? name.slice(0, 18) + "..." : name, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
   }, [returned, borrowed]);
 
   const incidentData = useMemo(() => {
-    const counts = incidents.reduce((acc, inc) => {
+    const c = incidents.reduce((acc, inc) => {
       const s = inc.status || "unknown";
       acc[s] = (acc[s] || 0) + 1;
       return acc;
     }, {});
-    return Object.entries(counts).map(([name, value]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), value }));
+    return Object.entries(c).map(([name, value]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), value }));
   }, [incidents]);
 
-  const maintenanceData = useMemo(() => {
-    const counts = maintenance.reduce((acc, m) => {
-      const s = m.status || "unknown";
+  const requestStatusData = useMemo(() => {
+    const c = borrowRequests.reduce((acc, r) => {
+      const s = r.status || "unknown";
       acc[s] = (acc[s] || 0) + 1;
       return acc;
     }, {});
-    return Object.entries(counts).map(([name, value]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), value }));
-  }, [maintenance]);
+    return Object.entries(c).map(([name, value]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), value }));
+  }, [borrowRequests]);
+
+  const overdueItems = useMemo(() => {
+    const now = new Date();
+    return borrowed
+      .filter((b) => {
+        const due = toDate(b.dueDate);
+        return due && due.getTime() < now.getTime();
+      })
+      .map((b) => ({ ...b, daysOverdue: daysBetween(b.dueDate, now) }))
+      .sort((a, b) => b.daysOverdue - a.daysOverdue)
+      .slice(0, 5);
+  }, [borrowed]);
+
+  const recentBorrowed = useMemo(() => borrowed.slice(0, 5), [borrowed]);
+  const recentReturned = useMemo(() => returned.slice(0, 5), [returned]);
 
   if (loading) return <div className="page-loading"><div className="spinner-lg" /></div>;
 
   return (
     <div className="tab-content">
       <div className="records-header">
-        <h2><MdAssessment size={22} /> Reports Dashboard</h2>
+        <h2><MdAssessment size={22} /> Overview</h2>
         <div className="reports-downloads">
           <button className="btn btn-outline btn-sm" onClick={() => downloadReport("borrowed")}>
-            <MdDownload size={14} /> Borrowed Excel
+            <MdDownload size={14} /> Borrowed
           </button>
           <button className="btn btn-outline btn-sm" onClick={() => downloadReport("returned")}>
-            <MdDownload size={14} /> Returned Excel
+            <MdDownload size={14} /> Returned
           </button>
           <button className="btn btn-outline btn-sm" onClick={() => downloadReport("catalog")}>
-            <MdDownload size={14} /> Catalog Excel
+            <MdDownload size={14} /> Catalog
           </button>
         </div>
       </div>
 
-      <div className="reports-summary-grid">
-        <div className="report-summary-card">
-          <MdPeople size={28} style={{ color: "#1976d2" }} />
-          <div className="report-summary-value">{stats.users}</div>
-          <div className="report-summary-label">Total Users</div>
-          <div className="report-summary-detail">{stats.students} students</div>
+      {/* Key Metrics */}
+      <div className="overview-metrics">
+        <div className="overview-metric-card">
+          <div className="overview-metric-icon" style={{ background: "rgba(25,118,210,.1)", color: "#1976d2" }}><MdPeople size={20} /></div>
+          <div className="overview-metric-body">
+            <div className="overview-metric-value">{stats.users}</div>
+            <div className="overview-metric-label">Total Users</div>
+            <div className="overview-metric-detail">{stats.students} students</div>
+          </div>
         </div>
-        <div className="report-summary-card">
-          <MdInventory size={28} style={{ color: "#2E7D32" }} />
-          <div className="report-summary-value">{stats.catalog}</div>
-          <div className="report-summary-label">Catalog Items</div>
-          <div className="report-summary-detail">{stats.borrowed} currently borrowed</div>
+        <div className="overview-metric-card">
+          <div className="overview-metric-icon" style={{ background: "rgba(46,125,50,.1)", color: "#2E7D32" }}><MdInventory size={20} /></div>
+          <div className="overview-metric-body">
+            <div className="overview-metric-value">{stats.catalog}</div>
+            <div className="overview-metric-label">Catalog Items</div>
+          </div>
         </div>
-        <div className="report-summary-card">
-          <MdSchedule size={28} style={{ color: "#0277bd" }} />
-          <div className="report-summary-value">{stats.borrowed}</div>
-          <div className="report-summary-label">Active Borrows</div>
-          <div className="report-summary-detail">{stats.returned} total returned</div>
+        <div className="overview-metric-card">
+          <div className="overview-metric-icon" style={{ background: "rgba(2,119,189,.1)", color: "#0277bd" }}><MdSchedule size={20} /></div>
+          <div className="overview-metric-body">
+            <div className="overview-metric-value">{stats.borrowed}</div>
+            <div className="overview-metric-label">Active Borrows</div>
+            <div className="overview-metric-detail">{stats.returned} returned</div>
+          </div>
         </div>
-        <div className="report-summary-card">
-          <MdWarning size={28} style={{ color: "#f57c00" }} />
-          <div className="report-summary-value">{stats.incidents}</div>
-          <div className="report-summary-label">Incidents</div>
-          <div className="report-summary-detail">{stats.openIncidents} open</div>
+        <div className="overview-metric-card">
+          <div className="overview-metric-icon" style={{ background: "rgba(249,168,37,.1)", color: "#f9a825" }}><MdAssignment size={20} /></div>
+          <div className="overview-metric-body">
+            <div className="overview-metric-value">{stats.pendingRequests}</div>
+            <div className="overview-metric-label">Pending Requests</div>
+          </div>
         </div>
-        <div className="report-summary-card">
-          <MdBuild size={28} style={{ color: "#7b1fa2" }} />
-          <div className="report-summary-value">{stats.maintenance}</div>
-          <div className="report-summary-label">Maintenance</div>
-          <div className="report-summary-detail">{stats.scheduledMaintenance} scheduled</div>
+        <div className="overview-metric-card">
+          <div className="overview-metric-icon" style={{ background: "rgba(229,57,53,.1)", color: "#e53935" }}><MdAttachMoney size={20} /></div>
+          <div className="overview-metric-body">
+            <div className="overview-metric-value">₱{stats.totalPendingFineAmount.toLocaleString()}</div>
+            <div className="overview-metric-label">Pending Fines</div>
+            <div className="overview-metric-detail">{stats.pendingFines} unpaid</div>
+          </div>
         </div>
-      </div>
-
-      <div className="reports-charts-grid">
-        <div className="report-chart-box report-chart-wide">
-          <h4>Borrowing Trend (Last 12 Weeks)</h4>
-          {trendData.some((d) => d.Borrows > 0 || d.Returns > 0) ? (
-            <ResponsiveContainer width="100%" height={260}>
-              <AreaChart data={trendData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                <defs>
-                  <linearGradient id="gradBorrows" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#2E7D32" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#2E7D32" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="gradReturns" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#1976d2" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#1976d2" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--text-muted)" }} />
-                <YAxis tick={{ fontSize: 11, fill: "var(--text-muted)" }} allowDecimals={false} />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Area type="monotone" dataKey="Borrows" stroke="#2E7D32" fill="url(#gradBorrows)" strokeWidth={2} />
-                <Area type="monotone" dataKey="Returns" stroke="#1976d2" fill="url(#gradReturns)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          ) : <EmptyChart text="No borrowing data yet" />}
+        <div className="overview-metric-card">
+          <div className="overview-metric-icon" style={{ background: "rgba(0,137,123,.1)", color: "#00897b" }}><MdEventAvailable size={20} /></div>
+          <div className="overview-metric-body">
+            <div className="overview-metric-value">{stats.todaySessions}</div>
+            <div className="overview-metric-label">Today's Sessions</div>
+          </div>
         </div>
-
-        <div className="report-chart-box">
-          <h4>Category Distribution</h4>
-          {categoryData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={260}>
-              <PieChart>
-                <Pie data={categoryData} cx="50%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={3} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                  {categoryData.map((_, i) => <Cell key={i} fill={CATEGORY_COLORS[i % CATEGORY_COLORS.length]} />)}
-                </Pie>
-                <Tooltip content={<CustomTooltip />} />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : <EmptyChart text="No catalog data" />}
+        <div className="overview-metric-card">
+          <div className="overview-metric-icon" style={{ background: "rgba(245,124,0,.1)", color: "#f57c00" }}><MdWarning size={20} /></div>
+          <div className="overview-metric-body">
+            <div className="overview-metric-value">{stats.openIncidents}</div>
+            <div className="overview-metric-label">Open Incidents</div>
+          </div>
+        </div>
+        <div className="overview-metric-card">
+          <div className="overview-metric-icon" style={{ background: "rgba(123,31,162,.1)", color: "#7b1fa2" }}><MdBuild size={20} /></div>
+          <div className="overview-metric-body">
+            <div className="overview-metric-value">{stats.scheduledMaintenance}</div>
+            <div className="overview-metric-label">Scheduled Maintenance</div>
+          </div>
         </div>
       </div>
 
+      {/* Overdue Alert */}
+      {overdueItems.length > 0 && (
+        <div className="overview-alert">
+          <MdWarningAmber size={18} />
+          <span><strong>{overdueItems.length}</strong> overdue item{overdueItems.length > 1 ? "s" : ""} require attention</span>
+        </div>
+      )}
+
+      {/* Categories Chart */}
+      <div className="report-chart-box">
+        <h4>Categories</h4>
+        {categoryData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={260}>
+            <PieChart>
+              <Pie data={categoryData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                {categoryData.map((_, i) => <Cell key={i} fill={CATEGORY_COLORS[i % CATEGORY_COLORS.length]} />)}
+              </Pie>
+              <Tooltip content={<ChartTooltip />} />
+            </PieChart>
+          </ResponsiveContainer>
+        ) : <EmptyChart text="No catalog data" />}
+      </div>
+
+      {/* Charts Row 2 */}
       <div className="reports-charts-grid">
         <div className="report-chart-box">
-          <h4>Item Condition Distribution</h4>
+          <h4>Item Condition</h4>
           {conditionData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
+            <ResponsiveContainer width="100%" height={200}>
               <BarChart data={conditionData} layout="vertical" margin={{ top: 5, right: 20, left: 80, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 11, fill: "var(--text-muted)" }} allowDecimals={false} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "var(--text-muted)" }} width={75} />
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip content={<ChartTooltip />} />
                 <Bar dataKey="value" name="Items" radius={[0, 6, 6, 0]}>
                   {conditionData.map((entry) => <Cell key={entry.name} fill={CONDITION_COLORS[entry.name] || "#888"} />)}
                 </Bar>
@@ -288,52 +316,122 @@ export default function ReportsTab() {
             </ResponsiveContainer>
           ) : <EmptyChart text="No condition data" />}
         </div>
-
         <div className="report-chart-box">
-          <h4>Top Borrowed Items</h4>
+          <h4>Top Borrowed</h4>
           {topBorrowedData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
+            <ResponsiveContainer width="100%" height={200}>
               <BarChart data={topBorrowedData} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 11, fill: "var(--text-muted)" }} allowDecimals={false} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "var(--text-muted)" }} width={100} />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="value" name="Times Borrowed" fill="#2E7D32" radius={[0, 6, 6, 0]} />
+                <Tooltip content={<ChartTooltip />} />
+                <Bar dataKey="value" name="Borrows" fill="#2E7D32" radius={[0, 6, 6, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : <EmptyChart text="No borrowing history" />}
         </div>
       </div>
 
+      {/* Charts Row 3 */}
       <div className="reports-charts-grid">
+        <div className="report-chart-box">
+          <h4>Request Status</h4>
+          {requestStatusData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie data={requestStatusData} cx="50%" cy="50%" outerRadius={70} paddingAngle={3} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                  {requestStatusData.map((entry) => <Cell key={entry.name} fill={REQUEST_STATUS_COLORS[entry.name.toLowerCase()] || "#888"} />)}
+                </Pie>
+                <Tooltip content={<ChartTooltip />} />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : <EmptyChart text="No requests yet" />}
+        </div>
         <div className="report-chart-box">
           <h4>Incident Status</h4>
           {incidentData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
+            <ResponsiveContainer width="100%" height={200}>
               <PieChart>
-                <Pie data={incidentData} cx="50%" cy="50%" outerRadius={80} paddingAngle={3} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                <Pie data={incidentData} cx="50%" cy="50%" outerRadius={70} paddingAngle={3} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
                   {incidentData.map((entry) => <Cell key={entry.name} fill={INCIDENT_COLORS[entry.name.toLowerCase()] || "#888"} />)}
                 </Pie>
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip content={<ChartTooltip />} />
               </PieChart>
             </ResponsiveContainer>
-          ) : <EmptyChart text="No incidents reported" />}
-        </div>
-
-        <div className="report-chart-box">
-          <h4>Maintenance Status</h4>
-          {maintenanceData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie data={maintenanceData} cx="50%" cy="50%" outerRadius={80} paddingAngle={3} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                  {maintenanceData.map((entry) => <Cell key={entry.name} fill={MAINTENANCE_COLORS[entry.name.toLowerCase()] || "#888"} />)}
-                </Pie>
-                <Tooltip content={<CustomTooltip />} />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : <EmptyChart text="No maintenance records" />}
+          ) : <EmptyChart text="No incidents" />}
         </div>
       </div>
+
+      {/* Data Tables */}
+      <div className="reports-charts-grid">
+        <div className="report-chart-box">
+          <h4>Currently Borrowed</h4>
+          {recentBorrowed.length > 0 ? (
+            <div className="overview-table-wrap">
+              <table className="overview-table">
+                <thead>
+                  <tr><th>Borrower</th><th>Item</th><th>Qty</th><th>Due</th></tr>
+                </thead>
+                <tbody>
+                  {recentBorrowed.map((b) => (
+                    <tr key={b.id}>
+                      <td>{b.userName || b.studentName || "—"}</td>
+                      <td>{b.itemName || "—"}</td>
+                      <td>{b.quantity || 1}</td>
+                      <td>{formatDate(b.dueDate)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : <EmptyChart text="No active borrows" />}
+        </div>
+        <div className="report-chart-box">
+          <h4>Recently Returned</h4>
+          {recentReturned.length > 0 ? (
+            <div className="overview-table-wrap">
+              <table className="overview-table">
+                <thead>
+                  <tr><th>Borrower</th><th>Item</th><th>Returned</th></tr>
+                </thead>
+                <tbody>
+                  {recentReturned.map((r) => (
+                    <tr key={r.id}>
+                      <td>{r.userName || r.studentName || "—"}</td>
+                      <td>{r.itemName || "—"}</td>
+                      <td>{formatDate(r.timestamp)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : <EmptyChart text="No returns yet" />}
+        </div>
+      </div>
+
+      {/* Overdue Table */}
+      {overdueItems.length > 0 && (
+        <div className="report-chart-box overview-overdue-box">
+          <h4><MdWarningAmber size={16} style={{ color: "#d32f2f" }} /> Overdue Items</h4>
+          <div className="overview-table-wrap">
+            <table className="overview-table overview-overdue-table">
+              <thead>
+                <tr><th>Borrower</th><th>Item</th><th>Due Date</th><th>Days Overdue</th></tr>
+              </thead>
+              <tbody>
+                {overdueItems.map((item) => (
+                  <tr key={item.id}>
+                    <td>{item.userName || item.studentName || "—"}</td>
+                    <td>{item.itemName || "—"}</td>
+                    <td>{formatDate(item.dueDate)}</td>
+                    <td><span className="overview-overdue-badge">{item.daysOverdue}d overdue</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

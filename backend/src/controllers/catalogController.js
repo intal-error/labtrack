@@ -89,28 +89,36 @@ const update = async (req, res) => {
     const { id } = req.params;
     const data = req.body;
     const docRef = db.collection(COLLECTION).doc(id);
-    const doc = await docRef.get();
-    if (!doc.exists) return res.status(404).json({ error: "Item not found" });
 
-    const current = doc.data();
-    const quantity = Number(data.quantity ?? current.quantity) || 0;
-    const previousBorrowed = Math.max(0, Number(current.quantity || 0) - Number(current.availableQuantity || 0));
-    const availableQuantity = Math.max(0, quantity - previousBorrowed);
+    await db.runTransaction(async (t) => {
+      const doc = await t.get(docRef);
+      if (!doc.exists) throw new Error("Item not found");
 
-    const allowed = ["itemName", "category", "course", "condition", "status", "imageUrl", "barcode"];
-    const sanitized = {};
-    for (const key of allowed) {
-      if (data[key] !== undefined) sanitized[key] = data[key];
-    }
+      const current = doc.data();
+      const quantity = Number(data.quantity ?? current.quantity) || 0;
+      const previousBorrowed = Math.max(0, Number(current.quantity || 0) - Number(current.availableQuantity || 0));
 
-    await docRef.set({
-      ...sanitized,
-      quantity,
-      availableQuantity,
-      available: availableQuantity > 0,
-      status: availableQuantity > 0 ? "Available" : "Borrowed",
-      updatedAt: new Date(),
-    }, { merge: true });
+      if (quantity < previousBorrowed) {
+        throw new Error(`Cannot reduce quantity below ${previousBorrowed} (currently borrowed). Return items first or keep quantity at ${previousBorrowed}+.`);
+      }
+
+      const availableQuantity = Math.max(0, quantity - previousBorrowed);
+
+      const allowed = ["itemName", "category", "course", "condition", "status", "imageUrl", "barcode"];
+      const sanitized = {};
+      for (const key of allowed) {
+        if (data[key] !== undefined) sanitized[key] = data[key];
+      }
+
+      t.set(docRef, {
+        ...sanitized,
+        quantity,
+        availableQuantity,
+        available: availableQuantity > 0,
+        status: availableQuantity > 0 ? "Available" : "Borrowed",
+        updatedAt: new Date(),
+      }, { merge: true });
+    });
 
     res.json({ message: "Item updated" });
   } catch (err) {
@@ -120,7 +128,25 @@ const update = async (req, res) => {
 
 const remove = async (req, res) => {
   try {
-    await db.collection(COLLECTION).doc(req.params.id).delete();
+    const { id } = req.params;
+    const itemDoc = await db.collection(COLLECTION).doc(id).get();
+    if (!itemDoc.exists) return res.status(404).json({ error: "Item not found" });
+
+    const item = itemDoc.data();
+    const borrowed = Math.max(0, Number(item.quantity || 0) - Number(item.availableQuantity || 0));
+    if (borrowed > 0) {
+      return res.status(400).json({ error: `Cannot delete item with ${borrowed} active borrow(s). Return all items first.` });
+    }
+
+    const activeRequests = await db.collection("borrowRequests")
+      .where("catalogId", "==", id)
+      .where("status", "==", "pending")
+      .get();
+    if (!activeRequests.empty) {
+      return res.status(400).json({ error: `Cannot delete item with ${activeRequests.size} pending borrow request(s). Reject or cancel them first.` });
+    }
+
+    await db.collection(COLLECTION).doc(id).delete();
     res.json({ message: "Item deleted" });
   } catch (err) {
     res.status(500).json({ error: err.message });

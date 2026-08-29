@@ -71,7 +71,7 @@ const register = async (req, res) => {
     res.status(201).json({ id: userRecord.uid, message: "Registration successful" });
   } catch (err) {
     console.error("Registration error:", err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Registration failed. Please try again." });
   }
 };
 
@@ -129,8 +129,17 @@ const changePassword = async (req, res) => {
       return res.status(400).json({ error: "Current and new passwords are required" });
     }
 
-    if (newPassword.length < 6) {
-      return res.status(400).json({ error: "New password must be at least 6 characters" });
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: "New password must be at least 8 characters" });
+    }
+    if (!/[A-Z]/.test(newPassword)) {
+      return res.status(400).json({ error: "New password must contain at least one uppercase letter" });
+    }
+    if (!/[a-z]/.test(newPassword)) {
+      return res.status(400).json({ error: "New password must contain at least one lowercase letter" });
+    }
+    if (!/[0-9]/.test(newPassword)) {
+      return res.status(400).json({ error: "New password must contain at least one number" });
     }
 
     const userDoc = await db.collection("users").doc(uid).get();

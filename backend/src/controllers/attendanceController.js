@@ -461,7 +461,7 @@ const getMyAttendance = async (req, res) => {
         return res.status(403).json({ error: "Not authorized" });
       }
       const profile = userDoc.data();
-      if (profile.schoolId && profile.schoolId !== schoolId) {
+      if (!profile.schoolId || profile.schoolId !== schoolId) {
         return res.status(403).json({ error: "Not authorized to view this record" });
       }
     }

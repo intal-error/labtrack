@@ -306,7 +306,7 @@ export default function ScannerPage() {
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                   <span className="scanner-collapsed-name">{borrowerResult.name}</span>
                   <span className="scanner-collapsed-id">{borrowerResult.schoolID}</span>
-                   <span className={`scanner-collapsed-role ${borrowerResult.role}`}>Student</span>
+                   <span className={`scanner-collapsed-role ${borrowerResult.role}`}>{borrowerResult.role?.charAt(0).toUpperCase() + (borrowerResult.role?.slice(1) || "Student")}</span>
                 </div>
               </div>
             ) : (
@@ -325,7 +325,7 @@ export default function ScannerPage() {
                       <div className="scanner-user-name">{borrowerResult.name}</div>
                       <div className="scanner-user-id">{borrowerResult.schoolID}</div>
                        <div className={`scanner-user-role ${borrowerResult.role}`}>
-                         Student
+                         {borrowerResult.role?.charAt(0).toUpperCase() + (borrowerResult.role?.slice(1) || "Student")}
                        </div>
                     </div>
                     <div className="scanner-user-verified">

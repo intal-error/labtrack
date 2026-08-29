@@ -101,12 +101,15 @@ const getMyRequests = async (req, res) => {
 
 const createRequest = async (req, res) => {
   try {
-    const { itemId, quantity, dueDate, purpose, assigned_admin_id } = req.body;
+    const { itemId, quantity, dueDate, purpose } = req.body;
     const uid = req.user.uid;
 
     const userSnap = await db.collection(USERS).doc(uid).get();
     if (!userSnap.exists) return res.status(404).json({ error: "User not found" });
     const user = userSnap.data();
+
+    // Only admins can assign requests to specific admins; students always use auto-assign
+    const assigned_admin_id = req.user.role === "admin" ? (req.body.assigned_admin_id || "") : "";
 
     const itemSnap = await db.collection(CATALOG).doc(itemId).get();
     if (!itemSnap.exists) return res.status(404).json({ error: "Catalog item not found" });

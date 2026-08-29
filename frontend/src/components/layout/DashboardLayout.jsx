@@ -25,7 +25,7 @@ const navSections = [
       { path: "/my-attendance", label: "My Attendance", icon: MdEventAvailable, roles: ["student"] },
       { path: "/attendance-scan", label: "Scan Attendance", icon: MdQrCodeScanner, roles: ["student"] },
       { path: "/attendance", label: "Attendance Logs", icon: MdEventAvailable, roles: ["admin"] },
-      { path: "/reports", label: "Reports", icon: MdAssessment, roles: ["admin"] },
+      { path: "/reports", label: "Overview", icon: MdAssessment, roles: ["admin"] },
     ],
   },
   {
@@ -44,7 +44,7 @@ const navSections = [
     items: [
       { path: "/notifications", label: "Notifications", icon: MdNotifications, roles: ["student", "admin"] },
       { path: "/incidents", label: "Incidents", icon: MdWarning, roles: ["admin", "student"] },
-      { path: "/fines", label: "Fines", icon: MdAttachMoney, roles: ["admin"] },
+      { path: "/fines", label: "Fines", icon: MdAttachMoney, roles: ["student", "admin"] },
       { path: "/manuals", label: "Lab Manuals", icon: MdMenuBook, roles: ["student", "admin"] },
       { path: "/documents", label: "Documents", icon: MdFolderOpen, roles: ["admin"] },
       { path: "/settings", label: "Settings", icon: MdSettings, roles: ["admin"] },

@@ -34,6 +34,7 @@ const authorize = (...allowedRoles) => {
         if (role) req.user.role = role;
       } catch (err) {
         console.error("Failed to look up user role:", err.message);
+        return res.status(403).json({ error: "Unable to verify permissions" });
       }
     }
 
@@ -46,7 +47,10 @@ const authorize = (...allowedRoles) => {
 
 const errorHandler = (err, req, res, _next) => {
   console.error("Server error:", err);
-  res.status(err.status || 500).json({ error: err.message || "Internal server error" });
+  const isDev = process.env.NODE_ENV === "development";
+  res.status(err.status || 500).json({
+    error: isDev ? (err.message || "Internal server error") : "Internal server error",
+  });
 };
 
 module.exports = { verifyToken, authorize, errorHandler };

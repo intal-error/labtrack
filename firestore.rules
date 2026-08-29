@@ -22,8 +22,9 @@ service cloud.firestore {
       allow read: if request.auth != null && (isOwner(userId) || isAdmin());
       // Users can create their own profile during registration
       allow create: if request.auth != null && request.auth.uid == userId;
-      // Users can update their own profile; admins can update anyone
-      allow update: if request.auth != null && (isOwner(userId) || isAdmin());
+      // Users can update their own profile (without changing role); admins can update anyone
+      allow update: if request.auth != null && (isOwner(userId) || isAdmin())
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
       // Only admins can delete users
       allow delete: if isAdmin();
 
@@ -50,20 +51,20 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Transactions - admins can read/write all
+    // Transactions - backend-only writes (Admin SDK bypasses rules)
     match /transactions/{transactionId} {
       allow read: if request.auth != null && isAdmin();
-      allow create: if request.auth != null;
-      allow update: if request.auth != null && isAdmin();
+      allow create: if false;
+      allow update: if false;
       allow delete: if isAdmin();
     }
 
-    // Notifications - users can read their own; admins can manage all
+    // Notifications - backend-only writes; users can read their own; update limited to owner
     match /notifications/{notificationId} {
       allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow create: if false;
+      allow update: if request.auth != null && (request.auth.uid == resource.data.targetUserId || isAdmin());
+      allow delete: if isAdmin();
     }
 
     // Documents - admin can manage
@@ -92,19 +93,19 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Fines - admin can manage all
+    // Fines - backend-only writes; admin can read
     match /fines/{id} {
       allow read: if request.auth != null && isAdmin();
-      allow create: if request.auth != null;
+      allow create: if false;
       allow update: if request.auth != null && isAdmin();
       allow delete: if isAdmin();
     }
 
-    // Borrow Requests - anyone can create/read own; admin can manage
+    // Borrow Requests - backend-only writes
     match /borrowRequests/{id} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null && isAdmin();
+      allow read: if request.auth != null && isAdmin();
+      allow create: if false;
+      allow update: if false;
       allow delete: if isAdmin();
     }
 
@@ -124,10 +125,10 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
-    // Lab Attendance - public kiosk can read/create; admin can manage
+    // Lab Attendance - backend-only reads/writes (Admin SDK bypasses rules)
     match /labAttendance/{attendanceId} {
-      allow read: if true;
-      allow create: if true;
+      allow read: if request.auth != null && isAdmin();
+      allow create: if false;
       allow update, delete: if isAdmin();
     }
 

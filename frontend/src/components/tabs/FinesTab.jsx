@@ -28,6 +28,7 @@ export default function FinesTab() {
   const [selectedFine, setSelectedFine] = useState(null);
   const [waiveReason, setWaiveReason] = useState("");
   const [sortBy, setSortBy] = useState("oldest");
+  const [processing, setProcessing] = useState(null);
 
   useEffect(() => { if (role) load(); }, [role]);
 
@@ -44,16 +45,20 @@ export default function FinesTab() {
 
   async function handlePay(id) {
     if (!confirm("Mark this fine as paid?")) return;
+    setProcessing(id);
     try {
       await api.payFine(id);
       toast.success("Fine marked as paid");
       load();
     } catch (err) {
       toast.error(err.message || "Failed to update fine");
+    } finally {
+      setProcessing(null);
     }
   }
 
   async function handleWaive(id) {
+    setProcessing(id);
     try {
       await api.waiveFine(id, waiveReason);
       toast.success("Fine waived");
@@ -62,6 +67,8 @@ export default function FinesTab() {
       load();
     } catch (err) {
       toast.error(err.message || "Failed to waive fine");
+    } finally {
+      setProcessing(null);
     }
   }
 
@@ -181,10 +188,10 @@ export default function FinesTab() {
             </div>
             {fine.status === "pending" && role === "admin" && (
               <div className="maintenance-card-actions">
-                <button className="btn btn-sm btn-primary" onClick={(e) => { e.stopPropagation(); handlePay(fine.id); }}>
-                  <MdCheckCircle size={14} /> Mark Paid
+                <button className="btn btn-sm btn-primary" disabled={processing === fine.id} onClick={(e) => { e.stopPropagation(); handlePay(fine.id); }}>
+                  {processing === fine.id ? "Processing..." : <><MdCheckCircle size={14} /> Mark Paid</>}
                 </button>
-                <button className="btn btn-sm btn-outline" onClick={(e) => { e.stopPropagation(); setSelectedFine(fine); }}>
+                <button className="btn btn-sm btn-outline" disabled={processing === fine.id} onClick={(e) => { e.stopPropagation(); setSelectedFine(fine); }}>
                   <MdCancel size={14} /> Waive
                 </button>
               </div>

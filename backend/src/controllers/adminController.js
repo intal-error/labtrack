@@ -131,6 +131,18 @@ const update = async (req, res) => {
     }
 
     if (password) {
+      if (password.length < 8) {
+        return res.status(400).json({ error: "Password must be at least 8 characters" });
+      }
+      if (!/[A-Z]/.test(password)) {
+        return res.status(400).json({ error: "Password must contain at least one uppercase letter" });
+      }
+      if (!/[a-z]/.test(password)) {
+        return res.status(400).json({ error: "Password must contain at least one lowercase letter" });
+      }
+      if (!/[0-9]/.test(password)) {
+        return res.status(400).json({ error: "Password must contain at least one number" });
+      }
       try {
         await auth.updateUser(id, { password });
       } catch (e) {
@@ -147,11 +159,26 @@ const update = async (req, res) => {
 const toggleStatus = async (req, res) => {
   try {
     const { id } = req.params;
+
+    if (req.user.uid === id) {
+      return res.status(400).json({ error: "Cannot deactivate your own account" });
+    }
+
     const userDoc = await db.collection("users").doc(id).get();
     if (!userDoc.exists) return res.status(404).json({ error: "Admin not found" });
 
     const current = userDoc.data();
     const newStatus = current.status === "active" ? "inactive" : "active";
+
+    if (newStatus === "inactive") {
+      const activeAdminsSnap = await db.collection("users")
+        .where("role", "==", "admin")
+        .where("status", "==", "active")
+        .get();
+      if (activeAdminsSnap.size <= 1) {
+        return res.status(400).json({ error: "Cannot deactivate the last active admin" });
+      }
+    }
 
     await db.collection("users").doc(id).set({ status: newStatus, updatedAt: new Date() }, { merge: true });
 
@@ -173,7 +200,19 @@ const toggleStatus = async (req, res) => {
 const remove = async (req, res) => {
   try {
     const { id } = req.params;
-    // Soft delete: set status to inactive
+
+    if (req.user.uid === id) {
+      return res.status(400).json({ error: "Cannot deactivate your own account" });
+    }
+
+    const activeAdminsSnap = await db.collection("users")
+      .where("role", "==", "admin")
+      .where("status", "==", "active")
+      .get();
+    if (activeAdminsSnap.size <= 1) {
+      return res.status(400).json({ error: "Cannot deactivate the last active admin" });
+    }
+
     await db.collection("users").doc(id).set({ status: "inactive", updatedAt: new Date() }, { merge: true });
     for (const coll of ADMIN_COLLECTIONS) {
       try {

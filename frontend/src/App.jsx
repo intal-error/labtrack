@@ -101,7 +101,7 @@ function App() {
 
               <Route path="notifications" element={<NotificationsTab />} />
               <Route path="settings" element={<RoleRoute allowed={["admin"]}><SettingsTab /></RoleRoute>} />
-              <Route path="documents" element={<DocumentsTab />} />
+              <Route path="documents" element={<RoleRoute allowed={["admin"]}><DocumentsTab /></RoleRoute>} />
               <Route path="scanner" element={<RoleRoute allowed={["student"]}><ScannerPage /></RoleRoute>} />
               <Route path="transactions" element={<TransactionsPage />} />
               <Route path="borrowed" element={<Navigate to="/transactions" replace />} />
@@ -114,7 +114,7 @@ function App() {
               <Route path="manuals" element={<ManualsTab />} />
               <Route path="usage-logs" element={<RoleRoute allowed={["student"]}><UsageLogsTab /></RoleRoute>} />
               <Route path="reports" element={<RoleRoute allowed={["admin"]}><ReportsTab /></RoleRoute>} />
-              <Route path="fines" element={<RoleRoute allowed={["admin"]}><FinesTab /></RoleRoute>} />
+              <Route path="fines" element={<FinesTab />} />
               <Route path="borrow-requests" element={<RoleRoute allowed={["admin"]}><BorrowRequestsTab /></RoleRoute>} />
               <Route path="attendance" element={<RoleRoute allowed={["admin"]}><AttendanceLogsPage /></RoleRoute>} />
               <Route path="attendance/room/:roomId" element={<RoleRoute allowed={["admin"]}><RoomAttendancePage /></RoleRoute>} />
