@@ -80,7 +80,7 @@ export default function RoomAttendancePage() {
             <MdArrowBack size={20} />
           </button>
           <div>
-            <h1><MdMeetingRoom size={24} /> {roomName || "Room Attendance"}</h1>
+            <h1><MdMeetingRoom size={24} /> {roomName || "Room Logs"}</h1>
             <p className="attendance-subtitle">Attendance records for this laboratory room</p>
           </div>
         </div>

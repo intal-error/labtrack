@@ -4,7 +4,8 @@ import { api } from "../../services/api";
 import Modal from "../ui/Modal";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
-import { MdWarning, MdInfo, MdCheckCircle, MdError, MdNotificationsOff, MdOpenInNew } from "react-icons/md";
+import { MdWarning, MdInfo, MdCheckCircle, MdError, MdNotificationsOff, MdOpenInNew, MdNotifications } from "react-icons/md";
+import PageHero from "../ui/PageHero";
 
 const TYPE_CONFIG = {
   alert: { icon: <MdError size={22} />, label: "Alert", color: "#d32f2f", bg: "linear-gradient(135deg,#ffebee,#ffcdd2)" },
@@ -92,17 +93,13 @@ export default function NotificationsTab() {
 
   return (
     <div className="tab-content">
-      <div className="notif-header">
-        <div className="notif-header-left">
-          <h2>Notifications</h2>
-          {unread > 0 && <span className="notif-unread-badge">{unread} unread</span>}
-        </div>
+      <PageHero icon={MdNotifications} title="Notifications" subtitle={unread > 0 ? `${unread} unread notifications` : "Stay updated on your lab activity"}>
         {unread > 0 && (
-          <button className="btn btn-primary btn-sm" onClick={markAllRead}>
-            <MdCheckCircle size={14} /> Mark all read
+          <button className="hero-action-btn ghost" onClick={markAllRead}>
+            <MdCheckCircle size={16} /> Mark all read
           </button>
         )}
-      </div>
+      </PageHero>
 
       <div className="notif-filters">
         <button className={`notif-filter-btn ${filter === "all" ? "active" : ""}`} onClick={() => setFilter("all")}>

@@ -1,14 +1,49 @@
 import { useState, useEffect, useRef } from "react";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
-import { formatDuration } from "../utils/attendanceHelpers";
+import { formatDuration, formatTime } from "../utils/attendanceHelpers";
 
 import ScannerCamera from "../components/scanner/ScannerCamera";
 import toast from "react-hot-toast";
 import {
   MdQrCodeScanner, MdLogin, MdLogout, MdCheckCircle, MdError,
+  MdAccessTime, MdMeetingRoom, MdBook,
 } from "react-icons/md";
+import PageHero from "../components/ui/PageHero";
 import "../styles/pages/attendance-scanner.css";
+
+function toDate(value) {
+  if (!value) return null;
+  if (typeof value?.toDate === "function") return value.toDate();
+  if (value instanceof Date) return value;
+  if (typeof value?.seconds === "number") return new Date(value.seconds * 1000);
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function formatDateShort(date) {
+  const d = toDate(date);
+  if (!d) return "—";
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return `${months[d.getMonth()]} ${d.getDate()}`;
+}
+
+function formatTimeShort(date) {
+  const d = toDate(date);
+  if (!d) return "—";
+  return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+}
+
+function timeAgo(date) {
+  const d = toDate(date);
+  if (!d) return "";
+  const now = new Date();
+  const diff = Math.floor((now.getTime() - d.getTime()) / 1000);
+  if (diff < 60) return "just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
 
 export default function AttendanceScannerPage() {
   const { userProfile } = useAuth();
@@ -27,10 +62,13 @@ export default function AttendanceScannerPage() {
   const [resultData, setResultData] = useState(null);
   const [step1Collapsed, setStep1Collapsed] = useState(false);
   const [step2Collapsed, setStep2Collapsed] = useState(false);
+  const [recentLogs, setRecentLogs] = useState([]);
+  const [logsLoading, setLogsLoading] = useState(true);
 
   const step2Ref = useRef(null);
-
   const isTimeIn = mode === "time_in";
+
+  useEffect(() => { loadRecentLogs(); }, [schoolId]);
 
   useEffect(() => {
     if (step1Collapsed && isTimeIn) {
@@ -39,6 +77,18 @@ export default function AttendanceScannerPage() {
       }, 200);
     }
   }, [step1Collapsed, isTimeIn]);
+
+  async function loadRecentLogs() {
+    if (!schoolId) { setLogsLoading(false); return; }
+    try {
+      const data = await api.getStudentAttendance(schoolId);
+      setRecentLogs(Array.isArray(data) ? data.slice(0, 8) : []);
+    } catch {
+      // silent
+    } finally {
+      setLogsLoading(false);
+    }
+  }
 
   const parseRoomQR = (text) => {
     const t = text.trim();
@@ -56,7 +106,7 @@ export default function AttendanceScannerPage() {
     setCameraTarget(null);
     const parsed = parseRoomQR(decodedText);
     if (!parsed) {
-      setTxStatus("Invalid QR code. Please scan a room QR code.");
+      setTxStatus("Invalid QR. Scan a room QR code.");
       setTxStatusType("error");
       return;
     }
@@ -93,7 +143,7 @@ export default function AttendanceScannerPage() {
 
   const handleTimeOut = async (code, room) => {
     if (!schoolId) {
-      setTxStatus("No student ID found in your profile.");
+      setTxStatus("No student ID found.");
       setTxStatusType("error");
       return;
     }
@@ -105,6 +155,7 @@ export default function AttendanceScannerPage() {
       setResultData(result.record);
       setTxStatus("");
       toast.success("Time-out recorded!");
+      loadRecentLogs();
     } catch (err) {
       setTxStatus(err.message || "Failed to record time-out");
       setTxStatusType("error");
@@ -122,7 +173,7 @@ export default function AttendanceScannerPage() {
       return;
     }
     if (!subject) {
-      setTxStatus("Please select a subject.");
+      setTxStatus("Please enter a subject.");
       setTxStatusType("error");
       return;
     }
@@ -132,7 +183,7 @@ export default function AttendanceScannerPage() {
       return;
     }
     if (!schoolId) {
-      setTxStatus("No student ID found in your profile.");
+      setTxStatus("No student ID found.");
       setTxStatusType("error");
       return;
     }
@@ -152,6 +203,7 @@ export default function AttendanceScannerPage() {
       setTxStatus("");
       setStep2Collapsed(true);
       toast.success("Time-in recorded!");
+      loadRecentLogs();
     } catch (err) {
       setTxStatus(err.message || "Failed to record time-in");
       setTxStatusType("error");
@@ -175,10 +227,8 @@ export default function AttendanceScannerPage() {
 
   return (
     <section className="attendance-scan-page">
-      <div className="attendance-scan-header">
-        <h1>Scan Attendance</h1>
-        <p className="attendance-scan-subtitle">Scan room QR codes to log your laboratory attendance</p>
-      </div>
+      {/* Header */}
+      <PageHero icon={MdQrCodeScanner} title="Scan Attendance" subtitle="Sign in or out of a laboratory room" />
 
       <div className="attendance-scan-shell">
         {/* Mode Toggle */}
@@ -189,7 +239,7 @@ export default function AttendanceScannerPage() {
             type="button"
           >
             <MdLogin size={18} />
-            Time-In
+            Sign In
           </button>
           <button
             className={`attendance-scan-mode-btn time-out ${!isTimeIn ? "active" : ""}`}
@@ -197,7 +247,7 @@ export default function AttendanceScannerPage() {
             type="button"
           >
             <MdLogout size={18} />
-            Time-Out
+            Sign Out
           </button>
         </div>
 
@@ -212,35 +262,35 @@ export default function AttendanceScannerPage() {
 
         {/* Success Result */}
         {resultData && (
-          <div className={`attendance-scan-result ${resultData.status === "timed_out" ? "time_out" : ""}`}>
-            <div className={`attendance-scan-result-icon ${resultData.status === "timed_out" ? "time_out" : "success"}`}>
-              {resultData.status === "timed_out" ? <MdLogout size={24} /> : <MdCheckCircle size={24} />}
+          <div className={`logbook-entry-card ${resultData.status === "timed_out" ? "completed" : "active"}`}>
+            <div className="logbook-entry-header">
+              <div className={`logbook-entry-status-dot ${resultData.status === "timed_out" ? "completed" : "active"}`} />
+              <span className="logbook-entry-status-text">
+                {resultData.status === "active" ? "Signed In" : "Signed Out"}
+              </span>
+              <span className="logbook-entry-time">{timeAgo(resultData.timestamp)}</span>
             </div>
-            <div className="attendance-scan-result-info">
-              <h3>{resultData.status === "active" ? "Time-In Recorded!" : "Time-Out Recorded!"}</h3>
-              <p>{resultData.firstName} {resultData.lastName}</p>
-              <div className="attendance-scan-result-detail">
-                <span className="label">Student ID</span>
-                <span className="value">{resultData.studentSchoolId}</span>
+            <div className="logbook-entry-body">
+              <div className="logbook-entry-row">
+                <MdMeetingRoom size={14} />
+                <span>{resultData.labRoom}</span>
               </div>
-              <div className="attendance-scan-result-detail">
-                <span className="label">Room</span>
-                <span className="value">{resultData.labRoom}</span>
-              </div>
-              {resultData.status === "active" && (
-                <div className="attendance-scan-result-detail">
-                  <span className="label">Time-In</span>
-                  <span className="value">
-                    {resultData.timeIn
-                      ? new Date(resultData.timeIn.seconds ? resultData.timeIn.seconds * 1000 : resultData.timeIn).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })
-                      : "-"}
-                  </span>
+              {resultData.status === "active" && resultData.timeIn && (
+                <div className="logbook-entry-row">
+                  <MdAccessTime size={14} />
+                  <span>In: {formatTimeShort(resultData.timeIn)}</span>
                 </div>
               )}
               {resultData.status === "timed_out" && resultData.totalDuration != null && (
-                <div className="attendance-scan-result-detail">
-                  <span className="label">Total Duration</span>
-                  <span className="value">{formatDuration(resultData.totalDuration)}</span>
+                <div className="logbook-entry-row">
+                  <MdAccessTime size={14} />
+                  <span>Duration: {formatDuration(resultData.totalDuration)}</span>
+                </div>
+              )}
+              {resultData.subject && (
+                <div className="logbook-entry-row">
+                  <MdBook size={14} />
+                  <span>{resultData.subject}</span>
                 </div>
               )}
             </div>
@@ -258,7 +308,7 @@ export default function AttendanceScannerPage() {
               </div>
               <div className="scanner-step-text">
                 <h2>Room</h2>
-                <p>Scan the room QR code or enter room code manually</p>
+                <p>Scan room QR or enter code</p>
               </div>
               {step1Collapsed && roomResult && (
                 <button type="button" className="scanner-step-change" onClick={() => { setStep1Collapsed(false); setRoomResult(null); setRoomCode(""); setLabRoom(""); setTxStatus(""); setTxStatusType(""); setResultData(null); }}>
@@ -298,21 +348,6 @@ export default function AttendanceScannerPage() {
                     Find
                   </button>
                 </div>
-
-                {roomResult && (
-                  <div className="scanner-result-card">
-                    <div className="scanner-result-icon item">
-                      <MdQrCodeScanner size={20} />
-                    </div>
-                    <div className="scanner-result-info">
-                      <strong>{roomResult.name}</strong>
-                      <div className="scanner-result-meta">
-                        <span>{roomResult.code}</span>
-                      </div>
-                    </div>
-                    <svg className="scanner-result-check" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -333,7 +368,7 @@ export default function AttendanceScannerPage() {
                 </div>
                 <div className="scanner-step-text">
                   <h2>Details</h2>
-                  <p>Select subject and enter professor name</p>
+                  <p>Enter subject and professor</p>
                 </div>
               </div>
               <div className="scanner-step-body">
@@ -374,7 +409,7 @@ export default function AttendanceScannerPage() {
               ) : (
                 <>
                   <MdCheckCircle size={18} />
-                  Confirm Time-In
+                  Confirm Sign In
                 </>
               )}
             </button>
@@ -389,21 +424,63 @@ export default function AttendanceScannerPage() {
                 ) : (
                   <>
                     <MdLogout size={18} />
-                    Confirm Time-Out
+                    Confirm Sign Out
                   </>
                 )}
               </button>
             )
           )}
 
-          {/* Reset Button (after success) */}
+          {/* Reset Button */}
           {resultData && (
             <button type="button" className="scanner-btn-find" style={{ width: "100%", justifyContent: "center", marginTop: 12, minHeight: 44 }} onClick={resetForm}>
               <MdQrCodeScanner size={16} />
-              Scan Next Student
+              New Entry
             </button>
           )}
         </form>
+      </div>
+
+      {/* Recent Entries */}
+      <div className="logbook-recent">
+        <div className="logbook-recent-header">
+          <MdBook size={18} />
+          <h3>Recent Entries</h3>
+        </div>
+        {logsLoading ? (
+          <div className="logbook-recent-loading"><div className="spinner-lg" /></div>
+        ) : recentLogs.length === 0 ? (
+          <div className="logbook-recent-empty">
+            <MdQrCodeScanner size={24} />
+            <p>No entries yet. Scan a room QR to get started.</p>
+          </div>
+        ) : (
+          <div className="logbook-recent-list">
+            {recentLogs.map((log) => (
+              <div key={log.id} className={`logbook-recent-entry ${log.status === "active" ? "active" : ""}`}>
+                <div className="logbook-recent-entry-left">
+                  <div className={`logbook-recent-dot ${log.status === "active" ? "active" : "completed"}`} />
+                  <div className="logbook-recent-info">
+                    <span className="logbook-recent-room">{log.labRoom || "Unknown Room"}</span>
+                    <span className="logbook-recent-meta">
+                      {formatDateShort(log.date)} &middot; {log.subject || "—"}
+                    </span>
+                  </div>
+                </div>
+                <div className="logbook-recent-entry-right">
+                  <span className="logbook-recent-time">{formatTimeShort(log.timeIn)}</span>
+                  {log.status === "active" ? (
+                    <span className="logbook-recent-badge active">Inside</span>
+                  ) : log.totalDuration != null ? (
+                    <span className="logbook-recent-duration">{formatDuration(log.totalDuration)}</span>
+                  ) : (
+                    <span className="logbook-recent-badge out">Out</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );

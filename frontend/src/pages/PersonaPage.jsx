@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api } from "../services/api";
 import { MdSearch, MdPerson, MdSchool, MdEmail, MdPhone, MdBookmark, MdAssignmentReturn, MdInventory } from "react-icons/md";
+import PageHero from "../components/ui/PageHero";
 import "../styles/pages/persona.css";
 
 export default function PersonaPage() {
@@ -27,15 +28,7 @@ export default function PersonaPage() {
 
   return (
     <section className="persona-page">
-      <div className="persona-header">
-        <div className="persona-header-icon">
-          <MdSearch size={28} />
-        </div>
-        <div>
-          <h1>Persona</h1>
-          <p className="persona-subtitle">Look up student or faculty records</p>
-        </div>
-      </div>
+      <PageHero icon={MdSearch} title="Persona" subtitle="Look up student or faculty records" />
 
       <div className="persona-search-card">
         <form onSubmit={handleSearch}>

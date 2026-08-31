@@ -125,9 +125,29 @@ const getMyReturned = async (req, res) => {
       .where("action", "==", "returned")
       .where("userId", "==", uid)
       .get();
-    const items = snap.docs
+    let items = snap.docs
       .map((doc) => ({ id: doc.id, ...doc.data() }))
       .sort((a, b) => (toDate(b.timestamp)?.getTime() || 0) - (toDate(a.timestamp)?.getTime() || 0));
+
+    const missingDates = items.filter((i) => !i.borrowedAt && i.originalTransactionId);
+    if (missingDates.length > 0) {
+      const borrowIds = [...new Set(missingDates.map((i) => i.originalTransactionId))];
+      const borrowSnaps = await Promise.all(borrowIds.map((id) => db.collection(TRANS).doc(id).get()));
+      const borrowMap = {};
+      borrowSnaps.forEach((s) => { if (s.exists) borrowMap[s.id] = s.data(); });
+      items = items.map((item) => {
+        if (!item.borrowedAt && item.originalTransactionId && borrowMap[item.originalTransactionId]) {
+          const borrow = borrowMap[item.originalTransactionId];
+          return {
+            ...item,
+            borrowedAt: borrow.borrowedAt || borrow.timestamp || null,
+            dueDate: item.dueDate || borrow.dueDate || null,
+          };
+        }
+        return item;
+      });
+    }
+
     const enriched = await enrichWithProfileURL(items);
     res.json(enriched);
   } catch (err) {

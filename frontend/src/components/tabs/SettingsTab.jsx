@@ -4,8 +4,9 @@ import { useTheme } from "../../context/ThemeContext";
 import toast from "react-hot-toast";
 import {
   MdDarkMode, MdNotifications, MdSecurity, MdPeople,
-  MdSave, MdRestartAlt, MdWarning, MdAttachMoney, MdBackup
+  MdSave, MdRestartAlt, MdWarning, MdAttachMoney, MdBackup, MdSettings
 } from "react-icons/md";
+import PageHero from "../ui/PageHero";
 import "../../styles/pages/tabs.css";
 
 const DEFAULTS = {
@@ -202,17 +203,7 @@ export default function SettingsTab() {
 
   return (
     <div className="tab-content">
-      <div className="settings-header">
-        <div>
-          <h2>Settings</h2>
-          <p className="settings-subtitle">Manage system preferences and configurations</p>
-        </div>
-        {lastSaved && (
-          <span className="settings-saved-label">
-            Last saved: {lastSaved.toLocaleTimeString()}
-          </span>
-        )}
-      </div>
+      <PageHero icon={MdSettings} title="Settings" subtitle={lastSaved ? `Last saved: ${lastSaved.toLocaleTimeString()}` : "Manage system preferences and configurations"} />
 
       <div className="settings-grid">
         <div className="settings-section">

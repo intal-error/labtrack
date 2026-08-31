@@ -36,6 +36,7 @@ const adminCreateSchema = z.object({
   contact: z.string().max(20).trim().optional().default(""),
   position: z.string().max(100).trim().optional().default(""),
   assignedCourse: z.string().max(50).trim().optional().default(""),
+  assignedCourses: z.array(z.string()).optional().default([]),
   assignedYear: z.string().max(10).trim().optional().default(""),
   permissions: z.array(z.string()).optional().default(["view_catalog", "manage_catalog", "view_transactions", "view_requests", "process_requests"]),
 });
@@ -56,6 +57,7 @@ const borrowRequestSchema = z.object({
   quantity: z.number().int().min(1, "Quantity must be at least 1").max(1000),
   dueDate: z.string().min(1, "Due date is required"),
   purpose: z.string().min(1, "Purpose is required").max(500).trim(),
+  targetCourse: z.string().max(100).trim().optional(),
 });
 
 module.exports = {

@@ -8,6 +8,9 @@ import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Modal from "../components/ui/Modal";
 import toast from "react-hot-toast";
 import "../styles/pages/tables.css";
+import { MdSwapHoriz } from "react-icons/md";
+import PageHero from "../components/ui/PageHero";
+import ViewToggle from "../components/ui/ViewToggle";
 
 const AVATAR_COLORS = ["#2E7D32", "#1565c0", "#6a1b9a", "#c62828", "#ef6c00", "#00838f", "#4e342e", "#37474f"];
 
@@ -108,7 +111,7 @@ export default function TransactionsPage() {
   const [filterCourse, setFilterCourse] = useState("All");
   const [sortBy, setSortBy] = useState("date-desc");
   const [dateRange, setDateRange] = useState("all");
-  const [viewMode, setViewMode] = useState("grid");
+  const [viewMode, setViewMode] = useState("list");
   const [returningId, setReturningId] = useState(null);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
 
@@ -213,24 +216,18 @@ export default function TransactionsPage() {
 
   return (
     <section className="transactions-page">
-      <div className="transactions-header">
-        <div className="transactions-header-left">
-          <h1>Transactions</h1>
-          <p className="transactions-subtitle">{isStudent ? "Track your borrowed and returned equipment" : "Track all borrowed and returned equipment"}</p>
-        </div>
-        <div className="transactions-header-actions">
-          <button className="btn btn-outline btn-refresh" onClick={load}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-            Refresh
+      <PageHero icon={MdSwapHoriz} title="Transactions" subtitle={isStudent ? "Track your borrowed and returned equipment" : "Track all borrowed and returned equipment"}>
+        <button className="hero-action-btn ghost" onClick={load}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          Refresh
+        </button>
+        {!isStudent && (
+          <button className="hero-action-btn primary" onClick={downloadReport}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download Report
           </button>
-          {!isStudent && (
-            <button className="btn btn-green" onClick={downloadReport}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Download Report
-            </button>
-          )}
-        </div>
-      </div>
+        )}
+      </PageHero>
 
       <div className="transactions-stats">
         <div className="stat-card stat-active">
@@ -290,14 +287,7 @@ export default function TransactionsPage() {
           </div>
         </div>
         <div className="transactions-toolbar-right">
-          <div className="transactions-view-toggle">
-            <button className={`view-btn ${viewMode === "grid" ? "active" : ""}`} onClick={() => setViewMode("grid")} title="Grid view">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-            </button>
-            <button className={`view-btn ${viewMode === "list" ? "active" : ""}`} onClick={() => setViewMode("list")} title="List view">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-            </button>
-          </div>
+          <ViewToggle value={viewMode} onChange={setViewMode} localStorageKey="labtrack-transactions-view" />
           <select className="transactions-sort-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
             {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
@@ -347,6 +337,7 @@ export default function TransactionsPage() {
             const color = getAvatarColor(fullName);
             const overdue = isBorrowed ? getOverdueInfo(date, item.quantity, item.returnedQuantity) : null;
             const isReturning = returningId === item.id;
+            const returnDate = !isBorrowed ? toDate(item.returnedAt || item.timestamp) : null;
 
             return (
               <div className={`transaction-card ${overdue?.className || ""}`} key={item.id} onClick={() => handleViewInfo(item)} style={{cursor:"pointer"}}>
@@ -393,6 +384,12 @@ export default function TransactionsPage() {
                         <span style={{ color: overdue ? "var(--red)" : undefined }}>Due: {formatDate(toDate(item.dueDate))}</span>
                       </div>
                     )}
+                    {!isBorrowed && returnDate && (
+                      <div className="transaction-detail">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                        <span>Returned: {formatDate(returnDate)}</span>
+                      </div>
+                    )}
                   </div>
                   {item.course && <span className="transaction-course-tag">{item.course}{item.year ? ` - ${item.year}` : ""}</span>}
                   {item.equipment_course && item.equipment_course !== item.course && (
@@ -423,8 +420,9 @@ export default function TransactionsPage() {
                 <th>Item</th>
                 <th>Qty</th>
                 <th>Equipment Course</th>
-                <th>Date</th>
+                <th>{activeTab === "returned" ? "Borrowed" : "Date"}</th>
                 {activeTab === "borrowed" && <th>Due Date</th>}
+                {activeTab === "returned" && <th>Returned</th>}
                 <th>Status</th>
               </tr>
             </thead>
@@ -436,6 +434,7 @@ export default function TransactionsPage() {
                 const fullName = `${item.firstName || ""} ${item.lastName || ""}`.trim();
                 const overdue = isBorrowed ? getOverdueInfo(date, item.quantity, item.returnedQuantity) : null;
                 const isReturning = returningId === item.id;
+                const returnDate = !isBorrowed ? toDate(item.returnedAt || item.timestamp) : null;
 
                 return (
                   <tr key={item.id} className={overdue?.className || ""} onClick={() => handleViewInfo(item)} style={{cursor:"pointer"}}>
@@ -466,6 +465,9 @@ export default function TransactionsPage() {
                       <td style={{ color: overdue ? "var(--red)" : undefined, fontWeight: overdue ? 600 : undefined }}>
                         {item.dueDate ? formatDate(toDate(item.dueDate)) : "-"}
                       </td>
+                    )}
+                    {!isBorrowed && (
+                      <td>{returnDate ? formatDate(returnDate) : "-"}</td>
                     )}
                     <td>
                       <div className="table-status-cell">

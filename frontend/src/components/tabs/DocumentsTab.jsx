@@ -4,7 +4,8 @@ import { useAuth } from "../../context/AuthContext";
 import { filterBySearch } from "../../utils/search";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
-import { MdDescription, MdPictureAsPdf, MdTableChart, MdSearch, MdDownload, MdDelete, MdCloudUpload } from "react-icons/md";
+import { MdDescription, MdPictureAsPdf, MdTableChart, MdSearch, MdDownload, MdDelete, MdCloudUpload, MdFolderOpen } from "react-icons/md";
+import PageHero from "../ui/PageHero";
 
 export default function DocumentsTab() {
   const { role } = useAuth();
@@ -121,15 +122,14 @@ export default function DocumentsTab() {
 
   return (
     <div className="tab-content">
-      <div className="docs-header">
-        <h2>Documents</h2>
+      <PageHero icon={MdFolderOpen} title="Documents" subtitle="Manage lab documents and files">
         {role === "admin" && (
-          <button className="btn btn-primary" onClick={() => fileInputRef.current?.click()}>
+          <button className="hero-action-btn ghost" onClick={() => fileInputRef.current?.click()}>
             <MdCloudUpload size={16} /> Upload
           </button>
         )}
-        <input ref={fileInputRef} type="file" style={{ display: "none" }} onChange={handleUpload} accept=".pdf,.xlsx,.xls,.doc,.docx" />
-      </div>
+      </PageHero>
+      <input ref={fileInputRef} type="file" style={{ display: "none" }} onChange={handleUpload} accept=".pdf,.xlsx,.xls,.doc,.docx" />
 
       <div className="doc-stats">
         <div className={`doc-stat-card ${activeType === "total" ? "active" : ""}`} onClick={() => setActiveType("total")}>

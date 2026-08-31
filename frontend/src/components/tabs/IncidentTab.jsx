@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { filterBySearch } from "../../utils/search";
 import "../../styles/pages/tabs.css";
 import { MdWarning, MdAdd, MdEdit, MdDelete, MdSearch, MdInfo, MdOutlineWarning, MdCameraAlt, MdFilterList, MdClose, MdEvent, MdPerson, MdAssignment, MdSchedule, MdLocationOn } from "react-icons/md";
+import PageHero from "../ui/PageHero";
 
 const SEVERITY_COLORS = { low: "#43A047", medium: "#f57c00", high: "#d32f2f", critical: "#b71c1c" };
 const STATUS_COLORS = { open: "#d32f2f", investigating: "#f57c00", resolved: "#43A047" };
@@ -208,12 +209,11 @@ export default function IncidentTab() {
 
   return (
     <div className="tab-content">
-      <div className="records-header">
-        <h2><MdWarning size={22} /> Incident Reports</h2>
+      <PageHero icon={MdWarning} title="Incident Reports" subtitle="Report and track laboratory incidents">
         {canCreate && (
-          <button className="btn btn-primary" onClick={openAdd}><MdAdd size={16} /> Report Incident</button>
+          <button className="hero-action-btn ghost" onClick={openAdd}><MdAdd size={16} /> Report Incident</button>
         )}
-      </div>
+      </PageHero>
 
       <div className="incident-stats">
         <div className={`incident-stat-card ${filterStatus === "All" ? "active" : ""}`} onClick={() => setFilterStatus("All")}>

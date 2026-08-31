@@ -37,7 +37,7 @@ const getActiveAdmins = async (req, res) => {
 
 const create = async (req, res) => {
   try {
-    const { firstName, lastName, email, password, contact, position, assignedCourse, assignedYear, permissions } = req.body;
+    const { firstName, lastName, email, password, contact, position, assignedCourse, assignedCourses, assignedYear, permissions } = req.body;
     if (!firstName || !lastName || !email || !password) {
       return res.status(400).json({ error: "Required fields missing" });
     }
@@ -47,13 +47,19 @@ const create = async (req, res) => {
     // Set custom claims so authorize() middleware works
     await auth.setCustomUserClaims(userRecord.uid, { role: "admin" });
 
+    // Support both assignedCourse (string, legacy) and assignedCourses (array)
+    const courses = Array.isArray(assignedCourses)
+      ? assignedCourses
+      : assignedCourse ? [assignedCourse] : [];
+
     const adminData = {
       firstName,
       lastName,
       email,
       contact: contact || "",
       position: position || "",
-      assignedCourse: assignedCourse || "",
+      assignedCourse: courses[0] || "",
+      assignedCourses: courses,
       assignedYear: assignedYear || "",
       role: "admin",
       status: "active",
@@ -71,7 +77,8 @@ const create = async (req, res) => {
       lastName: lastName,
       contact: contact || "",
       position: position || "",
-      assignedCourse: assignedCourse || "",
+      assignedCourse: courses[0] || "",
+      assignedCourses: courses,
       assignedYear: assignedYear || "",
       email,
       permissions: adminData.permissions,
@@ -91,45 +98,9 @@ const create = async (req, res) => {
 const update = async (req, res) => {
   try {
     const { id } = req.params;
-    const { firstName, lastName, contact, position, password, assignedCourse, assignedYear, permissions, status } = req.body;
+    const { firstName, lastName, contact, position, password, assignedCourse, assignedCourses, assignedYear, permissions, status } = req.body;
 
-    // Update in users collection
-    const userDoc = await db.collection("users").doc(id).get();
-    if (userDoc.exists) {
-      const updateData = {
-        firstName,
-        lastName,
-        contact: contact || "",
-        position: position || "",
-        assignedCourse: assignedCourse !== undefined ? assignedCourse : userDoc.data().assignedCourse || "",
-        assignedYear: assignedYear !== undefined ? assignedYear : userDoc.data().assignedYear || "",
-        updatedAt: new Date(),
-      };
-      if (permissions !== undefined) updateData.permissions = permissions;
-      if (status !== undefined) updateData.status = status;
-      await db.collection("users").doc(id).set(updateData, { merge: true });
-    }
-
-    // Also update in admins collection (legacy)
-    for (const coll of ADMIN_COLLECTIONS) {
-      const docRef = db.collection(coll).doc(id);
-      const doc = await docRef.get();
-      if (doc.exists) {
-        const legacyData = {
-          firstName: firstName,
-          lastName: lastName,
-          contact: contact || "",
-          position: position || "",
-          assignedCourse: assignedCourse !== undefined ? assignedCourse : doc.data().assignedCourse || "",
-          assignedYear: assignedYear !== undefined ? assignedYear : doc.data().assignedYear || "",
-        };
-        if (permissions !== undefined) legacyData.permissions = permissions;
-        if (status !== undefined) legacyData.status = status;
-        await docRef.set(legacyData, { merge: true });
-        break;
-      }
-    }
-
+    // Validate password BEFORE any Firestore writes
     if (password) {
       if (password.length < 8) {
         return res.status(400).json({ error: "Password must be at least 8 characters" });
@@ -147,6 +118,56 @@ const update = async (req, res) => {
         await auth.updateUser(id, { password });
       } catch (e) {
         console.warn("Could not update auth password:", e.message);
+      }
+    }
+
+    // Support both assignedCourse (string, legacy) and assignedCourses (array)
+    const courses = Array.isArray(assignedCourses)
+      ? assignedCourses
+      : assignedCourse !== undefined ? (assignedCourse ? [assignedCourse] : []) : undefined;
+
+    // Update in users collection
+    const userDoc = await db.collection("users").doc(id).get();
+    if (userDoc.exists) {
+      const existing = userDoc.data();
+      const mergedCourses = courses !== undefined ? courses : (existing.assignedCourses || (existing.assignedCourse ? [existing.assignedCourse] : []));
+
+      const updateData = {
+        firstName,
+        lastName,
+        contact: contact || "",
+        position: position || "",
+        assignedCourse: mergedCourses[0] || "",
+        assignedCourses: mergedCourses,
+        assignedYear: assignedYear !== undefined ? assignedYear : existing.assignedYear || "",
+        updatedAt: new Date(),
+      };
+      if (permissions !== undefined) updateData.permissions = permissions;
+      if (status !== undefined) updateData.status = status;
+      await db.collection("users").doc(id).set(updateData, { merge: true });
+    }
+
+    // Also update in admins collection (legacy)
+    for (const coll of ADMIN_COLLECTIONS) {
+      const docRef = db.collection(coll).doc(id);
+      const doc = await docRef.get();
+      if (doc.exists) {
+        const existing = doc.data();
+        const mergedCourses = courses !== undefined ? courses : (existing.assignedCourses || (existing.assignedCourse ? [existing.assignedCourse] : []));
+
+        const legacyData = {
+          firstName: firstName,
+          lastName: lastName,
+          contact: contact || "",
+          position: position || "",
+          assignedCourse: mergedCourses[0] || "",
+          assignedCourses: mergedCourses,
+          assignedYear: assignedYear !== undefined ? assignedYear : existing.assignedYear || "",
+        };
+        if (permissions !== undefined) legacyData.permissions = permissions;
+        if (status !== undefined) legacyData.status = status;
+        await docRef.set(legacyData, { merge: true });
+        break;
       }
     }
 

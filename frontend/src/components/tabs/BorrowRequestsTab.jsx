@@ -7,6 +7,8 @@ import { filterBySearch } from "../../utils/search";
 import "../../styles/pages/tabs.css";
 import "../../styles/pages/catalog.css";
 import { MdAssignment, MdSearch, MdCheckCircle, MdCancel, MdSchedule, MdPerson, MdInventory, MdSort, MdSwapHoriz } from "react-icons/md";
+import PageHero from "../ui/PageHero";
+import ViewToggle from "../ui/ViewToggle";
 
 const STATUS_COLORS = {
   pending: "#f57c00",
@@ -71,7 +73,7 @@ export default function BorrowRequestsTab() {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [reviewNotes, setReviewNotes] = useState("");
   const [processing, setProcessing] = useState(null);
-  const [viewMode, setViewMode] = useState("grid");
+  const [viewMode, setViewMode] = useState("list");
   const [sortBy, setSortBy] = useState("newest");
   // Reassignment state
   const [reassignTarget, setReassignTarget] = useState(null);
@@ -174,7 +176,7 @@ export default function BorrowRequestsTab() {
   const filtered = useMemo(() => {
     let result = requests;
     if (filter !== "all") result = result.filter((r) => r.status === filter);
-    if (search.trim()) result = filterBySearch(result, search, ["firstName", "lastName", "itemName", "schoolID", "assigned_admin_name"]);
+    if (search.trim()) result = filterBySearch(result, search, ["firstName", "lastName", "itemName", "schoolID", "assigned_admin_name", "targetCourse"]);
     result = [...result].sort((a, b) => {
       if (sortBy === "oldest") return (toDate(a.createdAt)?.getTime() || 0) - (toDate(b.createdAt)?.getTime() || 0);
       if (sortBy === "due-date") {
@@ -191,9 +193,7 @@ export default function BorrowRequestsTab() {
 
   return (
     <div className="tab-content">
-      <div className="records-header">
-        <h2><MdAssignment size={22} /> Borrow Requests</h2>
-      </div>
+      <PageHero icon={MdAssignment} title="Borrow Requests" subtitle="Review and manage student borrow requests" />
 
       <div className="maintenance-stats">
         {[
@@ -233,14 +233,7 @@ export default function BorrowRequestsTab() {
               <option value="due-date">Due Date</option>
             </select>
           </div>
-          <div className="catalog-view-toggle">
-            <button className={`view-btn ${viewMode === "grid" ? "active" : ""}`} onClick={() => setViewMode("grid")} title="Grid view">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-            </button>
-            <button className={`view-btn ${viewMode === "list" ? "active" : ""}`} onClick={() => setViewMode("list")} title="List view">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-            </button>
-          </div>
+          <ViewToggle value={viewMode} onChange={setViewMode} localStorageKey="labtrack-borrow-requests-view" />
         </div>
       </div>
 
@@ -287,6 +280,9 @@ export default function BorrowRequestsTab() {
                     </span>
                     <span className="maintenance-date-badge">
                       Qty: {req.quantity}
+                    </span>
+                    <span className="maintenance-date-badge" style={{ background: "rgba(46,125,50,.1)", color: "#2e7d32", fontWeight: 600 }}>
+                      {req.targetCourse || req.equipment_course || req.course || ""}
                     </span>
                     <span className="maintenance-assigned">
                       <MdSchedule size={14} /> {timeAgo(req.createdAt)}
@@ -335,7 +331,7 @@ export default function BorrowRequestsTab() {
                 <th>School ID</th>
                 <th>Item</th>
                 <th>Qty</th>
-                <th>Equipment Course</th>
+                <th>Target Course</th>
                 <th>Assigned Admin</th>
                 <th>Due Date</th>
                 <th>Status</th>
@@ -353,11 +349,9 @@ export default function BorrowRequestsTab() {
                     <td>{req.itemName}</td>
                     <td>{req.quantity}</td>
                     <td>
-                      {isCrossCourse ? (
-                        <span style={{ color: "#f57c00", fontWeight: 600 }}>{req.equipment_course} *</span>
-                      ) : (
-                        <span>{req.equipment_course || req.course || "-"}</span>
-                      )}
+                      <span style={{ fontWeight: 600, color: "var(--green)" }}>
+                        {req.targetCourse || req.equipment_course || req.course || "-"}
+                      </span>
                     </td>
                     <td>{req.assigned_admin_name || <span style={{ color: "var(--text-muted)" }}>Unassigned</span>}</td>
                     <td>
@@ -407,14 +401,18 @@ export default function BorrowRequestsTab() {
                   <span className="txn-detail-label">Item</span>
                   <span className="txn-detail-value">{selectedRequest.itemName}</span>
                 </div>
-                {selectedRequest.equipment_course && (
+                <div className="txn-detail-row">
+                  <span className="txn-detail-label">Target Course</span>
+                  <span className="txn-detail-value" style={{ fontWeight: 700, color: "var(--green)" }}>
+                    {selectedRequest.targetCourse || selectedRequest.equipment_course || "-"}
+                  </span>
+                </div>
+                {selectedRequest.equipment_course && selectedRequest.targetCourse && selectedRequest.equipment_course !== selectedRequest.targetCourse && (
                   <div className="txn-detail-row">
                     <span className="txn-detail-label">Equipment Course</span>
                     <span className="txn-detail-value">
                       {selectedRequest.equipment_course}
-                      {selectedRequest.equipment_course !== selectedRequest.course && (
-                        <span style={{ color: "#f57c00", fontSize: 11, marginLeft: 6 }}>(Cross-course)</span>
-                      )}
+                      <span style={{ color: "#f57c00", fontSize: 11, marginLeft: 6 }}>(Different from target)</span>
                     </span>
                   </div>
                 )}
@@ -527,7 +525,7 @@ export default function BorrowRequestsTab() {
                   <option value="">Select admin...</option>
                   {admins.map((admin) => (
                     <option key={admin.id} value={admin.id}>
-                      {admin.firstName} {admin.lastName} {admin.assignedCourse ? `(${admin.assignedCourse})` : ""}
+                      {admin.firstName} {admin.lastName} {(() => { const c = admin.assignedCourses || (admin.assignedCourse ? [admin.assignedCourse] : []); return c.length > 0 ? `(${c.join(", ")})` : ""; })()}
                     </option>
                   ))}
                 </select>

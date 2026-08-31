@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import { filterBySearch } from "../../utils/search";
 import "../../styles/pages/tabs.css";
 import { MdAttachMoney, MdSearch, MdCheckCircle, MdCancel, MdWarning, MdSort, MdPerson } from "react-icons/md";
+import PageHero from "../ui/PageHero";
 
 const STATUS_COLORS = {
   pending: "#f57c00",
@@ -104,9 +105,7 @@ export default function FinesTab() {
 
   return (
     <div className="tab-content">
-      <div className="records-header">
-        <h2><MdAttachMoney size={22} /> Fine Management</h2>
-      </div>
+      <PageHero icon={MdAttachMoney} title="Fines" subtitle="View and manage fines for overdue equipment" />
 
       <div className="maintenance-stats">
         {[

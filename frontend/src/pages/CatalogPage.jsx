@@ -8,7 +8,9 @@ import Modal from "../components/ui/Modal";
 import toast from "react-hot-toast";
 import "../styles/pages/catalog.css";
 import "../styles/pages/shared-form-panel.css";
-import { MdClose, MdAdd, MdEdit, MdInfo, MdImage, MdAssignment, MdTag, MdQrCode } from "react-icons/md";
+import { MdClose, MdAdd, MdEdit, MdInfo, MdImage, MdAssignment, MdTag, MdQrCode, MdInventory, MdDownload } from "react-icons/md";
+import PageHero from "../components/ui/PageHero";
+import ViewToggle from "../components/ui/ViewToggle";
 
 export default function CatalogPage() {
   const [allItems, setAllItems] = useState([]);
@@ -23,7 +25,7 @@ export default function CatalogPage() {
   const [imageOverlay, setImageOverlay] = useState(null);
   const [form, setForm] = useState({ itemName: "", category: "", course: "", quantity: "", condition: "", status: "Available", imageUrl: "", barcode: "" });
   const [uploading, setUploading] = useState(false);
-  const [viewMode, setViewMode] = useState("grid");
+  const [viewMode, setViewMode] = useState("list");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -116,22 +118,15 @@ export default function CatalogPage() {
 
   return (
     <section className="catalog-page">
-      <div className="catalog-header">
-        <div className="catalog-header-left">
-          <h1>Catalog</h1>
-          <p className="catalog-subtitle">Manage laboratory tools and equipment inventory</p>
-        </div>
-        <div className="catalog-header-actions">
-          <button className="btn btn-green" onClick={() => setShowCreate(true)}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
-            Create Item
-          </button>
-          <button className="btn btn-red" onClick={async () => { try { await api.downloadReport("catalog"); toast.success("Downloaded!"); } catch { toast.error("Failed"); } }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Download Report
-          </button>
-        </div>
-      </div>
+      <PageHero icon={MdInventory} title="Catalog" subtitle="Manage laboratory tools and equipment inventory">
+        <button className="hero-action-btn ghost" onClick={() => setShowCreate(true)}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
+          Create Item
+        </button>
+        <button className="hero-action-btn ghost" onClick={async () => { try { await api.downloadReport("catalog"); toast.success("Downloaded!"); } catch { toast.error("Failed"); } }}>
+          <MdDownload size={16} /> Download Report
+        </button>
+      </PageHero>
 
       <div className="catalog-stats">
         <div className="stat-card stat-total">
@@ -203,14 +198,7 @@ export default function CatalogPage() {
             <option value="number">1-200 (Numeric)</option>
           </select>
         </div>
-        <div className="catalog-view-toggle">
-          <button className={`view-btn ${viewMode === "grid" ? "active" : ""}`} onClick={() => setViewMode("grid")} title="Grid view">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-          </button>
-          <button className={`view-btn ${viewMode === "list" ? "active" : ""}`} onClick={() => setViewMode("list")} title="List view">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-          </button>
-        </div>
+        <ViewToggle value={viewMode} onChange={setViewMode} localStorageKey="labtrack-catalog-view" />
       </div>
 
       {filteredItems.length === 0 ? (

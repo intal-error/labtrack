@@ -17,12 +17,14 @@ import {
   MdAccessTime,
   MdGroup,
   MdMeetingRoom,
+  MdEventAvailable,
 } from "react-icons/md";
+import PageHero from "../components/ui/PageHero";
 
 const TABS = [
   { key: "active", label: "Currently Inside", icon: MdPeople },
   { key: "today", label: "Today's Log", icon: MdEventNote },
-  { key: "roomAttendance", label: "Room Attendance", icon: MdMeetingRoom },
+  { key: "roomLogs", label: "Room Logs", icon: MdMeetingRoom },
   { key: "rooms", label: "Room QR Codes", icon: MdQrCodeScanner },
 ];
 
@@ -139,10 +141,7 @@ export default function AttendanceLogsPage() {
   return (
     <div className="attendance-page">
       {/* Hero Header */}
-      <div className="attendance-header">
-        <h1>Lab Attendance</h1>
-        <p className="attendance-subtitle">Monitor student laboratory attendance in real-time</p>
-      </div>
+      <PageHero icon={MdEventAvailable} title="Attendance Logs" subtitle="Monitor student laboratory attendance in real-time" />
 
       <div className="attendance-shell">
         {/* Stats */}
@@ -371,8 +370,8 @@ export default function AttendanceLogsPage() {
           </>
         )}
 
-        {/* Room Attendance Tab */}
-        {activeTab === "roomAttendance" && <RoomAttendanceView />}
+        {/* Room Logs Tab */}
+        {activeTab === "roomLogs" && <RoomAttendanceView />}
 
         {/* Room Management Tab */}
         {activeTab === "rooms" && <RoomManagementTab />}

@@ -133,6 +133,21 @@
 .sidebar a.active .notif-badge{background:rgba(0,0,0,.8);color:#ef5350;box-shadow:0 2px 6px rgba(0,0,0,.12)}
 @keyframes notifPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
 
+/* Logbook status dot */
+.logbook-dot{
+  margin-left:auto;width:8px;height:8px;border-radius:50%;
+  background:rgba(255,255,255,.25);
+  transition:background .3s,box-shadow .3s;
+}
+.logbook-dot.active{
+  background:#4caf50;
+  box-shadow:0 0 6px rgba(76,175,80,.6);
+  animation:logbookPulse 2s ease-in-out infinite;
+}
+.sidebar a.active .logbook-dot{background:rgba(255,255,255,.4)}
+.sidebar a.active .logbook-dot.active{background:#4caf50;box-shadow:0 0 6px rgba(76,175,80,.6)}
+@keyframes logbookPulse{0%,100%{box-shadow:0 0 4px rgba(76,175,80,.4)}50%{box-shadow:0 0 10px rgba(76,175,80,.8)}}
+
 /* CSS Tooltips (collapsed) */
 .sidebar.collapsed a[data-label]::after,
 .sidebar.collapsed .sidebar-bottom-item[data-label]::after{
@@ -256,6 +271,10 @@ body.dark .burger-btn:hover{background:rgba(255,255,255,.08)}
 body.dark .sidebar-overlay.active{background:rgba(0,0,0,.6)}
 body.dark .notif-badge{box-shadow:0 2px 8px rgba(239,83,80,.5)}
 body.dark .sidebar a.active .notif-badge{background:rgba(0,0,0,.9);color:#ef5350}
+body.dark .logbook-dot{background:rgba(255,255,255,.2)}
+body.dark .logbook-dot.active{background:#4caf50;box-shadow:0 0 8px rgba(76,175,80,.7)}
+body.dark .sidebar a.active .logbook-dot{background:rgba(255,255,255,.35)}
+body.dark .sidebar a.active .logbook-dot.active{background:#4caf50;box-shadow:0 0 8px rgba(76,175,80,.7)}
 /* Tooltip dark override */
 body.dark .sidebar.collapsed a[data-label]::after,
 body.dark .sidebar.collapsed .sidebar-bottom-item[data-label]::after{

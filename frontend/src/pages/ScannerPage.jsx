@@ -5,8 +5,11 @@ import { resolveUser } from "../components/scanner/BorrowerLookup";
 import { resolveItem } from "../components/scanner/ItemLookup";
 import ScannerCamera from "../components/scanner/ScannerCamera";
 import { useAuth } from "../context/AuthContext";
+import { COURSES } from "../constants/courses";
 import toast from "react-hot-toast";
 import "../styles/pages/scanner.css";
+import { MdQrCodeScanner } from "react-icons/md";
+import PageHero from "../components/ui/PageHero";
 
 function defaultDueDate() {
   const d = new Date();
@@ -45,8 +48,7 @@ export default function ScannerPage() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [step1Collapsed, setStep1Collapsed] = useState(false);
   const [step2Collapsed, setStep2Collapsed] = useState(false);
-  const [admins, setAdmins] = useState([]);
-  const [selectedAdminId, setSelectedAdminId] = useState("");
+  const [targetCourse, setTargetCourse] = useState("");
 
   const step2Ref = useRef(null);
   const borrowPhotoRef = useRef(null);
@@ -54,10 +56,6 @@ export default function ScannerPage() {
 
   useEffect(() => {
     setDueDate(defaultDueDate());
-    // Load active admins for student borrow selection
-    if (!isAdmin) {
-      api.getActiveAdmins().then((data) => setAdmins(Array.isArray(data) ? data : [])).catch(() => {});
-    }
   }, []);
 
   useEffect(() => {
@@ -132,6 +130,7 @@ export default function ScannerPage() {
     const d = item.data;
     const avail = getAvailableQuantity(d);
     setItemResult({ name: d.itemName, available: avail, total: numOr(d.quantity), condition: d.condition, category: d.category, course: d.course || "" });
+    setTargetCourse(d.course || "");
     setTxStatus("Item found."); setTxStatusType("success");
     setStep2Collapsed(true);
   };
@@ -181,7 +180,7 @@ export default function ScannerPage() {
             quantity: qty,
             dueDate: due.toISOString(),
             purpose: purpose.trim(),
-            assigned_admin_id: selectedAdminId || undefined,
+            targetCourse: targetCourse || undefined,
           });
           toast.success("Borrow request submitted! Awaiting approval.");
         } else {
@@ -226,6 +225,7 @@ export default function ScannerPage() {
     setPurpose("");
     setBorrowPhotoURL(""); setReturnPhotoURL("");
     setConditionOnBorrow("Good"); setConditionOnReturn("Good");
+    setTargetCourse("");
     if (!isAdmin && userProfile) {
       setSchoolId(userProfile.schoolId || userProfile.schoolID || userProfile.studentID || userProfile.employeeId || "");
       setFirstName(userProfile.firstName || userProfile.firstname || "");
@@ -233,10 +233,11 @@ export default function ScannerPage() {
       setEmail(userProfile.email || "");
       setRole("student");
       setSelectedUser(userProfile);
+      setQuantity(1);
       setBorrowerResult({
         name: `${userProfile.firstName || userProfile.firstname || ""} ${userProfile.lastName || userProfile.lastname || ""}`.trim(),
         schoolID: userProfile.schoolId || userProfile.schoolID || userProfile.studentID || userProfile.employeeId,
-        role: userProfile.role,
+        role: userProfile.role || "student",
         course: userProfile.course,
         year: userProfile.year,
         department: userProfile.department,
@@ -255,10 +256,7 @@ export default function ScannerPage() {
 
   return (
     <section className="scanner-page">
-      <div className="scanner-header">
-        <h1>Scan Borrow / Return</h1>
-        <p className="scanner-subtitle">Scan QR codes or enter codes manually to borrow or return equipment</p>
-      </div>
+      <PageHero icon={MdQrCodeScanner} title="Scan Borrow / Return" subtitle="Scan QR codes or enter codes manually to borrow or return equipment" />
 
       <div className="scanner-shell">
         <div className="scanner-mode">
@@ -306,7 +304,7 @@ export default function ScannerPage() {
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                   <span className="scanner-collapsed-name">{borrowerResult.name}</span>
                   <span className="scanner-collapsed-id">{borrowerResult.schoolID}</span>
-                   <span className={`scanner-collapsed-role ${borrowerResult.role}`}>{borrowerResult.role?.charAt(0).toUpperCase() + (borrowerResult.role?.slice(1) || "Student")}</span>
+                    <span className={`scanner-collapsed-role ${borrowerResult.role}`}>{(borrowerResult.role || "student").charAt(0).toUpperCase() + (borrowerResult.role || "student").slice(1)}</span>
                 </div>
               </div>
             ) : (
@@ -325,7 +323,7 @@ export default function ScannerPage() {
                       <div className="scanner-user-name">{borrowerResult.name}</div>
                       <div className="scanner-user-id">{borrowerResult.schoolID}</div>
                        <div className={`scanner-user-role ${borrowerResult.role}`}>
-                         {borrowerResult.role?.charAt(0).toUpperCase() + (borrowerResult.role?.slice(1) || "Student")}
+                          {(borrowerResult.role || "student").charAt(0).toUpperCase() + (borrowerResult.role || "student").slice(1)}
                        </div>
                     </div>
                     <div className="scanner-user-verified">
@@ -546,15 +544,14 @@ export default function ScannerPage() {
                     <input type="text" placeholder="e.g. Lab experiment, thesis project..." value={purpose} onChange={(e) => setPurpose(e.target.value)} />
                   </div>
                 )}
-                {!isAdmin && userProfile?.role === "student" && admins.length > 0 && (
+                {!isAdmin && userProfile?.role === "student" && (
                   <div className="scanner-field" style={{ marginTop: 12 }}>
-                    <label>Approving Admin</label>
-                    <select value={selectedAdminId} onChange={(e) => setSelectedAdminId(e.target.value)}>
-                      <option value="">Auto-assign (Recommended)</option>
-                      {admins.map((a) => (
-                        <option key={a.id} value={a.id}>{a.firstName} {a.lastName}{a.assignedCourse ? ` — ${a.assignedCourse}` : ""}</option>
-                      ))}
+                    <label>Target Course</label>
+                    <select value={targetCourse} onChange={(e) => setTargetCourse(e.target.value)}>
+                      <option value="">Select course...</option>
+                      {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
                     </select>
+                    <span className="scanner-field-hint">Equipment will be routed to the admin(s) assigned to this course</span>
                   </div>
                 )}
               </>

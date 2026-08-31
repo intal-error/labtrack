@@ -5,6 +5,7 @@ import { filterBySearch } from "../../utils/search";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
 import { MdMenuBook, MdAdd, MdDelete, MdEdit, MdSearch, MdOpenInNew, MdDownload, MdCloudUpload, MdClose, MdInfo, MdAssignment, MdDescription } from "react-icons/md";
+import PageHero from "../ui/PageHero";
 
 const CATEGORIES = ["All", "General", "Safety", "Equipment Guide", "Software", "Procedure"];
 const CATEGORY_ICONS = { General: "📘", Safety: "🛡️", "Equipment Guide": "🔧", Software: "💻", Procedure: "📋" };
@@ -152,12 +153,11 @@ export default function ManualsTab() {
 
   return (
     <div className="tab-content">
-      <div className="records-header">
-        <h2><MdMenuBook size={22} /> Laboratory Manual Repository</h2>
+      <PageHero icon={MdMenuBook} title="Lab Manuals" subtitle="Guides and references for laboratory equipment">
         {role === "admin" && (
-          <button className="btn btn-primary" onClick={openAdd}><MdAdd size={16} /> Upload Manual</button>
+          <button className="hero-action-btn ghost" onClick={openAdd}><MdAdd size={16} /> Upload Manual</button>
         )}
-      </div>
+      </PageHero>
 
       <div className="manuals-stats">
         <div className={`manuals-stat-card ${filterCategory === "All" ? "active" : ""}`} onClick={() => setFilterCategory("All")}>

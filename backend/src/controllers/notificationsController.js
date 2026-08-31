@@ -5,15 +5,41 @@ const COLLECTION = "notifications";
 const getAll = async (req, res) => {
   try {
     const userId = req.user.uid;
-    const snap = await db.collection(COLLECTION).orderBy("createdAt", "desc").get();
-    const notifications = [];
-    snap.forEach((doc) => {
-      const data = doc.data();
-      const dismissedBy = data.dismissedBy || [];
-      if (!dismissedBy.includes(userId)) {
-        notifications.push({ id: doc.id, ...data });
-      }
-    });
+    const userDoc = await db.collection("users").doc(userId).get();
+    const isAdmin = userDoc.exists && userDoc.data().role === "admin";
+
+    let notifications = [];
+    if (isAdmin) {
+      // Admins see notifications targeted to them
+      const snap = await db.collection(COLLECTION)
+        .where("targetUserId", "==", userId)
+        .orderBy("createdAt", "desc")
+        .get();
+      snap.forEach((doc) => {
+        const data = doc.data();
+        const dismissedBy = data.dismissedBy || [];
+        if (!dismissedBy.includes(userId)) {
+          notifications.push({ id: doc.id, ...data });
+        }
+      });
+    } else {
+      // Non-admins see only their own notifications
+      const snap = await db.collection(COLLECTION)
+        .where("targetUserId", "==", userId)
+        .get();
+      snap.forEach((doc) => {
+        const data = doc.data();
+        const dismissedBy = data.dismissedBy || [];
+        if (!dismissedBy.includes(userId)) {
+          notifications.push({ id: doc.id, ...data });
+        }
+      });
+      notifications.sort((a, b) => {
+        const da = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
+        const db = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
+        return (db?.getTime?.() || 0) - (da?.getTime?.() || 0);
+      });
+    }
     res.json(notifications);
   } catch (err) {
     res.status(500).json({ error: err.message });

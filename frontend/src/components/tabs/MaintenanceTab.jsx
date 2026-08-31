@@ -7,6 +7,8 @@ import { filterBySearch } from "../../utils/search";
 import "../../styles/pages/tabs.css";
 import "../../styles/pages/catalog.css";
 import { MdBuild, MdAdd, MdEdit, MdDelete, MdCalendarToday, MdWarning, MdSearch, MdCheckCircle, MdSchedule, MdPlayArrow, MdAssignment, MdCameraAlt, MdImage, MdGridOn, MdList, MdClose, MdInfo } from "react-icons/md";
+import PageHero from "../ui/PageHero";
+import ViewToggle from "../ui/ViewToggle";
 
 const STATUS_COLORS = {
   scheduled: "#1976d2",
@@ -203,12 +205,11 @@ export default function MaintenanceTab() {
 
   return (
     <div className="tab-content">
-      <div className="records-header">
-        <h2><MdBuild size={22} /> Maintenance Scheduling</h2>
+      <PageHero icon={MdBuild} title="Maintenance" subtitle="Schedule and track equipment maintenance">
         {role === "admin" && (
-          <button className="btn btn-primary" onClick={openCreate}><MdAdd size={16} /> Schedule Maintenance</button>
+          <button className="hero-action-btn ghost" onClick={openCreate}><MdAdd size={16} /> Schedule</button>
         )}
-      </div>
+      </PageHero>
 
       <div className="maintenance-stats">
         {["total", "scheduled", "in-progress", "completed"].map((key) => (
@@ -240,14 +241,7 @@ export default function MaintenanceTab() {
             <MdSearch size={16} />
             <input type="text" placeholder="Search items, technician..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <div className="catalog-view-toggle">
-            <button className={`view-btn ${viewMode === "grid" ? "active" : ""}`} onClick={() => setViewMode("grid")} title="Grid view">
-              <MdGridOn size={16} />
-            </button>
-            <button className={`view-btn ${viewMode === "list" ? "active" : ""}`} onClick={() => setViewMode("list")} title="List view">
-              <MdList size={16} />
-            </button>
-          </div>
+          <ViewToggle value={viewMode} onChange={setViewMode} localStorageKey="labtrack-maintenance-view" />
         </div>
       </div>
 

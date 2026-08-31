@@ -5,6 +5,9 @@ import Modal from "../components/ui/Modal";
 import toast from "react-hot-toast";
 import "../styles/pages/tables.css";
 import "../styles/pages/catalog.css";
+import { MdAssignment } from "react-icons/md";
+import PageHero from "../components/ui/PageHero";
+import ViewToggle from "../components/ui/ViewToggle";
 
 const STATUS_COLORS = {
   pending: "#f57c00",
@@ -40,7 +43,7 @@ export default function MyRequestsPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
   const [selectedRequest, setSelectedRequest] = useState(null);
-  const [viewMode, setViewMode] = useState("grid");
+  const [viewMode, setViewMode] = useState("list");
 
   useEffect(() => { load(); }, []);
 
@@ -83,12 +86,7 @@ export default function MyRequestsPage() {
 
   return (
     <section className="transactions-page">
-      <div className="transactions-header">
-        <div className="transactions-header-left">
-          <h1>My Borrow Requests</h1>
-          <p className="transactions-subtitle">Track your pending and processed borrow requests</p>
-        </div>
-      </div>
+      <PageHero icon={MdAssignment} title="My Requests" subtitle="Track your pending and processed borrow requests" />
 
       <div className="transactions-stats">
         <div className="stat-card stat-active">
@@ -121,14 +119,7 @@ export default function MyRequestsPage() {
             ))}
           </div>
         </div>
-        <div className="catalog-view-toggle">
-          <button className={`view-btn ${viewMode === "grid" ? "active" : ""}`} onClick={() => setViewMode("grid")} title="Grid view">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-          </button>
-          <button className={`view-btn ${viewMode === "list" ? "active" : ""}`} onClick={() => setViewMode("list")} title="List view">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-          </button>
-        </div>
+        <ViewToggle value={viewMode} onChange={setViewMode} localStorageKey="labtrack-myrequests-view" />
       </div>
 
       {filtered.length === 0 ? (

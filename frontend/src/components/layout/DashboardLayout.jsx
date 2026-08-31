@@ -20,12 +20,15 @@ const navSections = [
     label: "HOME",
     items: [
       { path: "/home", label: "Home", icon: MdHome, roles: ["student", "admin"] },
-
+      { path: "/reports", label: "Overview", icon: MdAssessment, roles: ["admin"] },
+    ],
+  },
+  {
+    label: "ATTENDANCE",
+    items: [
       { path: "/usage-logs", label: "My Activity", icon: MdHistory, roles: ["student"] },
-      { path: "/my-attendance", label: "My Attendance", icon: MdEventAvailable, roles: ["student"] },
       { path: "/attendance-scan", label: "Scan Attendance", icon: MdQrCodeScanner, roles: ["student"] },
       { path: "/attendance", label: "Attendance Logs", icon: MdEventAvailable, roles: ["admin"] },
-      { path: "/reports", label: "Overview", icon: MdAssessment, roles: ["admin"] },
     ],
   },
   {
@@ -68,7 +71,8 @@ export default function DashboardLayout() {
     Object.fromEntries(navSections.map((s) => [s.label, true]))
   );
   const [unreadCount, setUnreadCount] = useState(0);
-  const { role, logout, loading } = useAuth();
+  const [logbookActive, setLogbookActive] = useState(false);
+  const { role, userProfile, logout, loading } = useAuth();
   const { dark, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -83,9 +87,25 @@ export default function DashboardLayout() {
     }
   }
 
+  async function fetchLogbookStatus() {
+    try {
+      const data = await api.getStudentAttendance(userProfile.schoolId);
+      const hasActive = (data.records || []).some((r) => r.status === "active");
+      setLogbookActive(hasActive);
+    } catch {
+      setLogbookActive(false);
+    }
+  }
+
   useEffect(() => {
     if (role) fetchUnreadCount();
   }, [role]);
+
+  useEffect(() => {
+    if (role === "student" && userProfile?.schoolId) {
+      fetchLogbookStatus();
+    }
+  }, [role, userProfile?.schoolId, location.pathname]);
 
   useEffect(() => {
     if (location.pathname === "/notifications") {
@@ -160,6 +180,9 @@ export default function DashboardLayout() {
                           >
                             <span className="nav-icon"><Icon size={18} /></span>
                             {!collapsed && <span className="nav-label">{label}</span>}
+                            {path === "/attendance-scan" && !collapsed && (
+                              <span className={`logbook-dot ${logbookActive ? "active" : ""}`} />
+                            )}
                             {path === "/notifications" && unreadCount > 0 && (
                               <span className="notif-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>
                             )}

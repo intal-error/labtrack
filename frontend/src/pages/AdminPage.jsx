@@ -2,7 +2,9 @@ import { useState, useEffect } from "react";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { MdAdd, MdList, MdLogout, MdPerson, MdLock, MdPhone, MdWork, MdEmail, MdArrowBack, MdShield, MdEdit, MdDelete, MdGridView, MdViewList, MdVisibility, MdEditNote, MdAssignment, MdSwapHoriz, MdSchool } from "react-icons/md";
+import { MdAdd, MdList, MdLogout, MdPerson, MdLock, MdPhone, MdWork, MdEmail, MdArrowBack, MdShield, MdEdit, MdDelete, MdGridView, MdViewList, MdVisibility, MdEditNote, MdAssignment, MdSwapHoriz, MdSchool, MdAdminPanelSettings } from "react-icons/md";
+import PageHero from "../components/ui/PageHero";
+import ViewToggle from "../components/ui/ViewToggle";
 import { COURSES } from "../constants/courses";
 
 import EmptyState from "../components/ui/EmptyState";
@@ -23,10 +25,10 @@ const PERMISSIONS = [
 export default function AdminPage() {
   const [view, setView] = useState("main");
   const [admins, setAdmins] = useState([]);
-  const [form, setForm] = useState({ firstName: "", lastName: "", password: "", contact: "", position: "", email: "", assignCourse: false, assignedCourse: "", assignedYear: "", permissions: ["view_catalog", "manage_catalog", "view_transactions", "view_requests", "process_requests"] });
+  const [form, setForm] = useState({ firstName: "", lastName: "", password: "", contact: "", position: "", email: "", assignCourse: false, assignedCourses: [], assignedYear: "", permissions: ["view_catalog", "manage_catalog", "view_transactions", "view_requests", "process_requests"] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [displayMode, setDisplayMode] = useState("grid");
+  const [viewMode, setViewMode] = useState("list");
   const { logout } = useAuth();
   const navigate = useNavigate();
 
@@ -44,14 +46,14 @@ export default function AdminPage() {
     try {
       await api.createAdmin(form);
       toast.success("Admin created!");
-      setForm({ firstName: "", lastName: "", password: "", contact: "", position: "", email: "", assignCourse: false, assignedCourse: "", assignedYear: "", permissions: ["view_catalog", "manage_catalog", "view_transactions", "view_requests", "process_requests"] });
+      setForm({ firstName: "", lastName: "", password: "", contact: "", position: "", email: "", assignCourse: false, assignedCourses: [], assignedYear: "", permissions: ["view_catalog", "manage_catalog", "view_transactions", "view_requests", "process_requests"] });
       setView("list");
     } catch (err) { toast.error(err.message); }
     finally { setLoading(false); }
   };
 
   const handleDelete = async (id) => {
-    if (!confirm("Deactivate this admin account?")) return;
+    if (!confirm("Deactivate this admin account? They will no longer be able to log in.")) return;
     try { await api.deleteAdmin(id); toast.success("Admin deactivated!"); loadAdmins(); }
     catch (err) { toast.error(err.message); }
   };
@@ -73,11 +75,12 @@ export default function AdminPage() {
     if (lastname === null) return;
     const position = prompt("Position:", admin.position || "");
     const contact = prompt("Contact:", admin.contact || "");
-    const course = prompt("Assigned Course:", admin.assignedCourse || "");
+    const course = prompt("Assigned Courses (comma-separated, e.g. BIT,BSIT):", (admin.assignedCourses || []).join(","));
+    const courses = course ? course.split(",").map((c) => c.trim()).filter(Boolean) : [];
     const year = prompt("Assigned Year:", admin.assignedYear || "");
     const password = prompt("New password (blank to keep):", "");
     try {
-      await api.updateAdmin(id, { firstName: firstname, lastName: lastname, position, contact, assignedCourse: course || undefined, assignedYear: year || undefined, password: password || undefined });
+      await api.updateAdmin(id, { firstName: firstname, lastName: lastname, position, contact, assignedCourses: courses, assignedYear: year || undefined, password: password || undefined });
       toast.success("Updated!"); loadAdmins();
     } catch (err) { toast.error(err.message); }
   };
@@ -97,15 +100,7 @@ export default function AdminPage() {
 
   return (
     <section className="admin-page">
-      <div className="admin-header">
-        <div className="admin-header-icon">
-          <MdShield size={28} />
-        </div>
-        <div>
-          <h1>Admin</h1>
-          <p className="admin-subtitle">System administration panel</p>
-        </div>
-      </div>
+      <PageHero icon={MdAdminPanelSettings} title="Admin" subtitle="System administration panel" />
 
       {view === "main" && (
         <div className="admin-main-card fade-in-up">
@@ -165,28 +160,39 @@ export default function AdminPage() {
               </div>
             </div>
             <div className="course-assign-section">
-              <button type="button" className={`course-toggle-header ${form.assignCourse ? "active" : ""}`} onClick={() => setForm({ ...form, assignCourse: !form.assignCourse, assignedCourse: form.assignCourse ? "" : form.assignedCourse, assignedYear: form.assignCourse ? "" : form.assignedYear })}>
+              <button type="button" className={`course-toggle-header ${form.assignCourse ? "active" : ""}`} onClick={() => setForm({ ...form, assignCourse: !form.assignCourse, assignedCourses: form.assignCourse ? [] : form.assignedCourses, assignedYear: form.assignCourse ? "" : form.assignedYear })}>
                 <MdSchool size={18} />
-                <span>Assign to Course for Approvals</span>
+                <span>Assign to Courses for Approvals</span>
                 <span className={`course-toggle-switch ${form.assignCourse ? "on" : ""}`} />
               </button>
               {form.assignCourse && (
                 <div className="course-toggle-fields">
-                  <div className="admin-form-row">
-                    <div className="admin-input-wrap">
-                      <select value={form.assignedCourse} onChange={(e) => setForm({ ...form, assignedCourse: e.target.value })}>
-                        <option value="">Select Course</option>
-                        {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </div>
+                  <div className="admin-course-chips">
+                    {COURSES.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        className={`perm-chip ${form.assignedCourses.includes(c) ? "active" : ""}`}
+                        onClick={() => {
+                          const courses = form.assignedCourses.includes(c)
+                            ? form.assignedCourses.filter((x) => x !== c)
+                            : [...form.assignedCourses, c];
+                          setForm({ ...form, assignedCourses: courses });
+                        }}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="admin-form-row" style={{ marginTop: 8 }}>
                     <div className="admin-input-wrap">
                       <select value={form.assignedYear} onChange={(e) => setForm({ ...form, assignedYear: e.target.value })}>
-                        <option value="">Select Year</option>
+                        <option value="">Select Year (optional)</option>
                         {["1st Year", "2nd Year", "3rd Year", "4th Year", "5th Year"].map((y) => <option key={y} value={y}>{y}</option>)}
                       </select>
                     </div>
                   </div>
-                  <p className="course-assign-hint">Admin will approve borrow requests from students of this course.</p>
+                  <p className="course-assign-hint">Admin will approve borrow requests for the selected courses. Select multiple courses if needed.</p>
                 </div>
               )}
             </div>
@@ -224,22 +230,7 @@ export default function AdminPage() {
             </button>
             <h2>Account List</h2>
             <span className="admin-count-badge">{admins.length}</span>
-            <div className="admin-display-toggle">
-              <button
-                className={`admin-toggle-btn ${displayMode === "grid" ? "active" : ""}`}
-                onClick={() => setDisplayMode("grid")}
-                title="Grid View"
-              >
-                <MdGridView size={18} />
-              </button>
-              <button
-                className={`admin-toggle-btn ${displayMode === "list" ? "active" : ""}`}
-                onClick={() => setDisplayMode("list")}
-                title="List View"
-              >
-                <MdViewList size={18} />
-              </button>
-            </div>
+            <ViewToggle value={viewMode} onChange={setViewMode} localStorageKey="labtrack-admin-view" />
           </div>
 
           {error ? (
@@ -248,7 +239,7 @@ export default function AdminPage() {
             <EmptyState message="No admin accounts found." />
           ) : (
             <div className="admin-list-scroll">
-              {displayMode === "grid" ? (
+              {viewMode === "grid" ? (
                 <div className="admin-grid">
                   {admins.map((a) => (
                     <div className="admin-account-card" key={a.id}>
@@ -275,12 +266,16 @@ export default function AdminPage() {
                               <span>{a.contact}</span>
                             </div>
                           )}
-                          {(a.assignedCourse || a.assignedYear) && (
-                            <div className="admin-account-detail">
-                              <MdWork size={14} />
-                              <span>{a.assignedCourse || "No Course"} - {a.assignedYear || "No Year"}</span>
-                            </div>
-                          )}
+                          {(() => {
+                            const courses = a.assignedCourses || (a.assignedCourse ? [a.assignedCourse] : []);
+                            if (courses.length === 0 && !a.assignedYear) return null;
+                            return (
+                              <div className="admin-account-detail">
+                                <MdSchool size={14} />
+                                <span>{courses.length > 0 ? courses.join(", ") : "No Course"}{a.assignedYear ? ` — ${a.assignedYear}` : ""}</span>
+                              </div>
+                            );
+                          })()}
                         </div>
                         <div className="admin-account-actions">
                           <button className="admin-btn-edit" onClick={() => handleUpdate(a.id)}>
@@ -290,7 +285,7 @@ export default function AdminPage() {
                             {(a.status || "active") === "active" ? "Deactivate" : "Activate"}
                           </button>
                           <button className="admin-btn-delete" onClick={() => handleDelete(a.id)}>
-                            <MdDelete size={14} /> Delete
+                            <MdDelete size={14} /> Deactivate
                           </button>
                         </div>
                       </div>
@@ -322,7 +317,10 @@ export default function AdminPage() {
                           </td>
                           <td>{a.email || "-"}</td>
                           <td>{a.contact || "-"}</td>
-                          <td>{(a.assignedCourse || a.assignedYear) ? `${a.assignedCourse || "No Course"} - ${a.assignedYear || "No Year"}` : "-"}</td>
+                          <td>{(() => {
+                            const courses = a.assignedCourses || (a.assignedCourse ? [a.assignedCourse] : []);
+                            return courses.length > 0 ? courses.join(", ") : "-";
+                          })()}</td>
                           <td>{a.position || "Admin"}</td>
                           <td>
                             <span className={`admin-status-badge ${(a.status || "active") === "active" ? "status-active" : "status-inactive"}`}>

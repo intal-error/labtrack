@@ -128,7 +128,7 @@ const methodAwareLimiter = (req, res, next) => {
 
 // Public routes
 app.use("/api/auth", authLimiter, authRoutes);
-app.use("/api/attendance", attendanceLimiter, attendanceRoutes);
+app.use("/api/attendance", verifyToken, attendanceLimiter, attendanceRoutes);
 app.get("/api/health", (req, res) => res.json({ status: "ok", timestamp: new Date().toISOString() }));
 
 // Protected routes (any authenticated user)

@@ -6,6 +6,7 @@ import {
   MdAssessment, MdDownload, MdPeople, MdInventory, MdWarning, MdBuild, MdSchedule,
   MdAssignment, MdAttachMoney, MdEventAvailable, MdWarningAmber
 } from "react-icons/md";
+import PageHero from "../ui/PageHero";
 import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
@@ -197,20 +198,17 @@ export default function ReportsTab() {
 
   return (
     <div className="tab-content">
-      <div className="records-header">
-        <h2><MdAssessment size={22} /> Overview</h2>
-        <div className="reports-downloads">
-          <button className="btn btn-outline btn-sm" onClick={() => downloadReport("borrowed")}>
-            <MdDownload size={14} /> Borrowed
-          </button>
-          <button className="btn btn-outline btn-sm" onClick={() => downloadReport("returned")}>
-            <MdDownload size={14} /> Returned
-          </button>
-          <button className="btn btn-outline btn-sm" onClick={() => downloadReport("catalog")}>
-            <MdDownload size={14} /> Catalog
-          </button>
-        </div>
-      </div>
+      <PageHero icon={MdAssessment} title="Overview" subtitle="Monitor lab activity at a glance">
+        <button className="hero-action-btn ghost" onClick={() => downloadReport("borrowed")}>
+          <MdDownload size={16} /> Borrowed
+        </button>
+        <button className="hero-action-btn ghost" onClick={() => downloadReport("returned")}>
+          <MdDownload size={16} /> Returned
+        </button>
+        <button className="hero-action-btn ghost" onClick={() => downloadReport("catalog")}>
+          <MdDownload size={16} /> Catalog
+        </button>
+      </PageHero>
 
       {/* Key Metrics */}
       <div className="overview-metrics">

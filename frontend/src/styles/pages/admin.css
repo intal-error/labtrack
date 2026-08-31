@@ -86,7 +86,7 @@
 .admin-list-scroll::-webkit-scrollbar-thumb:hover{background:var(--green-light)}
 
 /* Table View */
-.admin-table-wrap{overflow-x:auto}
+.admin-table-wrap{overflow-x:auto;max-height:calc(100vh - 280px);overflow-y:auto;scrollbar-width:thin}
 .admin-table{width:100%;border-collapse:collapse}
 .admin-table th{text-align:left;padding:10px 14px;font-size:12px;font-weight:600;text-transform:uppercase;color:var(--text-muted);background:var(--bg);border-bottom:1.5px solid var(--border);position:sticky;top:0;z-index:1}
 .admin-table td{padding:10px 14px;font-size:13px;color:var(--text);border-bottom:1px solid var(--border)}
