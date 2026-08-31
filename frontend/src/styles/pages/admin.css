@@ -89,12 +89,26 @@
 .admin-table-wrap{overflow-x:auto;max-height:calc(100vh - 280px);overflow-y:auto;scrollbar-width:thin}
 .admin-table{width:100%;border-collapse:collapse}
 .admin-table th{text-align:left;padding:10px 14px;font-size:12px;font-weight:600;text-transform:uppercase;color:var(--text-muted);background:var(--bg);border-bottom:1.5px solid var(--border);position:sticky;top:0;z-index:1}
-.admin-table td{padding:10px 14px;font-size:13px;color:var(--text);border-bottom:1px solid var(--border)}
+.admin-table td{padding:10px 14px;font-size:13px;color:var(--text);border-bottom:1px solid var(--border);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .admin-table tr:hover td{background:var(--bg)}
-.admin-table-user{display:flex;align-items:center;gap:10px}
-.admin-table-name{font-weight:600;white-space:nowrap}
+.admin-table-user{display:flex;align-items:center;gap:10px;min-width:160px;max-width:200px}
+.admin-table-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .admin-table-actions{display:flex;gap:6px}
 .admin-table-actions .admin-btn-edit,.admin-table-actions .admin-btn-delete{flex:none;padding:6px 10px;font-size:11px}
+
+/* Kebab Menu */
+.admin-kebab-wrap{position:relative}
+.admin-kebab-btn{width:32px;height:32px;border-radius:8px;border:none;background:transparent;color:var(--text-muted);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s}
+.admin-kebab-btn:hover{background:var(--bg);color:var(--text)}
+.admin-kebab-dropdown{position:absolute;top:100%;right:0;margin-top:4px;background:var(--bg-card);border:1.5px solid var(--border);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:100;min-width:160px;padding:6px;animation:fadeInUp .15s ease}
+.admin-kebab-dropdown button{display:flex;align-items:center;gap:8px;width:100%;padding:8px 12px;border:none;border-radius:8px;background:transparent;color:var(--text);font-size:13px;font-weight:500;cursor:pointer;transition:background .15s;text-align:left;font-family:inherit}
+.admin-kebab-dropdown button:hover{background:var(--bg)}
+.admin-kebab-dropdown button.danger{color:#c62828}
+.admin-kebab-dropdown button.danger:hover{background:#ffebee}
+.admin-th-actions{width:48px}
+.admin-td-kebab{text-align:center}
+.admin-add-btn{display:inline-flex;align-items:center;gap:4px;padding:7px 14px;border-radius:10px;font-size:13px;font-weight:600;border:1.5px solid var(--green);background:var(--green);color:#000;cursor:pointer;transition:all .2s;font-family:inherit;white-space:nowrap}
+.admin-add-btn:hover{box-shadow:0 4px 12px rgba(46,125,50,.3);transform:translateY(-1px)}
 
 /* Permission Chips */
 .perm-section{margin-top:4px}
@@ -176,3 +190,11 @@ body.dark .course-toggle-header:hover{color:#fff}
 body.dark .course-toggle-header.active{color:var(--green);background:rgba(46,125,50,.08)}
 body.dark .course-toggle-switch{background:rgba(255,255,255,.15)}
 body.dark .course-toggle-fields select{background:#0a0a0a;border-color:rgba(255,255,255,.1);color:#fff}
+body.dark .admin-kebab-btn{color:#888}
+body.dark .admin-kebab-btn:hover{background:#1a1a1a;color:#fff}
+body.dark .admin-kebab-dropdown{background:#131313;border-color:rgba(255,255,255,.1);box-shadow:0 8px 24px rgba(0,0,0,.4)}
+body.dark .admin-kebab-dropdown button{color:#ccc}
+body.dark .admin-kebab-dropdown button:hover{background:#1a1a1a;color:#fff}
+body.dark .admin-kebab-dropdown button.danger{color:#ef9a9a}
+body.dark .admin-kebab-dropdown button.danger:hover{background:#3a1b1b}
+body.dark .admin-add-btn{background:var(--green);color:#000}

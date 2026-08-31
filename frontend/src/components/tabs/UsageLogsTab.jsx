@@ -6,6 +6,7 @@ import { filterBySearch } from "../../utils/search";
 import { formatDuration, formatTime, getTodayString } from "../../utils/attendanceHelpers";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
+import "../../styles/pages/attendance.css";
 import {
   MdHistory, MdCheckCircle, MdAccessTime, MdWarning, MdSearch,
   MdEventBusy, MdInventory, MdQrCodeScanner, MdSchedule,
@@ -272,7 +273,7 @@ export default function UsageLogsTab() {
               )}
             </div>
           ) : (
-            <div className="attendance-table-wrap desktop-only">
+            <div className="attendance-table-wrap">
               <div className="attendance-table-scroll">
                 <table className="attendance-table">
                   <thead>
@@ -313,43 +314,6 @@ export default function UsageLogsTab() {
               </div>
             </div>
           )}
-          <div className="mobile-cards mobile-only">
-            {filteredAttendance.map((r, i) => (
-              <div key={r.id || i} className="mobile-record-card">
-                <div className="mobile-record-header">
-                  <span className="mobile-record-date">{r.date}</span>
-                  <span className={`status-badge ${r.status}`}>
-                    {r.status === "active" ? "Inside" : "Signed Out"}
-                  </span>
-                </div>
-                <div className="mobile-record-body">
-                  <div className="mobile-record-row">
-                    <span className="mobile-record-label">Room</span>
-                    <span className="mobile-record-value">{r.labRoom || "—"}</span>
-                  </div>
-                  <div className="mobile-record-row">
-                    <span className="mobile-record-label">Subject</span>
-                    <span className="mobile-record-value">{r.subject || "—"}</span>
-                  </div>
-                  <div className="mobile-record-row">
-                    <span className="mobile-record-label">Professor</span>
-                    <span className="mobile-record-value">{r.professor || "—"}</span>
-                  </div>
-                  <div className="mobile-record-row">
-                    <span className="mobile-record-label">Time</span>
-                    <span className="mobile-record-value">
-                      {formatTime(r.timeIn)}{r.timeOut ? ` - ${formatTime(r.timeOut)}` : ""}
-                    </span>
-                  </div>
-                </div>
-                {r.totalDuration != null && (
-                  <div className="mobile-record-footer">
-                    <span className="duration-badge">{formatDuration(r.totalDuration)}</span>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
         </>
       ) : (
         <div className="usage-log-list">

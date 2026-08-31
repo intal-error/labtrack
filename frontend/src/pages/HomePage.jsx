@@ -135,24 +135,20 @@ export default function HomePage() {
             {getGreeting()}, <span className="hero-name">{firstName}</span>
           </h1>
           <p className="hero-date">{formatDate()}</p>
-          <p className="hero-tagline">
-            {isStudent
-              ? "Browse the lab catalog, scan equipment, and keep track of your borrows — all in one place."
-              : "Your laboratory at a glance — monitor inventory, process transactions, and keep everything running."}
-          </p>
           <div className="hero-actions">
-            <button className="hero-btn primary" onClick={() => navigate("/scanner")}>
-              <MdQrCodeScanner size={16} /> Scan Now
-            </button>
-            {!isStudent && (
-              <button className="hero-btn ghost" onClick={() => navigate("/catalog")}>
+            {!isStudent ? (
+              <button className="hero-btn primary" onClick={() => navigate("/catalog")}>
                 Browse Catalog <MdArrowForward size={15} />
               </button>
-            )}
-            {isStudent && (
-              <button className="hero-btn ghost" onClick={() => navigate("/manuals")}>
-                Lab Manuals <MdArrowForward size={15} />
-              </button>
+            ) : (
+              <>
+                <button className="hero-btn primary" onClick={() => navigate("/scanner")}>
+                  <MdQrCodeScanner size={16} /> Scan Equipment
+                </button>
+                <button className="hero-btn ghost" onClick={() => navigate("/manuals")}>
+                  Lab Manuals <MdArrowForward size={15} />
+                </button>
+              </>
             )}
           </div>
         </div>

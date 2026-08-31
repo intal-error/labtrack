@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import toast from "react-hot-toast";
 import { filterBySearch } from "../../utils/search";
 import "../../styles/pages/tabs.css";
+import "../../styles/pages/shared-form-panel.css";
 import { MdWarning, MdAdd, MdEdit, MdDelete, MdSearch, MdInfo, MdOutlineWarning, MdCameraAlt, MdFilterList, MdClose, MdEvent, MdPerson, MdAssignment, MdSchedule, MdLocationOn } from "react-icons/md";
 import PageHero from "../ui/PageHero";
 
@@ -396,40 +397,44 @@ export default function IncidentTab() {
 
       <div className="incident-list">
         {filtered.length === 0 ? (
-          <div className="incident-empty">
-            <MdWarning size={48} />
-            <h3>{search || filterStatus !== "All" || filterSeverity !== "All" ? "No matching incidents" : "No incidents reported"}</h3>
-            <p>{search || filterStatus !== "All" || filterSeverity !== "All" ? "Try adjusting your search or filters" : canCreate ? "Click 'Report Incident' to submit your first report" : "No incidents have been reported yet"}</p>
-          </div>
-        ) : filtered.map((inc) => (
+            <div className="incident-empty">
+              <div className="incident-empty-icon"><MdWarning size={56} /></div>
+              <h3>{search || filterStatus !== "All" || filterSeverity !== "All" ? "No matching incidents" : "No incidents reported"}</h3>
+              <p>{search || filterStatus !== "All" || filterSeverity !== "All" ? "Try adjusting your search or filters" : canCreate ? "Click 'Report Incident' to submit your first report" : "No incidents have been reported yet"}</p>
+            </div>
+          ) : (
+            <div className="incident-list-grid">
+            {filtered.map((inc) => (
           <div className={`incident-card incident-severity-${inc.severity}`} key={inc.id}
                onClick={() => { setSelectedIncident(inc); setShowDetail(true); }} style={{ cursor: "pointer" }}>
             <div className="incident-card-header">
               <div className="incident-card-title">
-                <MdWarning size={18} style={{ color: SEVERITY_COLORS[inc.severity] }} />
-                <span>{inc.title}</span>
+                <span className="incident-severity-dot" style={{ background: SEVERITY_COLORS[inc.severity] }} />
+                <span className="incident-card-title-text">{inc.title}</span>
               </div>
               <div className="incident-badges">
-                <span className="badge" style={{ background: `${SEVERITY_COLORS[inc.severity]}20`, color: SEVERITY_COLORS[inc.severity] }}>
+                <span className="badge" style={{ background: `${SEVERITY_COLORS[inc.severity]}15`, color: SEVERITY_COLORS[inc.severity], border: `1px solid ${SEVERITY_COLORS[inc.severity]}30` }}>
                   {inc.severity}
                 </span>
-                <span className="badge" style={{ background: `${STATUS_COLORS[inc.status]}20`, color: STATUS_COLORS[inc.status] }}>
+                <span className="badge" style={{ background: `${STATUS_COLORS[inc.status]}15`, color: STATUS_COLORS[inc.status], border: `1px solid ${STATUS_COLORS[inc.status]}30` }}>
                   {inc.status}
                 </span>
               </div>
             </div>
-              <div className="incident-card-body">
-                <div className="incident-meta">
-                  <span>Type: {TYPE_LABELS[inc.type] || inc.type}</span>
-                  {inc.itemName && <span>Item: {inc.itemName}</span>}
-                  <span>Reported by: {inc.reporterName} ({inc.reporterRole})</span>
-                  {inc.photos?.length > 0 && <span className="incident-photo-count"><MdCameraAlt size={12} /> {inc.photos.length} photo{inc.photos.length > 1 ? "s" : ""}</span>}
-                  {inc.createdAt && <span>{timeAgo(inc.createdAt)}</span>}
-                </div>
-                <p className="incident-desc">{inc.description?.length > 120 ? inc.description.slice(0, 120) + "..." : inc.description}</p>
+            <div className="incident-card-body">
+              <div className="incident-meta">
+                <span className="incident-meta-item"><MdInfo size={12} /> {TYPE_LABELS[inc.type] || inc.type}</span>
+                {inc.itemName && <span className="incident-meta-item"><MdAssignment size={12} /> {inc.itemName}</span>}
+                <span className="incident-meta-item"><MdPerson size={12} /> {inc.reporterName}</span>
+                {inc.photos?.length > 0 && <span className="incident-meta-item incident-photo-badge"><MdCameraAlt size={12} /> {inc.photos.length}</span>}
+                {inc.createdAt && <span className="incident-meta-item incident-time"><MdSchedule size={12} /> {timeAgo(inc.createdAt)}</span>}
               </div>
+              <p className="incident-desc">{inc.description?.length > 150 ? inc.description.slice(0, 150) + "..." : inc.description}</p>
+            </div>
           </div>
         ))}
+        </div>
+          )}
       </div>
 
       {selectedIncident && (
@@ -479,10 +484,10 @@ export default function IncidentTab() {
                 <span className="lab-form-section-title">Information</span>
               </div>
               <div className="incident-detail-info">
-                <p><strong>Type:</strong> {TYPE_LABELS[selectedIncident.type] || selectedIncident.type}</p>
-                {selectedIncident.itemName && <p><strong>Related Item:</strong> {selectedIncident.itemName}</p>}
-                <p><strong>Reported by:</strong> {selectedIncident.reporterName} ({selectedIncident.reporterRole})</p>
-                {selectedIncident.createdAt && <p><strong>Date:</strong> {timeAgo(selectedIncident.createdAt)}</p>}
+                <div className="incident-info-row"><span className="incident-info-label">Type</span><span className="incident-info-value">{TYPE_LABELS[selectedIncident.type] || selectedIncident.type}</span></div>
+                {selectedIncident.itemName && <div className="incident-info-row"><span className="incident-info-label">Related Item</span><span className="incident-info-value">{selectedIncident.itemName}</span></div>}
+                <div className="incident-info-row"><span className="incident-info-label">Reported by</span><span className="incident-info-value">{selectedIncident.reporterName} ({selectedIncident.reporterRole})</span></div>
+                {selectedIncident.createdAt && <div className="incident-info-row"><span className="incident-info-label">Date</span><span className="incident-info-value">{timeAgo(selectedIncident.createdAt)}</span></div>}
               </div>
             </div>
 
@@ -516,19 +521,20 @@ export default function IncidentTab() {
                 </div>
                 <div className="incident-detail-actions">
                   {selectedIncident.status === "open" && (
-                    <button className="btn btn-outline" onClick={async () => { await updateStatus(selectedIncident.id, "investigating"); setSelectedIncident(null); setShowDetail(false); }}>
+                    <button className="btn btn-outline incident-action-btn" onClick={async () => { await updateStatus(selectedIncident.id, "investigating"); setSelectedIncident(null); setShowDetail(false); }}>
                       <MdInfo size={14} /> Mark Investigating
                     </button>
                   )}
                   {selectedIncident.status !== "resolved" && (
-                    <div className="incident-resolve-row">
-                      <input type="text" className="incident-resolution-input" value={resolutionNote} onChange={(e) => setResolutionNote(e.target.value)} placeholder="Resolution note (optional)" />
-                      <button className="btn btn-primary" onClick={handleResolve}><MdInfo size={14} /> Resolve</button>
+                    <div className="incident-resolve-section">
+                      <label className="incident-resolve-label">Resolution Note</label>
+                      <textarea className="incident-resolution-textarea" value={resolutionNote} onChange={(e) => setResolutionNote(e.target.value)} placeholder="Describe how the incident was resolved..." rows={3} />
+                      <button className="btn btn-primary incident-action-btn" onClick={handleResolve}><MdInfo size={14} /> Mark as Resolved</button>
                     </div>
                   )}
                   <div className="incident-detail-actions-row">
-                    <button className="btn btn-outline" onClick={() => { setSelectedIncident(null); setShowDetail(false); openEdit(selectedIncident); }}><MdEdit size={14} /> Edit</button>
-                    <button className="btn btn-danger" onClick={async () => { await handleDelete(selectedIncident.id); setSelectedIncident(null); setShowDetail(false); }}><MdDelete size={14} /> Delete</button>
+                    <button className="btn btn-outline incident-action-btn" onClick={() => { setSelectedIncident(null); setShowDetail(false); openEdit(selectedIncident); }}><MdEdit size={14} /> Edit</button>
+                    <button className="btn btn-danger incident-action-btn" onClick={async () => { await handleDelete(selectedIncident.id); setSelectedIncident(null); setShowDetail(false); }}><MdDelete size={14} /> Delete</button>
                   </div>
                 </div>
               </div>

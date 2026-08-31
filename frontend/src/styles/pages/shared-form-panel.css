@@ -149,6 +149,31 @@
   color: #2e7d32;
 }
 
+.lab-form-section-icon.inc-details {
+  background: linear-gradient(135deg, #fff3e0, #ffe0b2);
+  color: #ef6c00;
+}
+
+.lab-form-section-icon.inc-classification {
+  background: linear-gradient(135deg, #fce4ec, #f8bbd0);
+  color: #c62828;
+}
+
+.lab-form-section-icon.inc-description {
+  background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+  color: #1565c0;
+}
+
+.lab-form-section-icon.inc-evidence {
+  background: linear-gradient(135deg, #f3e5f5, #e1bee7);
+  color: #6a1b9a;
+}
+
+.lab-form-section-icon.inc-class {
+  background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+  color: #2e7d32;
+}
+
 .lab-form-section-title {
   font-size: 12px;
   font-weight: 700;
@@ -386,6 +411,31 @@ body.dark .lab-form-section-icon.class {
 }
 
 body.dark .lab-form-section-icon.location {
+  background: linear-gradient(135deg, #1a2e1e, #152218);
+  color: var(--green-light);
+}
+
+body.dark .lab-form-section-icon.inc-details {
+  background: linear-gradient(135deg, #2e2313, #1a1610);
+  color: #ffb74d;
+}
+
+body.dark .lab-form-section-icon.inc-classification {
+  background: linear-gradient(135deg, #3a1b1b, #2d1414);
+  color: #ef9a9a;
+}
+
+body.dark .lab-form-section-icon.inc-description {
+  background: linear-gradient(135deg, #14202e, #10161d);
+  color: #64b5f6;
+}
+
+body.dark .lab-form-section-icon.inc-evidence {
+  background: linear-gradient(135deg, #231430, #17101d);
+  color: #ce93d8;
+}
+
+body.dark .lab-form-section-icon.inc-class {
   background: linear-gradient(135deg, #1a2e1e, #152218);
   color: var(--green-light);
 }

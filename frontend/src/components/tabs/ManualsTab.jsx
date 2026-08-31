@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import { filterBySearch } from "../../utils/search";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
+import "../../styles/pages/shared-form-panel.css";
 import { MdMenuBook, MdAdd, MdDelete, MdEdit, MdSearch, MdOpenInNew, MdDownload, MdCloudUpload, MdClose, MdInfo, MdAssignment, MdDescription } from "react-icons/md";
 import PageHero from "../ui/PageHero";
 
@@ -298,47 +299,48 @@ export default function ManualsTab() {
             <h3>{search || filterCategory !== "All" ? "No matching manuals" : "No manuals yet"}</h3>
             <p>{search || filterCategory !== "All" ? "Try adjusting your search or filter" : role === "admin" ? "Click 'Upload Manual' to add your first manual" : "No manuals have been uploaded yet"}</p>
           </div>
-        ) : filtered.map((m) => {
+          ) : filtered.map((m) => {
           const fileType = getFileType(m.fileName);
           return (
             <div className="manual-card" key={m.id}>
-              <div className="manual-card-icon">
-                {fileType ? (
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                    <MdMenuBook size={28} style={{ color: fileType.color }} />
-                    <span style={{ fontSize: 9, fontWeight: 700, color: fileType.color, background: `${fileType.color}15`, padding: "1px 6px", borderRadius: 4 }}>{fileType.label}</span>
-                  </div>
-                ) : (
-                  <MdMenuBook size={32} />
-                )}
+              <div className="manual-card-top">
+                <div className="manual-card-icon">
+                  {fileType ? (
+                    <div className="manual-icon-inner" style={{ color: fileType.color }}>
+                      <MdMenuBook size={28} />
+                      <span className="manual-file-badge" style={{ background: `${fileType.color}15`, color: fileType.color, border: `1px solid ${fileType.color}30` }}>{fileType.label}</span>
+                    </div>
+                  ) : (
+                    <div className="manual-icon-inner"><MdMenuBook size={28} /></div>
+                  )}
+                </div>
+                <div className="manual-card-top-right">
+                  <span className="manual-card-category">{m.category}</span>
+                </div>
               </div>
               <div className="manual-card-body">
-                <h4>{m.title}</h4>
-                <span className="manual-card-category">{m.category}</span>
-                {m.description && <p className="manual-card-desc">{m.description}</p>}
-                {m.fileName && <span className="manual-filename">{m.fileName}</span>}
+                <h4 title={m.title}>{m.title}</h4>
+                {m.description && <p className="manual-card-desc" title={m.description}>{m.description}</p>}
+                {m.fileName && <span className="manual-filename" title={m.fileName}>{m.fileName}</span>}
+              </div>
+              <div className="manual-card-footer">
                 <div className="manual-card-meta">
                   {m.createdAt && <span className="manual-meta-date">{timeAgo(m.updatedAt || m.createdAt)}</span>}
                   {m.uploaderName && <span className="manual-meta-uploader">by {m.uploaderName}</span>}
                 </div>
-              </div>
-              <div className="manual-card-actions">
-                {m.fileUrl && (
-                  <>
-                    <a href={m.fileUrl} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-primary" onClick={(e) => e.stopPropagation()}>
+                <div className="manual-card-actions">
+                  {m.fileUrl && (
+                    <a href={m.fileUrl} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-primary manual-open-btn" onClick={(e) => e.stopPropagation()}>
                       <MdOpenInNew size={14} /> Open
                     </a>
-                    <a href={m.fileUrl} download className="btn btn-sm btn-outline" onClick={(e) => e.stopPropagation()}>
-                      <MdDownload size={14} />
-                    </a>
-                  </>
-                )}
-                {role === "admin" && (
-                  <>
-                    <button className="btn btn-sm btn-outline" onClick={() => openEdit(m)}><MdEdit size={14} /></button>
-                    <button className="btn btn-sm btn-danger" onClick={() => handleDelete(m.id)}><MdDelete size={14} /></button>
-                  </>
-                )}
+                  )}
+                  {role === "admin" && (
+                    <div className="manual-admin-actions">
+                      <button className="btn btn-sm btn-outline" onClick={() => openEdit(m)}><MdEdit size={14} /></button>
+                      <button className="btn btn-sm btn-danger" onClick={() => handleDelete(m.id)}><MdDelete size={14} /></button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           );
