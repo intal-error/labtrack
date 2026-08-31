@@ -1,6 +1,6 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "npm run build -w frontend",
   "outputDirectory": "frontend/dist",
-  "framework": "vite",
-  "installCommand": "npm install"
+  "installCommand": "npm install",
+  "framework": null
 }
