@@ -1,6 +1,6 @@
 const { db, auth } = require("../config/firebase");
 
-const ADMIN_COLLECTIONS = ["admin", "admins"];
+const ADMIN_COLLECTIONS = ["admins"];
 
 const getAll = async (req, res) => {
   try {
@@ -19,7 +19,7 @@ const getAll = async (req, res) => {
 
     res.json(admins);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -31,7 +31,7 @@ const getActiveAdmins = async (req, res) => {
       .filter((a) => (a.status || "active") === "active");
     res.json(admins);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -91,7 +91,7 @@ const create = async (req, res) => {
     if (err.code === "auth/email-already-in-use") {
       return res.status(409).json({ error: "Email already registered" });
     }
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -173,7 +173,7 @@ const update = async (req, res) => {
 
     res.json({ message: "Admin updated" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -214,7 +214,7 @@ const toggleStatus = async (req, res) => {
 
     res.json({ message: `Admin ${newStatus}`, status: newStatus });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -247,7 +247,7 @@ const remove = async (req, res) => {
     try { await auth.updateUser(id, { disabled: true }); } catch (e) {}
     res.json({ message: "Admin deactivated" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 

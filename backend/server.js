@@ -128,8 +128,28 @@ const methodAwareLimiter = (req, res, next) => {
 
 // Public routes
 app.use("/api/auth", authLimiter, authRoutes);
-app.use("/api/attendance", verifyToken, attendanceLimiter, attendanceRoutes);
-app.get("/api/health", (req, res) => res.json({ status: "ok", timestamp: new Date().toISOString() }));
+
+// Public attendance kiosk routes (no auth required)
+app.use("/api/attendance", attendanceLimiter, (req, res, next) => {
+  const publicPaths = ["/time-in", "/time-out", "/auto-scan"];
+  const isLookup = req.path.startsWith("/lookup-student/");
+  if (publicPaths.includes(req.path) || isLookup) {
+    return next();
+  }
+  return verifyToken(req, res, next);
+}, attendanceRoutes);
+app.get("/api/health", async (req, res) => {
+  const health = { status: "ok", timestamp: new Date().toISOString() };
+  try {
+    const { db } = require("./src/config/firebase");
+    await db.collection("_health").doc("check").set({ checkedAt: new Date() }, { merge: true });
+    health.database = "connected";
+  } catch {
+    health.status = "degraded";
+    health.database = "disconnected";
+  }
+  res.json(health);
+});
 
 // Protected routes (any authenticated user)
 app.use("/api/catalog", verifyToken, methodAwareLimiter, catalogRoutes);
@@ -158,6 +178,21 @@ cron.schedule("*/30 * * * *", () => {
   checkOverdueTransactions().catch(console.error);
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+const gracefulShutdown = (signal) => {
+  console.log(`\n${signal} received. Shutting down gracefully...`);
+  server.close(() => {
+    console.log("Server closed.");
+    process.exit(0);
+  });
+  setTimeout(() => {
+    console.error("Forced shutdown after timeout.");
+    process.exit(1);
+  }, 10000);
+};
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));

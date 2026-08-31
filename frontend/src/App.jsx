@@ -54,7 +54,7 @@ function IndexRedirect() {
 function GuestRoute({ children }) {
   const { user, role, loading } = useAuth();
   if (loading) return <div className="loading-screen"><div className="spinner-lg" /></div>;
-  if (user && role) return <Navigate to="/home" replace />;
+  if (user && role !== null) return <Navigate to="/home" replace />;
   return children;
 }
 

@@ -10,10 +10,9 @@ const getAll = async (req, res) => {
 
     let notifications = [];
     if (isAdmin) {
-      // Admins see notifications targeted to them
+      // Admins see notifications targeted to them (sorted in memory to avoid composite index)
       const snap = await db.collection(COLLECTION)
         .where("targetUserId", "==", userId)
-        .orderBy("createdAt", "desc")
         .get();
       snap.forEach((doc) => {
         const data = doc.data();
@@ -21,6 +20,11 @@ const getAll = async (req, res) => {
         if (!dismissedBy.includes(userId)) {
           notifications.push({ id: doc.id, ...data });
         }
+      });
+      notifications.sort((a, b) => {
+        const da = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
+        const db2 = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
+        return (db2?.getTime?.() || 0) - (da?.getTime?.() || 0);
       });
     } else {
       // Non-admins see only their own notifications
@@ -42,7 +46,7 @@ const getAll = async (req, res) => {
     }
     res.json(notifications);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -67,7 +71,7 @@ const getByUser = async (req, res) => {
     });
     res.json(notifications);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -95,7 +99,7 @@ const create = async (req, res) => {
     const ref = await db.collection(COLLECTION).add(data);
     res.status(201).json({ id: ref.id, message: "Notification created" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -116,7 +120,7 @@ const markRead = async (req, res) => {
     );
     res.json({ message: "Notification marked as read" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -126,20 +130,22 @@ const markAllRead = async (req, res) => {
     const snap = await db.collection(COLLECTION)
       .where("targetUserId", "==", userId)
       .get();
-    const batch = db.batch();
-    snap.forEach((doc) => {
-      const data = doc.data();
-      if (data.read !== true) {
-        batch.set(doc.ref, {
-          read: true,
-          readAt: new Date(),
-        }, { merge: true });
-      }
-    });
-    await batch.commit();
+
+    const BATCH_SIZE = 500;
+    const docs = snap.docs.filter((doc) => doc.data().read !== true);
+
+    for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+      const batch = db.batch();
+      const chunk = docs.slice(i, i + BATCH_SIZE);
+      chunk.forEach((doc) => {
+        batch.set(doc.ref, { read: true, readAt: new Date() }, { merge: true });
+      });
+      await batch.commit();
+    }
+
     res.json({ message: "All notifications marked as read" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -153,7 +159,7 @@ const dismiss = async (req, res) => {
     );
     res.json({ message: "Notification dismissed" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 

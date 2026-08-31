@@ -46,7 +46,7 @@ const uploadImage = async (req, res) => {
       res.status(400).json({ error: "Upload failed", details: data });
     }
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -94,7 +94,7 @@ const uploadDocument = async (req, res) => {
     const docRef = await db.collection("documents").add(docData);
     res.status(201).json({ id: docRef.id, ...docData });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -121,7 +121,7 @@ const uploadConditionPhoto = async (req, res) => {
       res.status(400).json({ error: "Upload failed", details: data });
     }
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 

@@ -26,7 +26,7 @@ const getAll = async (req, res) => {
 
     res.json(enriched);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -45,7 +45,7 @@ const create = async (req, res) => {
     const ref = await db.collection(COLLECTION).add(data);
     res.status(201).json({ id: ref.id, ...data });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -65,7 +65,7 @@ const update = async (req, res) => {
     await db.collection(COLLECTION).doc(id).update(updates);
     res.json({ message: "Manual updated" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -77,7 +77,7 @@ const remove = async (req, res) => {
     await db.collection(COLLECTION).doc(id).delete();
     res.json({ message: "Manual deleted" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 

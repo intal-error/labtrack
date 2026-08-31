@@ -26,7 +26,7 @@ const getSettings = async (req, res) => {
       res.json({ id: DOC_ID, ...DEFAULTS });
     }
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -49,7 +49,7 @@ const updateSettings = async (req, res) => {
     const doc = await db.collection(COLLECTION).doc(DOC_ID).get();
     res.json({ id: doc.id, ...doc.data() });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 

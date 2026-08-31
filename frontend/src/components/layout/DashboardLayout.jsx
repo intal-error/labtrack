@@ -105,7 +105,7 @@ export default function DashboardLayout() {
     if (role === "student" && userProfile?.schoolId) {
       fetchLogbookStatus();
     }
-  }, [role, userProfile?.schoolId, location.pathname]);
+  }, [role, userProfile?.schoolId]);
 
   useEffect(() => {
     if (location.pathname === "/notifications") {

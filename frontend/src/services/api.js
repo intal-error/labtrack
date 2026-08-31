@@ -247,7 +247,10 @@ export const api = {
     try {
       const res = await fetch(`${API_URL}/upload/condition-photo`, { method: "POST", headers, body: formData, signal: controller.signal });
       clearTimeout(timer);
-      if (!res.ok) throw new Error("Upload failed");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Upload failed" }));
+        throw new Error(err.error || `Upload failed (HTTP ${res.status})`);
+      }
       return res.json();
     } catch (err) {
       clearTimeout(timer);

@@ -84,7 +84,7 @@ const getProfile = async (req, res) => {
     }
     res.json({ id: doc.id, ...doc.data() });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -116,7 +116,7 @@ const updateProfile = async (req, res) => {
     res.json({ message: "Profile updated successfully" });
   } catch (err) {
     console.error("Profile update error:", err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -175,7 +175,7 @@ const changePassword = async (req, res) => {
     res.json({ message: "Password changed successfully" });
   } catch (err) {
     console.error("Password change error:", err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 

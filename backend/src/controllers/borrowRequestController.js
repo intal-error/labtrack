@@ -114,7 +114,7 @@ const getAllRequests = async (req, res) => {
 
     res.json(requests);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -133,7 +133,7 @@ const getMyRequests = async (req, res) => {
       });
     res.json(requests);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -225,9 +225,14 @@ const createRequest = async (req, res) => {
     // Notify ALL admins assigned to the target course
     try {
       const targetAdmins = await getTargetCourseAdmins(finalTargetCourse);
-      if (targetAdmins.length > 0) {
-        for (const admin of targetAdmins) {
-          await db.collection(NOTIF).add({
+      const adminList = targetAdmins.length > 0 ? targetAdmins : (await getActiveAdminsList());
+      const BATCH_SIZE = 500;
+      for (let i = 0; i < adminList.length; i += BATCH_SIZE) {
+        const batch = db.batch();
+        const chunk = adminList.slice(i, i + BATCH_SIZE);
+        chunk.forEach((admin) => {
+          const ref = db.collection(NOTIF).doc();
+          batch.set(ref, {
             targetUserId: admin.id,
             type: "info",
             title: "New Borrow Request",
@@ -237,25 +242,8 @@ const createRequest = async (req, res) => {
             link: "/borrow-requests",
             createdAt: new Date(),
           });
-        }
-      } else {
-        // Fallback: notify only active admins
-        const adminsSnap = await db.collection(USERS)
-          .where("role", "==", "admin")
-          .where("status", "==", "active")
-          .get();
-        for (const adminDoc of adminsSnap.docs) {
-          await db.collection(NOTIF).add({
-            targetUserId: adminDoc.id,
-            type: "info",
-            title: "New Borrow Request",
-            message: `${user.firstName} ${user.lastName} requested to borrow "${item.itemName}" (Qty: ${quantity}) — Course: ${finalTargetCourse}`,
-            read: false,
-            dismissedBy: [],
-            link: "/borrow-requests",
-            createdAt: new Date(),
-          });
-        }
+        });
+        await batch.commit();
       }
     } catch (notifErr) {
       console.error("Failed to send borrow request notifications:", notifErr.message);
@@ -263,7 +251,7 @@ const createRequest = async (req, res) => {
 
     res.status(201).json({ message: "Borrow request submitted", id: docRef.id });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -386,7 +374,7 @@ const approveRequest = async (req, res) => {
 
     res.json({ message: "Request approved and borrow recorded" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -441,7 +429,7 @@ const rejectRequest = async (req, res) => {
 
     res.json({ message: "Request rejected" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -462,7 +450,7 @@ const cancelRequest = async (req, res) => {
 
     res.json({ message: "Request cancelled" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -540,7 +528,7 @@ const reassignRequest = async (req, res) => {
 
     res.json({ message: "Request reassigned successfully" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 

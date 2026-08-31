@@ -9,7 +9,7 @@ const getAll = async (req, res) => {
     snap.forEach((doc) => items.push({ id: doc.id, ...doc.data() }));
     res.json(items);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -25,7 +25,7 @@ const create = async (req, res) => {
     const ref = await db.collection(COLLECTION).add(sanitized);
     res.status(201).json({ id: ref.id, message: "Maintenance scheduled" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -41,7 +41,7 @@ const update = async (req, res) => {
     await db.collection(COLLECTION).doc(id).set(sanitized, { merge: true });
     res.json({ message: "Maintenance updated" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -53,7 +53,7 @@ const remove = async (req, res) => {
     await db.collection(COLLECTION).doc(id).delete();
     res.json({ message: "Maintenance deleted" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 

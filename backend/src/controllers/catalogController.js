@@ -8,7 +8,7 @@ const getAll = async (req, res) => {
     const items = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     res.json(items);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -18,7 +18,7 @@ const getById = async (req, res) => {
     if (!doc.exists) return res.status(404).json({ error: "Item not found" });
     res.json({ id: doc.id, ...doc.data() });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -55,14 +55,17 @@ const create = async (req, res) => {
     });
 
     try {
-      const usersSnap = await db.collection("users").get();
-      const notifPromises = usersSnap.docs
-        .filter((doc) => {
-          const role = doc.data().role;
-          return role === "student";
-        })
-        .map((doc) =>
-          db.collection("notifications").add({
+      const usersSnap = await db.collection("users")
+        .where("role", "==", "student")
+        .get();
+      const BATCH_SIZE = 500;
+      const studentDocs = usersSnap.docs;
+      for (let i = 0; i < studentDocs.length; i += BATCH_SIZE) {
+        const batch = db.batch();
+        const chunk = studentDocs.slice(i, i + BATCH_SIZE);
+        chunk.forEach((doc) => {
+          const ref = db.collection("notifications").doc();
+          batch.set(ref, {
             targetUserId: doc.id,
             type: "info",
             title: "New Catalog Item Available",
@@ -71,16 +74,17 @@ const create = async (req, res) => {
             dismissedBy: [],
             link: "/catalog",
             createdAt: new Date(),
-          })
-        );
-      await Promise.all(notifPromises);
+          });
+        });
+        await batch.commit();
+      }
     } catch {
       // Non-critical: item was created successfully, skip notification
     }
 
     res.status(201).json({ id: docRef.id, message: "Item created" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -122,7 +126,7 @@ const update = async (req, res) => {
 
     res.json({ message: "Item updated" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -149,7 +153,7 @@ const remove = async (req, res) => {
     await db.collection(COLLECTION).doc(id).delete();
     res.json({ message: "Item deleted" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 

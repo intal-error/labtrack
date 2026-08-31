@@ -63,7 +63,7 @@ const getBorrowed = async (req, res) => {
     const enriched = await enrichWithProfileURL(items);
     res.json(enriched);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -96,7 +96,7 @@ const getReturned = async (req, res) => {
     const enriched = await enrichWithProfileURL(items);
     res.json(enriched);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -114,7 +114,7 @@ const getMyBorrowed = async (req, res) => {
     const enriched = await enrichWithProfileURL(items);
     res.json(enriched);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -151,7 +151,7 @@ const getMyReturned = async (req, res) => {
     const enriched = await enrichWithProfileURL(items);
     res.json(enriched);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -174,7 +174,7 @@ const getDashboardCounts = async (req, res) => {
       students: studentsCount,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -193,7 +193,7 @@ const getChartData = async (req, res) => {
       inventory: inventorySnap.size,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -315,7 +315,7 @@ const recordBorrow = async (req, res) => {
 
     res.status(201).json({ message: "Borrow recorded" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -411,7 +411,7 @@ const recordReturn = async (req, res) => {
 
     res.status(201).json({ message: "Return recorded" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -470,7 +470,7 @@ const getRecentActivity = async (req, res) => {
     const enriched = await enrichWithProfileURL(merged);
     res.json(enriched);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 

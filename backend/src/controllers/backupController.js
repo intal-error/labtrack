@@ -35,7 +35,7 @@ const exportBackup = async (req, res) => {
       ...backup,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -61,7 +61,7 @@ const downloadBackup = async (req, res) => {
     res.setHeader("Content-Disposition", `attachment; filename=labtrack_backup_${new Date().toISOString().slice(0, 10)}.json`);
     res.json(backup);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -74,25 +74,33 @@ const importBackup = async (req, res) => {
 
     let imported = 0;
     let skipped = 0;
+    const BATCH_SIZE = 500;
 
     for (const col of COLLECTIONS) {
       const docs = backupData.collections[col];
       if (!docs || !Array.isArray(docs)) continue;
 
-      for (const doc of docs) {
-        const { id, ...data } = doc;
-        if (!id) continue;
+      for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+        const batch = db.batch();
+        const chunk = docs.slice(i, i + BATCH_SIZE);
 
-        const docRef = db.collection(col).doc(id);
-        const existing = await docRef.get();
+        for (const doc of chunk) {
+          const { id, ...data } = doc;
+          if (!id) continue;
 
-        if (existing.exists && !overwrite) {
-          skipped++;
-          continue;
+          if (!overwrite) {
+            const existing = await db.collection(col).doc(id).get();
+            if (existing.exists) {
+              skipped++;
+              continue;
+            }
+          }
+
+          batch.set(db.collection(col).doc(id), data, { merge: true });
+          imported++;
         }
 
-        await docRef.set(data, { merge: true });
-        imported++;
+        await batch.commit();
       }
     }
 
@@ -111,7 +119,7 @@ const importBackup = async (req, res) => {
       skipped,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -124,7 +132,7 @@ const getBackupHistory = async (req, res) => {
     const history = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     res.json(history);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 

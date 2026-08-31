@@ -68,7 +68,7 @@ const lookupStudent = async (req, res) => {
       email: data.email || "",
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -146,7 +146,7 @@ const timeIn = async (req, res) => {
       record: { id: docRef.id, ...record },
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -198,7 +198,7 @@ const timeOut = async (req, res) => {
       },
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -241,7 +241,7 @@ const getActiveStudents = async (req, res) => {
 
     res.json(records);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -266,7 +266,7 @@ const getTodayAttendance = async (req, res) => {
 
     res.json(records);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -293,7 +293,7 @@ const getDailyLog = async (req, res) => {
 
     res.json(records);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -344,7 +344,7 @@ const getAttendanceHistory = async (req, res) => {
 
     res.json({ records: paged, total, page: pageNum, totalPages: Math.ceil(total / limitNum) });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -405,7 +405,7 @@ const getRoomAttendanceHistory = async (req, res) => {
 
     res.json({ records: paged, total, page: pageNum, totalPages: Math.ceil(total / limitNum), roomName, years: uniqueYears, courses: uniqueCourses });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -444,7 +444,7 @@ const getStudentAttendance = async (req, res) => {
       },
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -495,7 +495,7 @@ const getMyAttendance = async (req, res) => {
       },
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -534,7 +534,7 @@ const getStats = async (req, res) => {
       uniqueStudentsThisWeek: uniqueStudents,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -568,7 +568,7 @@ const updateRecord = async (req, res) => {
     const updated = await doc.ref.get();
     res.json({ id: updated.id, ...updated.data() });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -580,7 +580,7 @@ const deleteRecord = async (req, res) => {
     await doc.ref.delete();
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -714,7 +714,7 @@ const exportToExcel = async (req, res) => {
     await workbook.xlsx.write(res);
     res.end();
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -727,7 +727,7 @@ const getRooms = async (req, res) => {
     rooms.sort((a, b) => (a.roomName || "").localeCompare(b.roomName || ""));
     res.json(rooms);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -759,7 +759,7 @@ const createRoom = async (req, res) => {
     const docRef = await db.collection(ROOMS).add(record);
     res.json({ id: docRef.id, ...record });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -786,7 +786,7 @@ const updateRoom = async (req, res) => {
     const updated = await doc.ref.get();
     res.json({ id: updated.id, ...updated.data() });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -798,7 +798,7 @@ const deleteRoom = async (req, res) => {
     await doc.ref.delete();
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -817,7 +817,7 @@ const getRoomQR = async (req, res) => {
 
     res.json({ dataUrl, roomName: data.roomName, qrData: data.qrData });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -847,7 +847,7 @@ const getStudentQR = async (req, res) => {
       qrData,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -979,7 +979,7 @@ const autoScan = async (req, res) => {
       record: { id: docRef.id, ...record },
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 

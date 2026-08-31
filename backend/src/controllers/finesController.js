@@ -36,7 +36,7 @@ const getAllFines = async (req, res) => {
 
     res.json(enriched);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -63,7 +63,7 @@ const getMyFines = async (req, res) => {
 
     res.json(enriched);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -92,7 +92,7 @@ const checkRestriction = async (req, res) => {
       pendingCount: snap.size,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -114,7 +114,7 @@ const payFine = async (req, res) => {
 
     res.json({ message: "Fine marked as paid" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 
@@ -135,7 +135,7 @@ const waiveFine = async (req, res) => {
 
     res.json({ message: "Fine waived" });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 

@@ -16,20 +16,16 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const timeout = setTimeout(() => setLoading(false), 5000);
-
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
         try {
-          const profilePromise = (async () => {
-            const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
-            if (userDoc.exists()) {
-              const data = userDoc.data();
-              setRole((data.role || "").toLowerCase() || null);
-              setUserProfile({ id: userDoc.id, ...data });
-              return;
-            }
+          const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+          if (userDoc.exists()) {
+            const data = userDoc.data();
+            setRole((data.role || "").toLowerCase() || null);
+            setUserProfile({ id: userDoc.id, ...data });
+          } else {
             const adminDoc = await getDoc(doc(db, "admins", firebaseUser.uid));
             if (adminDoc.exists()) {
               const data = adminDoc.data();
@@ -39,13 +35,9 @@ export function AuthProvider({ children }) {
               setRole(null);
               setUserProfile(null);
             }
-          })();
-
-          await Promise.race([
-            profilePromise,
-            new Promise((resolve) => setTimeout(resolve, 4000)),
-          ]);
-        } catch {
+          }
+        } catch (err) {
+          console.error("Failed to load user profile:", err);
           setRole(null);
           setUserProfile(null);
         }
@@ -53,13 +45,9 @@ export function AuthProvider({ children }) {
         setRole(null);
         setUserProfile(null);
       }
-      clearTimeout(timeout);
       setLoading(false);
     });
-    return () => {
-      clearTimeout(timeout);
-      unsubscribe();
-    };
+    return () => unsubscribe();
   }, []);
 
   const logout = async () => {

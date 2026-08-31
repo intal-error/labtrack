@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../services/api";
+import { timeAgo, toDate } from "../utils/helpers";
 import toast from "react-hot-toast";
 import {
   MdQrCodeScanner, MdInventory, MdHistory, MdMenuBook,
@@ -10,14 +11,6 @@ import {
   MdHomeFilled, MdEventBusy, MdInventory2
 } from "react-icons/md";
 import "../styles/pages/home.css";
-
-function toDate(val) {
-  if (!val) return null;
-  if (typeof val?.toDate === "function") return val.toDate();
-  if (val?.seconds) return new Date(val.seconds * 1000);
-  const d = new Date(val);
-  return isNaN(d.getTime()) ? null : d;
-}
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -28,19 +21,6 @@ function getGreeting() {
 
 function formatDate() {
   return new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
-}
-
-function timeAgo(val) {
-  const date = toDate(val);
-  if (!date) return "";
-  const mins = Math.floor((Date.now() - date.getTime()) / 60000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  if (days < 7) return `${days}d ago`;
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 const NOTIF_STYLE = {
