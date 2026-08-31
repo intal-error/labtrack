@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { filterBySearch } from "../../utils/search";

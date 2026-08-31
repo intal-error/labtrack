@@ -7,15 +7,19 @@ const search = async (req, res) => {
     const { firstName, lastName } = req.query;
     if (!firstName || !lastName) return res.status(400).json({ error: "firstName and lastName required" });
 
-    const snap = await db.collection(USERS).get();
-    const queryFirst = firstName.trim().toLowerCase();
-    const queryLast = lastName.trim().toLowerCase();
+    const queryFirst = firstName.trim();
+    const queryLast = lastName.trim();
+
+    // Use Firestore where clause to narrow results (prefix match only)
+    const snap = await db.collection(USERS)
+      .where("firstName", ">=", queryFirst)
+      .where("firstName", "<=", queryFirst + "\uf8ff")
+      .get();
 
     const matched = snap.docs.filter((doc) => {
       const u = doc.data();
-      const f = String(u.firstName || "").trim().toLowerCase();
       const l = String(u.lastName || "").trim().toLowerCase();
-      return f.includes(queryFirst) && l.includes(queryLast);
+      return l.includes(queryLast.toLowerCase());
     });
 
     if (matched.length === 0) return res.status(404).json({ error: "No person found" });

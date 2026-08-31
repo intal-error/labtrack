@@ -1,36 +1,36 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
-import { Component } from "react";
+import { Component, Suspense, lazy } from "react";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
-import LoginPage from "./pages/LoginPage";
-import RegisterPage from "./pages/RegisterPage";
-import DashboardLayout from "./components/layout/DashboardLayout";
-import ScannerPage from "./pages/ScannerPage";
-import TransactionsPage from "./pages/TransactionsPage";
-import CatalogPage from "./pages/CatalogPage";
-import PersonaPage from "./pages/PersonaPage";
-import AdminPage from "./pages/AdminPage";
-import AboutPage from "./pages/AboutPage";
-import HomePage from "./pages/HomePage";
 
-import NotificationsTab from "./components/tabs/NotificationsTab";
-import SettingsTab from "./components/tabs/SettingsTab";
-import DocumentsTab from "./components/tabs/DocumentsTab";
-import MaintenanceTab from "./components/tabs/MaintenanceTab";
-import IncidentTab from "./components/tabs/IncidentTab";
-import ManualsTab from "./components/tabs/ManualsTab";
-import UsageLogsTab from "./components/tabs/UsageLogsTab";
-import ReportsTab from "./components/tabs/ReportsTab";
-import FinesTab from "./components/tabs/FinesTab";
-import BorrowRequestsTab from "./components/tabs/BorrowRequestsTab";
-import MyRequestsPage from "./pages/MyRequestsPage";
-import ProfilePage from "./pages/ProfilePage";
-import AttendanceKioskPage from "./pages/AttendanceKioskPage";
-import AttendanceLogsPage from "./pages/AttendanceLogsPage";
-import RoomAttendancePage from "./pages/RoomAttendancePage";
-import MyAttendancePage from "./pages/MyAttendancePage";
-import AttendanceScannerPage from "./pages/AttendanceScannerPage";
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const RegisterPage = lazy(() => import("./pages/RegisterPage"));
+const DashboardLayout = lazy(() => import("./components/layout/DashboardLayout"));
+const ScannerPage = lazy(() => import("./pages/ScannerPage"));
+const TransactionsPage = lazy(() => import("./pages/TransactionsPage"));
+const CatalogPage = lazy(() => import("./pages/CatalogPage"));
+const PersonaPage = lazy(() => import("./pages/PersonaPage"));
+const AdminPage = lazy(() => import("./pages/AdminPage"));
+const AboutPage = lazy(() => import("./pages/AboutPage"));
+const HomePage = lazy(() => import("./pages/HomePage"));
+const NotificationsTab = lazy(() => import("./components/tabs/NotificationsTab"));
+const SettingsTab = lazy(() => import("./components/tabs/SettingsTab"));
+const DocumentsTab = lazy(() => import("./components/tabs/DocumentsTab"));
+const MaintenanceTab = lazy(() => import("./components/tabs/MaintenanceTab"));
+const IncidentTab = lazy(() => import("./components/tabs/IncidentTab"));
+const ManualsTab = lazy(() => import("./components/tabs/ManualsTab"));
+const UsageLogsTab = lazy(() => import("./components/tabs/UsageLogsTab"));
+const ReportsTab = lazy(() => import("./components/tabs/ReportsTab"));
+const FinesTab = lazy(() => import("./components/tabs/FinesTab"));
+const BorrowRequestsTab = lazy(() => import("./components/tabs/BorrowRequestsTab"));
+const MyRequestsPage = lazy(() => import("./pages/MyRequestsPage"));
+const ProfilePage = lazy(() => import("./pages/ProfilePage"));
+const AttendanceKioskPage = lazy(() => import("./pages/AttendanceKioskPage"));
+const AttendanceLogsPage = lazy(() => import("./pages/AttendanceLogsPage"));
+const RoomAttendancePage = lazy(() => import("./pages/RoomAttendancePage"));
+const MyAttendancePage = lazy(() => import("./pages/MyAttendancePage"));
+const AttendanceScannerPage = lazy(() => import("./pages/AttendanceScannerPage"));
 
 
 function ProtectedRoute({ children }) {
@@ -90,6 +90,7 @@ function App() {
         <ThemeProvider>
           <ErrorBoundary>
           <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
+          <Suspense fallback={<div className="loading-screen"><div className="spinner-lg" /></div>}>
           <Routes>
             <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
             <Route path="/register" element={<GuestRoute><RegisterPage /></GuestRoute>} />
@@ -127,6 +128,7 @@ function App() {
             </Route>
             <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
+          </Suspense>
           </ErrorBoundary>
         </ThemeProvider>
       </AuthProvider>

@@ -226,7 +226,7 @@ export default function CatalogPage() {
               <div className="catalog-card" key={item.id}>
                 <div className="catalog-card-image">
                   {item.imageUrl ? (
-                    <img src={item.imageUrl} alt={item.itemName} onClick={() => setImageOverlay(item.imageUrl)} />
+                    <img src={item.imageUrl} alt={item.itemName} loading="lazy" onClick={() => setImageOverlay(item.imageUrl)} />
                   ) : (
                     <div className="item-placeholder">
                       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
@@ -295,7 +295,7 @@ export default function CatalogPage() {
                     <td className="table-name-cell">
                       <div className="table-item-name">
                         {item.imageUrl ? (
-                          <img src={item.imageUrl} alt="" className="table-item-thumb" onClick={() => setImageOverlay(item.imageUrl)} />
+                          <img src={item.imageUrl} alt="" className="table-item-thumb" loading="lazy" onClick={() => setImageOverlay(item.imageUrl)} />
                         ) : (
                           <div className="table-item-thumb-placeholder">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>

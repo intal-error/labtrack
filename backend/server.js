@@ -2,6 +2,8 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
+const compression = require("compression");
+const NodeCache = require("node-cache");
 const cron = require("node-cron");
 const rateLimit = require("express-rate-limit");
 const { ipKeyGenerator } = rateLimit;
@@ -39,7 +41,32 @@ if (process.env.NODE_ENV === "production" && allowedOrigins.includes("http://loc
 
 app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use(helmet());
+app.use(compression());
 app.use(express.json({ limit: "1mb" }));
+
+// In-memory cache for read-heavy endpoints (30s default TTL)
+const cache = new NodeCache({ stdTTL: 30, checkperiod: 60, useClones: false });
+
+function cacheMiddleware(ttl = 30) {
+  return (req, res, next) => {
+    if (req.method !== "GET") return next();
+    const key = `__cache__${req.originalUrl}`;
+    const cached = cache.get(key);
+    if (cached) {
+      res.set("X-Cache", "HIT");
+      return res.json(cached);
+    }
+    const originalJson = res.json.bind(res);
+    res.json = (body) => {
+      if (res.statusCode === 200) {
+        cache.set(key, body, ttl);
+        res.set("X-Cache", "MISS");
+      }
+      return originalJson(body);
+    };
+    next();
+  };
+}
 
 // Rate limiters
 const generalLimiter = rateLimit({
@@ -142,7 +169,7 @@ app.get("/api/health", async (req, res) => {
   const health = { status: "ok", timestamp: new Date().toISOString() };
   try {
     const { db } = require("./src/config/firebase");
-    await db.collection("_health").doc("check").set({ checkedAt: new Date() }, { merge: true });
+    await db.collection("_health").doc("check").get();
     health.database = "connected";
   } catch {
     health.status = "degraded";
@@ -152,23 +179,23 @@ app.get("/api/health", async (req, res) => {
 });
 
 // Protected routes (any authenticated user)
-app.use("/api/catalog", verifyToken, methodAwareLimiter, catalogRoutes);
+app.use("/api/catalog", verifyToken, methodAwareLimiter, cacheMiddleware(30), catalogRoutes);
 app.use("/api/transactions", verifyToken, methodAwareLimiter, transactionRoutes);
 app.use("/api/users", verifyToken, methodAwareLimiter, userRoutes);
 app.use("/api/notifications", verifyToken, methodAwareLimiter, notificationsRoutes);
 app.use("/api/documents", verifyToken, authorize("admin"), methodAwareLimiter, documentsRoutes);
-app.use("/api/reports", verifyToken, authorize("admin"), generalLimiter, reportRoutes);
+app.use("/api/reports", verifyToken, authorize("admin"), generalLimiter, cacheMiddleware(15), reportRoutes);
 app.use("/api/upload", verifyToken, uploadLimiter, uploadRoutes);
-app.use("/api/maintenance", verifyToken, authorize("admin"), methodAwareLimiter, maintenanceRoutes);
-app.use("/api/incidents", verifyToken, methodAwareLimiter, incidentRoutes);
-app.use("/api/manuals", verifyToken, methodAwareLimiter, manualRoutes);
-app.use("/api/fines", verifyToken, methodAwareLimiter, finesRoutes);
+app.use("/api/maintenance", verifyToken, authorize("admin"), methodAwareLimiter, cacheMiddleware(30), maintenanceRoutes);
+app.use("/api/incidents", verifyToken, methodAwareLimiter, cacheMiddleware(15), incidentRoutes);
+app.use("/api/manuals", verifyToken, methodAwareLimiter, cacheMiddleware(60), manualRoutes);
+app.use("/api/fines", verifyToken, methodAwareLimiter, cacheMiddleware(15), finesRoutes);
 app.use("/api/backup", verifyToken, authorize("admin"), backupLimiter, backupRoutes);
-app.use("/api/borrow-requests", verifyToken, methodAwareLimiter, borrowRequestRoutes);
+app.use("/api/borrow-requests", verifyToken, methodAwareLimiter, cacheMiddleware(15), borrowRequestRoutes);
 
 // Admin-only routes
-app.use("/api/admin", verifyToken, authorize("admin"), methodAwareLimiter, adminRoutes);
-app.use("/api/settings", verifyToken, authorize("admin"), methodAwareLimiter, settingsRoutes);
+app.use("/api/admin", verifyToken, authorize("admin"), methodAwareLimiter, cacheMiddleware(30), adminRoutes);
+app.use("/api/settings", verifyToken, authorize("admin"), methodAwareLimiter, cacheMiddleware(60), settingsRoutes);
 
 // Error handler
 app.use(errorHandler);

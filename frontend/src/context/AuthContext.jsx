@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect, useMemo, useCallback } from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../services/firebase";
@@ -50,7 +50,7 @@ export function AuthProvider({ children }) {
     return () => unsubscribe();
   }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await signOut(auth);
     } catch {
@@ -68,10 +68,15 @@ export function AuthProvider({ children }) {
     if (savedTheme) {
       localStorage.setItem("theme", savedTheme);
     }
-  };
+  }, []);
+
+  const value = useMemo(
+    () => ({ user, role, userProfile, setUserProfile, loading, logout }),
+    [user, role, userProfile, loading, logout]
+  );
 
   return (
-    <AuthContext.Provider value={{ user, role, userProfile, setUserProfile, loading, logout }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

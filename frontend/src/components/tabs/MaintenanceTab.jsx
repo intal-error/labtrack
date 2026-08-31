@@ -387,7 +387,7 @@ export default function MaintenanceTab() {
               <div className="catalog-card" key={item.id} onClick={() => setSelectedItem(item)}>
                 {item.photoURL && (
                   <div className="catalog-card-image">
-                    <img src={item.photoURL} alt={item.itemName} />
+                    <img src={item.photoURL} alt={item.itemName} loading="lazy" />
                   </div>
                 )}
                 <div className="catalog-card-body">
@@ -421,7 +421,7 @@ export default function MaintenanceTab() {
               <div className={`maintenance-card ${dateStyle}`} key={item.id} onClick={() => setSelectedItem(item)}>
                 {item.photoURL && (
                   <div className="maintenance-card-photo">
-                    <img src={item.photoURL} alt={item.itemName} />
+                    <img src={item.photoURL} alt={item.itemName} loading="lazy" />
                   </div>
                 )}
                 <div className="maintenance-card-header">

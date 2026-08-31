@@ -157,21 +157,18 @@ const getMyReturned = async (req, res) => {
 
 const getDashboardCounts = async (req, res) => {
   try {
-    const [borrowedSnap, returnedSnap, studentsSnap] = await Promise.all([
+    const [borrowedSnap, returnedSnap, studentsSnap, usersSnap] = await Promise.all([
       db.collection(TRANS).where("action", "==", "borrowed").get(),
       db.collection(TRANS).where("action", "==", "returned").get(),
       db.collection(USERS).where("role", "==", "student").get(),
+      db.collection(USERS).get(),
     ]);
     const activeBorrowed = borrowedSnap.docs.filter((doc) => isOpenBorrow(doc.data())).length;
-    const returnedCount = returnedSnap.size;
-    const studentsCount = studentsSnap.size;
-    const usersSnap = await db.collection(USERS).get();
-    const usersCount = usersSnap.size;
     res.json({
       borrowed: activeBorrowed,
-      returned: returnedCount,
-      users: usersCount,
-      students: studentsCount,
+      returned: returnedSnap.size,
+      users: usersSnap.size,
+      students: studentsSnap.size,
     });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });

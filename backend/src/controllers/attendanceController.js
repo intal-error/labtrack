@@ -209,11 +209,11 @@ const getActiveStudents = async (req, res) => {
     const today = getTodayString();
     const { room } = req.query;
 
-    // Fetch all records, filter in memory (avoids composite index requirement)
-    const snap = await db.collection(ATTENDANCE).get();
-    let records = snap.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }))
-      .filter((r) => r.status === "active" && r.date === today);
+    const snap = await db.collection(ATTENDANCE)
+      .where("date", "==", today)
+      .where("status", "==", "active")
+      .get();
+    let records = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
     if (req.adminAssignment?.assignedCourse) {
       records = records.filter((r) => r.course === req.adminAssignment.assignedCourse);
@@ -301,8 +301,10 @@ const getAttendanceHistory = async (req, res) => {
   try {
     const { from, to, course, year, subject, professor, labRoom, student, page = 1, limit = 50 } = req.query;
 
-    // Fetch all records - single-field queries are fine, no composite index needed
-    const snap = await db.collection(ATTENDANCE).get();
+    let query = db.collection(ATTENDANCE);
+    if (from) query = query.where("date", ">=", from);
+    if (to) query = query.where("date", "<=", to);
+    const snap = await query.get();
     let records = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
     // Apply all filters in memory
@@ -361,8 +363,9 @@ const getRoomAttendanceHistory = async (req, res) => {
     const roomCode = roomData.roomCode;
     const roomName = roomData.roomName;
 
-    // Fetch all records, filter by roomCode in memory (single-field query)
-    const snap = await db.collection(ATTENDANCE).get();
+    const snap = await db.collection(ATTENDANCE)
+      .where("roomCode", "==", roomCode)
+      .get();
     let records = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
     // Filter by roomCode (normalize both sides to handle raw vs normalized mismatch)
@@ -503,27 +506,30 @@ const getStats = async (req, res) => {
   try {
     const today = getTodayString();
 
-    // Fetch all records, filter in memory (avoids composite index requirement)
-    const snap = await db.collection(ATTENDANCE).get();
-    let allRecords = snap.docs.map((d) => d.data());
-
-    if (req.adminAssignment?.assignedCourse) {
-      allRecords = allRecords.filter((r) => r.course === req.adminAssignment.assignedCourse);
-    }
-
-    const todayRecords = allRecords.filter((r) => r.date === today);
-    const activeRecords = allRecords.filter((r) => r.status === "active" && r.date === today);
-
-    const totalToday = todayRecords.length;
-    const currentlyInside = activeRecords.length;
-    const completedToday = todayRecords.filter((r) => r.status === "timed_out").length;
-    const totalMinutesToday = todayRecords.reduce((sum, r) => sum + (r.totalDuration || 0), 0);
-
-    // Unique students this week
     const weekStart = new Date();
     weekStart.setDate(weekStart.getDate() - weekStart.getDay());
     const weekStartStr = weekStart.toISOString().slice(0, 10);
-    const weekRecords = allRecords.filter((r) => r.date >= weekStartStr && r.date <= today);
+
+    const [todaySnap, activeSnap, weekSnap] = await Promise.all([
+      db.collection(ATTENDANCE).where("date", "==", today).get(),
+      db.collection(ATTENDANCE).where("date", "==", today).where("status", "==", "active").get(),
+      db.collection(ATTENDANCE).where("date", ">=", weekStartStr).where("date", "<=", today).get(),
+    ]);
+
+    let todayRecords = todaySnap.docs.map((d) => d.data());
+    if (req.adminAssignment?.assignedCourse) {
+      todayRecords = todayRecords.filter((r) => r.course === req.adminAssignment.assignedCourse);
+    }
+
+    let weekRecords = weekSnap.docs.map((d) => d.data());
+    if (req.adminAssignment?.assignedCourse) {
+      weekRecords = weekRecords.filter((r) => r.course === req.adminAssignment.assignedCourse);
+    }
+
+    const totalToday = todayRecords.length;
+    const currentlyInside = activeSnap.size;
+    const completedToday = todayRecords.filter((r) => r.status === "timed_out").length;
+    const totalMinutesToday = todayRecords.reduce((sum, r) => sum + (r.totalDuration || 0), 0);
     const uniqueStudents = new Set(weekRecords.map((d) => d.studentSchoolId)).size;
 
     res.json({
@@ -590,15 +596,16 @@ const exportToExcel = async (req, res) => {
   try {
     const { from, to, course, year, subject, professor, labRoom, student, date } = req.query;
 
-    // Fetch all records, filter in memory (avoids composite index requirement)
-    const snap = await db.collection(ATTENDANCE).get();
-    let records = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-
-    // Apply all filters in memory
     const fromDate = date || from;
     const toDateVal = date || to;
-    if (fromDate) records = records.filter((r) => r.date >= fromDate);
-    if (toDateVal) records = records.filter((r) => r.date <= toDateVal);
+
+    let query = db.collection(ATTENDANCE);
+    if (fromDate) query = query.where("date", ">=", fromDate);
+    if (toDateVal) query = query.where("date", "<=", toDateVal);
+    const snap = await query.get();
+    let records = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
+    // Apply remaining filters in memory
     if (course) records = records.filter((r) => r.course === course);
     if (year) records = records.filter((r) => r.year === year);
     if (subject) records = records.filter((r) => r.subject === subject);

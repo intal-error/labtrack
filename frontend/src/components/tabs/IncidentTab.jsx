@@ -466,7 +466,7 @@ export default function IncidentTab() {
                 <div className="incident-detail-photos">
                   <div className="incident-photos-grid">
                     {selectedIncident.photos.map((url, i) => (
-                      <img key={i} src={url} alt={`Evidence ${i + 1}`} onClick={() => setImageOverlay(url)} style={{ cursor: "pointer" }} />
+                      <img key={i} src={url} alt={`Evidence ${i + 1}`} loading="lazy" onClick={() => setImageOverlay(url)} style={{ cursor: "pointer" }} />
                     ))}
                   </div>
                 </div>
