@@ -141,7 +141,7 @@ export default function ProfilePage() {
 
   return (
     <div className="profile-page">
-      <PageHero icon={MdAccountCircle} title="My Profile" subtitle="Manage your account settings" />
+      <PageHero icon={MdAccountCircle} title="My Profile" />
 
       <div className="profile-card">
         <div className="profile-sidebar">

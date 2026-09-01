@@ -76,7 +76,7 @@ export default function RoomAttendancePage() {
     <div className="attendance-page">
       <div className="attendance-header">
         <div className="room-attendance-header-row">
-          <button className="admin-back-btn" onClick={() => navigate("/attendance")}>
+          <button className="admin-back-btn" onClick={() => navigate("/attendance?tab=roomLogs")}>
             <MdArrowBack size={20} />
           </button>
           <div>

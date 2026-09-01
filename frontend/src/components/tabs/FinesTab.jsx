@@ -7,6 +7,7 @@ import { filterBySearch } from "../../utils/search";
 import "../../styles/pages/tabs.css";
 import { MdAttachMoney, MdSearch, MdCheckCircle, MdCancel, MdWarning, MdSort, MdPerson } from "react-icons/md";
 import PageHero from "../ui/PageHero";
+import Pagination from "../ui/Pagination";
 
 const STATUS_COLORS = {
   pending: "#f57c00",
@@ -30,13 +31,29 @@ export default function FinesTab() {
   const [waiveReason, setWaiveReason] = useState("");
   const [sortBy, setSortBy] = useState("oldest");
   const [processing, setProcessing] = useState(null);
+  const [page, setPage] = useState(1);
+  const [paginationData, setPaginationData] = useState(null);
 
   useEffect(() => { if (role) load(); }, [role]);
+  useEffect(() => { setPage(1); }, [search, filter]);
+  useEffect(() => { if (role) load(); }, [page]);
 
   async function load() {
     try {
-      const data = role === "admin" ? await api.getFines() : await api.getMyFines();
-      setFines(data || []);
+      const params = { page, limit: 25 };
+      if (search.trim()) params.search = search.trim();
+      if (filter !== "all") params.status = filter;
+      const data = role === "admin" ? await api.getFines(params) : await api.getMyFines(params);
+      if (Array.isArray(data)) {
+        setFines(data);
+        setPaginationData(null);
+      } else if (data && data.data) {
+        setFines(data.data);
+        setPaginationData(data.pagination || null);
+      } else {
+        setFines([]);
+        setPaginationData(null);
+      }
     } catch {
       toast.error("Failed to load fines");
     } finally {
@@ -105,7 +122,7 @@ export default function FinesTab() {
 
   return (
     <div className="tab-content">
-      <PageHero icon={MdAttachMoney} title="Fines" subtitle="View and manage fines for overdue equipment" />
+      <PageHero icon={MdAttachMoney} title="Fines" />
 
       <div className="maintenance-stats">
         {[
@@ -198,6 +215,16 @@ export default function FinesTab() {
           </div>
         ))}
       </div>
+
+      {paginationData && (
+        <Pagination
+          currentPage={paginationData.page}
+          totalPages={paginationData.totalPages}
+          totalItems={paginationData.total}
+          pageSize={paginationData.limit}
+          onPageChange={setPage}
+        />
+      )}
 
       {selectedFine && (
         <Modal title="Fine Details" onClose={() => { setSelectedFine(null); setWaiveReason(""); }}>

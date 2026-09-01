@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { api } from "../../services/api";
 import toast from "react-hot-toast";
 import {
@@ -11,11 +10,9 @@ import {
   MdDownload,
   MdOutlineQrCode,
   MdOutlineBusiness,
-  MdVisibility,
 } from "react-icons/md";
 
 export default function RoomManagementTab() {
-  const navigate = useNavigate();
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -147,9 +144,6 @@ export default function RoomManagementTab() {
               </div>
 
               <div className="room-card-actions">
-                <button onClick={() => navigate(`/attendance/room/${room.id}`)}>
-                  <MdVisibility size={13} /> View Attendance
-                </button>
                 <button onClick={() => openEditModal(room)}>
                   <MdEdit size={13} /> Edit
                 </button>

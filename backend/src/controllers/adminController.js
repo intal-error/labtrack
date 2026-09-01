@@ -98,6 +98,11 @@ const create = async (req, res) => {
 const update = async (req, res) => {
   try {
     const { id } = req.params;
+
+    if (req.user.uid !== id) {
+      return res.status(403).json({ error: "You can only edit your own account" });
+    }
+
     const { firstName, lastName, contact, position, password, assignedCourse, assignedCourses, assignedYear, permissions, status } = req.body;
 
     // Validate password BEFORE any Firestore writes

@@ -28,7 +28,7 @@ export default function PersonaPage() {
 
   return (
     <section className="persona-page">
-      <PageHero icon={MdSearch} title="Persona" subtitle="Look up student or faculty records" />
+      <PageHero icon={MdSearch} title="Persona" />
 
       <div className="persona-search-card">
         <form onSubmit={handleSearch}>

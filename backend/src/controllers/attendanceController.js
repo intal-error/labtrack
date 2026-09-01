@@ -363,9 +363,7 @@ const getRoomAttendanceHistory = async (req, res) => {
     const roomCode = roomData.roomCode;
     const roomName = roomData.roomName;
 
-    const snap = await db.collection(ATTENDANCE)
-      .where("roomCode", "==", roomCode)
-      .get();
+    const snap = await db.collection(ATTENDANCE).get();
     let records = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
     // Filter by roomCode (normalize both sides to handle raw vs normalized mismatch)

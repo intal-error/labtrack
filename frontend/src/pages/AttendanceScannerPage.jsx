@@ -1,16 +1,18 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { formatDuration, formatTime } from "../utils/attendanceHelpers";
 
-import ScannerCamera from "../components/scanner/ScannerCamera";
 import toast from "react-hot-toast";
 import {
   MdQrCodeScanner, MdLogin, MdLogout, MdCheckCircle, MdError,
   MdAccessTime, MdMeetingRoom, MdBook,
 } from "react-icons/md";
 import PageHero from "../components/ui/PageHero";
+import "../styles/pages/scanner.css";
 import "../styles/pages/attendance-scanner.css";
+
+const ScannerCamera = lazy(() => import("../components/scanner/ScannerCamera"));
 
 function toDate(value) {
   if (!value) return null;
@@ -228,7 +230,7 @@ export default function AttendanceScannerPage() {
   return (
     <section className="attendance-scan-page">
       {/* Header */}
-      <PageHero icon={MdQrCodeScanner} title="Scan Attendance" subtitle="Sign in or out of a laboratory room" />
+      <PageHero icon={MdQrCodeScanner} title="Scan Attendance" />
 
       <div className="attendance-scan-shell">
         {/* Mode Toggle */}
@@ -354,7 +356,9 @@ export default function AttendanceScannerPage() {
 
           {/* Camera */}
           {cameraTarget && (
-            <ScannerCamera target={cameraTarget} onScan={handleCameraScan} onStop={() => setCameraTarget(null)} />
+            <Suspense fallback={<div className="spinner-lg" />}>
+              <ScannerCamera target={cameraTarget} onScan={handleCameraScan} onStop={() => setCameraTarget(null)} />
+            </Suspense>
           )}
 
           {/* Step 2: Details (Time-In only) */}

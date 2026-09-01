@@ -1,12 +1,56 @@
 const { db } = require("../config/firebase");
+const { parsePagination, paginatedResponse } = require("../middleware/pagination");
 
 const COLLECTION = "incidents";
 
 const getAll = async (req, res) => {
   try {
     const snap = await db.collection(COLLECTION).orderBy("createdAt", "desc").get();
-    const items = [];
+    let items = [];
     snap.forEach((doc) => items.push({ id: doc.id, ...doc.data() }));
+
+    if (req.query.search) {
+      const q = req.query.search.toLowerCase();
+      items = items.filter(
+        (item) =>
+          (item.title && item.title.toLowerCase().includes(q)) ||
+          (item.description && item.description.toLowerCase().includes(q)) ||
+          (item.reporterName && item.reporterName.toLowerCase().includes(q))
+      );
+    }
+
+    if (req.query.status && req.query.status !== "All") {
+      items = items.filter((item) => item.status === req.query.status);
+    }
+
+    if (req.query.severity && req.query.severity !== "All") {
+      items = items.filter((item) => item.severity === req.query.severity);
+    }
+
+    if (req.query.dateFrom) {
+      const from = new Date(req.query.dateFrom);
+      items = items.filter((item) => {
+        const d = item.createdAt?.toDate ? item.createdAt.toDate() : new Date(item.createdAt);
+        return d >= from;
+      });
+    }
+
+    if (req.query.dateTo) {
+      const to = new Date(req.query.dateTo);
+      to.setHours(23, 59, 59, 999);
+      items = items.filter((item) => {
+        const d = item.createdAt?.toDate ? item.createdAt.toDate() : new Date(item.createdAt);
+        return d <= to;
+      });
+    }
+
+    const { page, limit, offset, paginate } = parsePagination(req);
+    if (paginate) {
+      const total = items.length;
+      const paged = items.slice(offset, offset + limit);
+      return res.json(paginatedResponse(paged, total, page, limit));
+    }
+
     res.json(items);
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
@@ -19,8 +63,51 @@ const getMyIncidents = async (req, res) => {
       .where("reportedBy", "==", req.user.uid)
       .orderBy("createdAt", "desc")
       .get();
-    const items = [];
+    let items = [];
     snap.forEach((doc) => items.push({ id: doc.id, ...doc.data() }));
+
+    if (req.query.search) {
+      const q = req.query.search.toLowerCase();
+      items = items.filter(
+        (item) =>
+          (item.title && item.title.toLowerCase().includes(q)) ||
+          (item.description && item.description.toLowerCase().includes(q)) ||
+          (item.reporterName && item.reporterName.toLowerCase().includes(q))
+      );
+    }
+
+    if (req.query.status && req.query.status !== "All") {
+      items = items.filter((item) => item.status === req.query.status);
+    }
+
+    if (req.query.severity && req.query.severity !== "All") {
+      items = items.filter((item) => item.severity === req.query.severity);
+    }
+
+    if (req.query.dateFrom) {
+      const from = new Date(req.query.dateFrom);
+      items = items.filter((item) => {
+        const d = item.createdAt?.toDate ? item.createdAt.toDate() : new Date(item.createdAt);
+        return d >= from;
+      });
+    }
+
+    if (req.query.dateTo) {
+      const to = new Date(req.query.dateTo);
+      to.setHours(23, 59, 59, 999);
+      items = items.filter((item) => {
+        const d = item.createdAt?.toDate ? item.createdAt.toDate() : new Date(item.createdAt);
+        return d <= to;
+      });
+    }
+
+    const { page, limit, offset, paginate } = parsePagination(req);
+    if (paginate) {
+      const total = items.length;
+      const paged = items.slice(offset, offset + limit);
+      return res.json(paginatedResponse(paged, total, page, limit));
+    }
+
     res.json(items);
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });

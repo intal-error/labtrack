@@ -1,6 +1,6 @@
 const router = require("express").Router();
 const { authorize } = require("../middleware/auth");
-const { getBorrowed, getReturned, getMyBorrowed, getMyReturned, getDashboardCounts, getChartData, recordBorrow, recordReturn, getRecentActivity } = require("../controllers/transactionController");
+const { getBorrowed, getReturned, getMyBorrowed, getMyReturned, getDashboardCounts, getChartData, recordBorrow, recordReturn, recordMyReturn, getRecentActivity } = require("../controllers/transactionController");
 
 router.get("/borrowed", authorize("admin"), getBorrowed);
 router.get("/returned", authorize("admin"), getReturned);
@@ -11,5 +11,6 @@ router.get("/counts", authorize("admin"), getDashboardCounts);
 router.get("/chart", authorize("admin"), getChartData);
 router.post("/borrow", authorize("admin"), recordBorrow);
 router.post("/return", authorize("admin"), recordReturn);
+router.post("/my-return", recordMyReturn);
 
 module.exports = router;

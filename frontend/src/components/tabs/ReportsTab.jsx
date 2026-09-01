@@ -36,13 +36,6 @@ function formatDate(date) {
   return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }
 
-function daysBetween(d1, d2) {
-  const a = toDate(d1);
-  const b = toDate(d2);
-  if (!a || !b) return 0;
-  return Math.ceil((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24));
-}
-
 const ChartTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
@@ -63,43 +56,24 @@ function EmptyChart({ text }) {
   );
 }
 
+const EMPTY_SUMMARY = {
+  counts: { users: 0, students: 0, catalog: 0, borrowed: 0, returned: 0 },
+  charts: { categoryData: [], conditionData: [], topBorrowedData: [], incidentData: [], requestStatusData: [] },
+  stats: { openIncidents: 0, scheduledMaintenance: 0, pendingRequests: 0, pendingFines: 0, totalPendingFineAmount: 0, todaySessions: 0 },
+  borrowed: [],
+  returned: [],
+};
+
 export default function ReportsTab() {
-  const [counts, setCounts] = useState({ borrowed: 0, returned: 0, users: 0, students: 0 });
-  const [catalog, setCatalog] = useState([]);
-  const [incidents, setIncidents] = useState([]);
-  const [maintenance, setMaintenance] = useState([]);
-  const [returned, setReturned] = useState([]);
-  const [borrowed, setBorrowed] = useState([]);
-  const [borrowRequests, setBorrowRequests] = useState([]);
-  const [fines, setFines] = useState([]);
-  const [todayAttendance, setTodayAttendance] = useState([]);
+  const [summary, setSummary] = useState(EMPTY_SUMMARY);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { load(); }, []);
 
   async function load() {
     try {
-      const results = await Promise.allSettled([
-        api.getDashboardCounts(),
-        api.getCatalog(),
-        api.getIncidents(),
-        api.getMaintenance(),
-        api.getReturned(),
-        api.getBorrowed(),
-        api.getBorrowRequests(),
-        api.getFines(),
-        api.getTodayAttendance(),
-      ]);
-      const get = (i) => results[i].status === "fulfilled" ? results[i].value : [];
-      setCounts(get(0));
-      setCatalog(Array.isArray(get(1)) ? get(1) : []);
-      setIncidents(Array.isArray(get(2)) ? get(2) : []);
-      setMaintenance(Array.isArray(get(3)) ? get(3) : []);
-      setReturned(Array.isArray(get(4)) ? get(4) : []);
-      setBorrowed(Array.isArray(get(5)) ? get(5) : []);
-      setBorrowRequests(Array.isArray(get(6)) ? get(6) : []);
-      setFines(Array.isArray(get(7)) ? get(7) : []);
-      setTodayAttendance(Array.isArray(get(8)) ? get(8) : []);
+      const data = await api.getReportSummary();
+      setSummary({ ...EMPTY_SUMMARY, ...data });
     } catch {
       toast.error("Failed to load overview data");
     } finally {
@@ -117,88 +91,45 @@ export default function ReportsTab() {
   }
 
   const stats = useMemo(() => ({
-    users: counts.users || 0,
-    students: counts.students || 0,
-    catalog: catalog.length,
-    borrowed: counts.borrowed || 0,
-    returned: counts.returned || 0,
-    openIncidents: incidents.filter((i) => i.status === "open").length,
-    scheduledMaintenance: maintenance.filter((m) => m.status === "scheduled").length,
-    pendingRequests: borrowRequests.filter((r) => r.status === "pending").length,
-    pendingFines: fines.filter((f) => f.status === "pending").length,
-    totalPendingFineAmount: fines.filter((f) => f.status === "pending").reduce((sum, f) => sum + (Number(f.totalFine) || 0), 0),
-    todaySessions: todayAttendance.length,
-  }), [counts, catalog, incidents, maintenance, borrowRequests, fines, todayAttendance]);
+    users: summary.counts.users || 0,
+    students: summary.counts.students || 0,
+    catalog: summary.counts.catalog || 0,
+    borrowed: summary.counts.borrowed || 0,
+    returned: summary.counts.returned || 0,
+    openIncidents: summary.stats.openIncidents || 0,
+    scheduledMaintenance: summary.stats.scheduledMaintenance || 0,
+    pendingRequests: summary.stats.pendingRequests || 0,
+    pendingFines: summary.stats.pendingFines || 0,
+    totalPendingFineAmount: summary.stats.totalPendingFineAmount || 0,
+    todaySessions: summary.stats.todaySessions || 0,
+  }), [summary]);
 
-  const categoryData = useMemo(() => {
-    const c = catalog.reduce((acc, item) => {
-      const cat = item.category || "Uncategorized";
-      acc[cat] = (acc[cat] || 0) + 1;
-      return acc;
-    }, {});
-    return Object.entries(c).map(([name, value]) => ({ name, value }));
-  }, [catalog]);
-
-  const conditionData = useMemo(() => {
-    const c = catalog.reduce((acc, item) => {
-      const cond = item.condition || "Unknown";
-      acc[cond] = (acc[cond] || 0) + 1;
-      return acc;
-    }, {});
-    return Object.entries(c).map(([name, value]) => ({ name, value }));
-  }, [catalog]);
-
-  const topBorrowedData = useMemo(() => {
-    const allTx = [...returned, ...borrowed];
-    const c = allTx.reduce((acc, t) => {
-      const name = t.itemName || "Unknown";
-      acc[name] = (acc[name] || 0) + (Number(t.quantity) || 1);
-      return acc;
-    }, {});
-    return Object.entries(c)
-      .map(([name, value]) => ({ name: name.length > 20 ? name.slice(0, 18) + "..." : name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 5);
-  }, [returned, borrowed]);
-
-  const incidentData = useMemo(() => {
-    const c = incidents.reduce((acc, inc) => {
-      const s = inc.status || "unknown";
-      acc[s] = (acc[s] || 0) + 1;
-      return acc;
-    }, {});
-    return Object.entries(c).map(([name, value]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), value }));
-  }, [incidents]);
-
-  const requestStatusData = useMemo(() => {
-    const c = borrowRequests.reduce((acc, r) => {
-      const s = r.status || "unknown";
-      acc[s] = (acc[s] || 0) + 1;
-      return acc;
-    }, {});
-    return Object.entries(c).map(([name, value]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), value }));
-  }, [borrowRequests]);
+  const categoryData = summary.charts.categoryData || [];
+  const conditionData = summary.charts.conditionData || [];
+  const topBorrowedData = summary.charts.topBorrowedData || [];
+  const incidentData = summary.charts.incidentData || [];
+  const requestStatusData = summary.charts.requestStatusData || [];
 
   const overdueItems = useMemo(() => {
     const now = new Date();
-    return borrowed
+    return (summary.borrowed || [])
       .filter((b) => {
         const due = toDate(b.dueDate);
         return due && due.getTime() < now.getTime();
       })
-      .map((b) => ({ ...b, daysOverdue: daysBetween(b.dueDate, now) }))
+      .map((b) => ({ ...b, daysOverdue: Math.ceil((now.getTime() - toDate(b.dueDate).getTime()) / (1000 * 60 * 60 * 24)) }))
       .sort((a, b) => b.daysOverdue - a.daysOverdue)
       .slice(0, 5);
-  }, [borrowed]);
+  }, [summary.borrowed]);
 
-  const recentBorrowed = useMemo(() => borrowed.slice(0, 5), [borrowed]);
-  const recentReturned = useMemo(() => returned.slice(0, 5), [returned]);
+  const recentBorrowed = useMemo(() => (summary.borrowed || []).slice(0, 5), [summary.borrowed]);
+  const recentReturned = useMemo(() => (summary.returned || []).slice(0, 5), [summary.returned]);
 
   if (loading) return <div className="page-loading"><div className="spinner-lg" /></div>;
 
   return (
     <div className="tab-content">
-      <PageHero icon={MdAssessment} title="Overview" subtitle="Monitor lab activity at a glance">
+      <PageHero icon={MdAssessment} title="Overview">
         <button className="hero-action-btn ghost" onClick={() => downloadReport("borrowed")}>
           <MdDownload size={16} /> Borrowed
         </button>

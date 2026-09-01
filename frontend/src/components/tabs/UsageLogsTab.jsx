@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { filterBySearch } from "../../utils/search";
@@ -60,7 +60,6 @@ function getDueProgress(borrowedAt, dueDate) {
 
 export default function UsageLogsTab() {
   const { userProfile } = useAuth();
-  const navigate = useNavigate();
   const [borrowed, setBorrowed] = useState([]);
   const [returned, setReturned] = useState([]);
   const [attendance, setAttendance] = useState([]);
@@ -163,7 +162,7 @@ export default function UsageLogsTab() {
 
   return (
     <div className="tab-content">
-      <PageHero icon={MdHistory} title="My Activity" subtitle="Track your borrowed, returned, and attendance activity">
+      <PageHero icon={MdHistory} title="My Activity">
         <Link to="/scanner" className="hero-action-btn ghost">
           <MdQrCodeScanner size={16} /> Scan to Return
         </Link>

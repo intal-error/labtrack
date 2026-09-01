@@ -6,10 +6,10 @@ export default function AboutPage() {
       <div className="about-split">
         <div className="about-left">
           <div className="overlay-image">
-            <img src="/slsulucena.jpg" alt="SLSU Background" className="bg-img" />
+            <img src="/slsulucena.jpg" alt="SLSU Background" className="bg-img" loading="lazy" width="1920" height="1080" decoding="async" />
           </div>
           <div className="about-left-content">
-            <img src="/logo.png" alt="SLSU Logo" className="about-logo" />
+            <img src="/logo.png" alt="SLSU Logo" className="about-logo" loading="lazy" width="80" height="80" decoding="async" />
             <h1 className="system-title">SLSU LABTRACK</h1>
           </div>
         </div>

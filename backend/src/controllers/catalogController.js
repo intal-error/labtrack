@@ -1,11 +1,45 @@
 const { db } = require("../config/firebase");
+const { parsePagination, paginatedResponse } = require("../middleware/pagination");
 
 const COLLECTION = "catalog";
 
 const getAll = async (req, res) => {
   try {
     const snap = await db.collection(COLLECTION).get();
-    const items = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    let items = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
+    if (req.query.search) {
+      const q = req.query.search.toLowerCase();
+      items = items.filter((item) => item.itemName && item.itemName.toLowerCase().includes(q));
+    }
+
+    if (req.query.status && req.query.status !== "All") {
+      items = items.filter((item) => item.status === req.query.status);
+    }
+
+    if (req.query.course && req.query.course !== "All") {
+      items = items.filter((item) => item.course === req.query.course);
+    }
+
+    if (req.query.sort) {
+      if (req.query.sort === "name") {
+        items.sort((a, b) => (a.itemName || "").localeCompare(b.itemName || ""));
+      } else if (req.query.sort === "date") {
+        items.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+      } else if (req.query.sort === "number") {
+        items.sort((a, b) => (Number(a.itemName) || 0) - (Number(b.itemName) || 0));
+      }
+    }
+
+    const { paginate, page, limit } = parsePagination(req);
+
+    if (paginate) {
+      const total = items.length;
+      const start = (page - 1) * limit;
+      const paged = items.slice(start, start + limit);
+      return res.json(paginatedResponse(paged, total, page, limit));
+    }
+
     res.json(items);
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });

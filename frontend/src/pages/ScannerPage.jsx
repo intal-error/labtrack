@@ -1,15 +1,16 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { api } from "../services/api";
 import { toDate, numOr, getAvailableQuantity, isOpenBorrow, normalize } from "../utils/helpers";
 import { resolveUser } from "../components/scanner/BorrowerLookup";
 import { resolveItem } from "../components/scanner/ItemLookup";
-import ScannerCamera from "../components/scanner/ScannerCamera";
 import { useAuth } from "../context/AuthContext";
 import { COURSES } from "../constants/courses";
 import toast from "react-hot-toast";
 import "../styles/pages/scanner.css";
 import { MdQrCodeScanner } from "react-icons/md";
 import PageHero from "../components/ui/PageHero";
+
+const ScannerCamera = lazy(() => import("../components/scanner/ScannerCamera"));
 
 function defaultDueDate() {
   const d = new Date();
@@ -195,7 +196,10 @@ export default function ScannerPage() {
           toast.success("Borrow recorded!");
         }
       } else {
-        const allBorrowed = await api.getBorrowed();
+        const isStudentReturn = !isAdmin && userProfile?.role === "student";
+        const allBorrowed = isStudentReturn
+          ? await api.getMyBorrowed()
+          : await api.getBorrowed();
         const normalizedSid = normalize(schoolId);
         const match = (allBorrowed || [])
           .map((d) => ({ id: d.id, data: d }))
@@ -204,7 +208,11 @@ export default function ScannerPage() {
           .filter(({ data }) => (data.catalogId || data.itemId) === selectedItem.id)
           .sort((a, b) => (toDate(b.data.timestamp)?.getTime() || 0) - (toDate(a.data.timestamp)?.getTime() || 0))[0];
         if (!match) throw new Error("No active loan found");
-        await api.recordReturn({ borrowId: match.id, itemId: selectedItem.id, schoolID: schoolId.trim(), quantity: qty, returnPhotoURL, conditionOnReturn });
+        if (isStudentReturn) {
+          await api.recordMyReturn({ borrowId: match.id, itemId: selectedItem.id, quantity: qty, returnPhotoURL, conditionOnReturn });
+        } else {
+          await api.recordReturn({ borrowId: match.id, itemId: selectedItem.id, schoolID: schoolId.trim(), quantity: qty, returnPhotoURL, conditionOnReturn });
+        }
         toast.success("Return recorded!");
       }
       resetForm();
@@ -256,7 +264,7 @@ export default function ScannerPage() {
 
   return (
     <section className="scanner-page">
-      <PageHero icon={MdQrCodeScanner} title="Scan Borrow / Return" subtitle="Scan QR codes or enter codes manually to borrow or return equipment" />
+      <PageHero icon={MdQrCodeScanner} title="Scan Borrow / Return" />
 
       <div className="scanner-shell">
         <div className="scanner-mode">
@@ -500,7 +508,9 @@ export default function ScannerPage() {
           </div>
 
           {cameraTarget && (
-            <ScannerCamera target={cameraTarget} onScan={handleCameraScan} onStop={() => setCameraTarget(null)} />
+            <Suspense fallback={<div className="spinner-lg" />}>
+              <ScannerCamera target={cameraTarget} onScan={handleCameraScan} onStop={() => setCameraTarget(null)} />
+            </Suspense>
           )}
 
           <div className="scanner-transaction-card">

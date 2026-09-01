@@ -122,7 +122,7 @@ export default function DocumentsTab() {
 
   return (
     <div className="tab-content">
-      <PageHero icon={MdFolderOpen} title="Documents" subtitle="Manage lab documents and files">
+      <PageHero icon={MdFolderOpen} title="Documents">
         {role === "admin" && (
           <button className="hero-action-btn ghost" onClick={() => fileInputRef.current?.click()}>
             <MdCloudUpload size={16} /> Upload

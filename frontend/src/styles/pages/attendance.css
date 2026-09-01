@@ -541,17 +541,12 @@ body.dark .attendance-active-timer { background: rgba(102,187,106,.1); }
   max-height: calc(100vh - 340px);
   overflow-y: auto;
   overflow-x: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--green) #f0f0f0;
+  scrollbar-width: none;
 }
 
 .attendance-table-wrapper::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-.attendance-table-wrapper::-webkit-scrollbar-thumb {
-  background: var(--green);
-  border-radius: 10px;
+  width: 0;
+  height: 0;
 }
 
 .attendance-table {
@@ -728,17 +723,12 @@ body.dark .attendance-action-btn.danger:hover {
 
 .attendance-table-scroll {
   overflow-x: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--green) #f0f0f0;
+  scrollbar-width: none;
 }
 
 .attendance-table-scroll::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-.attendance-table-scroll::-webkit-scrollbar-thumb {
-  background: var(--green);
-  border-radius: 10px;
+  width: 0;
+  height: 0;
 }
 
 /* ── Page Info ── */
@@ -854,7 +844,7 @@ body.dark .monthly-summary-card:hover {
 }
 
 body.dark .attendance-table-scroll::-webkit-scrollbar-thumb {
-  background: #43a047;
+  background: transparent;
 }
 
 /* ──────────────────────────────────

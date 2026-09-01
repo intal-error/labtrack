@@ -79,16 +79,14 @@
 .admin-toggle-btn.active{background:var(--green);color:#000;box-shadow:0 2px 8px rgba(46,125,50,.3)}
 
 /* Scrollable Container */
-.admin-list-scroll{max-height:60vh;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:var(--green) transparent}
-.admin-list-scroll::-webkit-scrollbar{width:6px}
-.admin-list-scroll::-webkit-scrollbar-track{background:transparent}
-.admin-list-scroll::-webkit-scrollbar-thumb{background:var(--green);border-radius:3px}
-.admin-list-scroll::-webkit-scrollbar-thumb:hover{background:var(--green-light)}
+.admin-list-scroll{max-height:60vh;overflow-y:auto;overflow-x:hidden;scrollbar-width:none}
+.admin-list-scroll::-webkit-scrollbar{width:0}
 
 /* Table View */
-.admin-table-wrap{overflow-x:auto;max-height:calc(100vh - 280px);overflow-y:auto;scrollbar-width:thin}
+.admin-table-wrap{overflow-x:auto;max-height:calc(100vh - 280px);overflow-y:auto;scrollbar-width:none}
+.admin-table-wrap::-webkit-scrollbar{width:0}
 .admin-table{width:100%;border-collapse:collapse}
-.admin-table th{text-align:left;padding:10px 14px;font-size:12px;font-weight:600;text-transform:uppercase;color:var(--text-muted);background:var(--bg);border-bottom:1.5px solid var(--border);position:sticky;top:0;z-index:1}
+.admin-table th{text-align:left;padding:10px 14px;font-size:12px;font-weight:600;text-transform:uppercase;color:#c8e6c9;background:#1a3a2a;border-bottom:1.5px solid rgba(46,125,50,.3);position:sticky;top:0;z-index:1}
 .admin-table td{padding:10px 14px;font-size:13px;color:var(--text);border-bottom:1px solid var(--border);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .admin-table tr:hover td{background:var(--bg)}
 .admin-table-user{display:flex;align-items:center;gap:10px;min-width:160px;max-width:200px}
@@ -106,7 +104,7 @@
 .admin-kebab-dropdown button.danger{color:#c62828}
 .admin-kebab-dropdown button.danger:hover{background:#ffebee}
 .admin-th-actions{width:48px}
-.admin-td-kebab{text-align:center}
+.admin-td-kebab{text-align:center;overflow:visible !important;position:relative}
 .admin-add-btn{display:inline-flex;align-items:center;gap:4px;padding:7px 14px;border-radius:10px;font-size:13px;font-weight:600;border:1.5px solid var(--green);background:var(--green);color:#000;cursor:pointer;transition:all .2s;font-family:inherit;white-space:nowrap}
 .admin-add-btn:hover{box-shadow:0 4px 12px rgba(46,125,50,.3);transform:translateY(-1px)}
 
@@ -177,7 +175,7 @@ body.dark .admin-toggle-btn{color:#888}
 body.dark .admin-toggle-btn:hover{color:#fff;background:#1a1a1a}
 body.dark .admin-toggle-btn.active{background:var(--green);color:#000}
 body.dark .admin-display-toggle{background:#0a0a0a;border-color:rgba(255,255,255,.1)}
-body.dark .admin-table th{background:#0a0a0a;border-color:rgba(255,255,255,.1);color:#888}
+body.dark .admin-table th{background:#1a3a2a;border-color:rgba(46,125,50,.3);color:#c8e6c9}
 body.dark .admin-table td{border-color:rgba(255,255,255,.05)}
 body.dark .admin-table tr:hover td{background:#131313}
 body.dark .admin-table-name{color:#fff}

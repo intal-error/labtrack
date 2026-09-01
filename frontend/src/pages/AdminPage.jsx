@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { MdAdd, MdList, MdLogout, MdPerson, MdLock, MdPhone, MdWork, MdEmail, MdArrowBack, MdShield, MdEdit, MdDelete, MdGridView, MdViewList, MdVisibility, MdEditNote, MdAssignment, MdSwapHoriz, MdSchool, MdAdminPanelSettings, MdMoreVert, MdClose } from "react-icons/md";
+import { MdAdd, MdList, MdPerson, MdLock, MdPhone, MdWork, MdEmail, MdArrowBack, MdShield, MdEdit, MdDelete, MdVisibility, MdEditNote, MdAssignment, MdSwapHoriz, MdSchool, MdAdminPanelSettings, MdMoreVert, MdClose } from "react-icons/md";
 import PageHero from "../components/ui/PageHero";
 import ViewToggle from "../components/ui/ViewToggle";
 import { COURSES } from "../constants/courses";
@@ -31,14 +31,13 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [viewMode, setViewMode] = useState("list");
-  const { logout } = useAuth();
+  const { logout, userProfile } = useAuth();
   const navigate = useNavigate();
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [openKebab, setOpenKebab] = useState(null);
-  const kebabRef = useRef(null);
 
   const loadAdmins = async () => {
     setError("");
@@ -50,7 +49,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (kebabRef.current && !kebabRef.current.contains(e.target)) setOpenKebab(null);
+      if (!e.target.closest(".admin-kebab-wrap")) setOpenKebab(null);
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -132,7 +131,7 @@ export default function AdminPage() {
 
   return (
     <section className="admin-page">
-      <PageHero icon={MdAdminPanelSettings} title="Admin" subtitle="System administration panel" />
+      <PageHero icon={MdAdminPanelSettings} title="Admin" />
 
       {view === "main" && (
         <div className="admin-main-card fade-in-up">
@@ -187,15 +186,15 @@ export default function AdminPage() {
                               {(a.status || "active") === "active" ? "Active" : "Inactive"}
                             </span>
                           </div>
-                          <div className="admin-kebab-wrap" ref={kebabRef}>
+                          <div className="admin-kebab-wrap">
                             <button className="admin-kebab-btn" onClick={() => setOpenKebab(openKebab === a.id ? null : a.id)}>
                               <MdMoreVert size={18} />
                             </button>
                             {openKebab === a.id && (
                               <div className="admin-kebab-dropdown">
-                                <button onClick={() => openEdit(a)}><MdEdit size={14} /> Edit</button>
+                                {userProfile?.id === a.id && <button onClick={() => openEdit(a)}><MdEdit size={14} /> Edit</button>}
                                 <button onClick={() => handleToggleStatus(a.id)}><MdShield size={14} /> {(a.status || "active") === "active" ? "Deactivate" : "Activate"}</button>
-                                <button className="danger" onClick={() => handleDelete(a.id)}><MdDelete size={14} /> Delete</button>
+                                {userProfile?.id !== a.id && <button className="danger" onClick={() => handleDelete(a.id)}><MdDelete size={14} /> Delete</button>}
                               </div>
                             )}
                           </div>
@@ -247,15 +246,15 @@ export default function AdminPage() {
                             </span>
                           </td>
                           <td className="admin-td-kebab">
-                            <div className="admin-kebab-wrap" ref={kebabRef}>
+                            <div className="admin-kebab-wrap">
                               <button className="admin-kebab-btn" onClick={() => setOpenKebab(openKebab === a.id ? null : a.id)}>
                                 <MdMoreVert size={18} />
                               </button>
                               {openKebab === a.id && (
                                 <div className="admin-kebab-dropdown">
-                                  <button onClick={() => openEdit(a)}><MdEdit size={14} /> Edit</button>
+                                  {userProfile?.id === a.id && <button onClick={() => openEdit(a)}><MdEdit size={14} /> Edit</button>}
                                   <button onClick={() => handleToggleStatus(a.id)}><MdShield size={14} /> {(a.status || "active") === "active" ? "Deactivate" : "Activate"}</button>
-                                  <button className="danger" onClick={() => handleDelete(a.id)}><MdDelete size={14} /> Delete</button>
+                                  {userProfile?.id !== a.id && <button className="danger" onClick={() => handleDelete(a.id)}><MdDelete size={14} /> Delete</button>}
                                 </div>
                               )}
                             </div>
@@ -315,6 +314,14 @@ export default function AdminPage() {
                   <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required={!editing} placeholder={editing ? "Leave blank to keep current" : "Password"} />
                   <MdLock size={16} />
                 </div>
+                {!editing && (
+                  <div className="lab-password-hints">
+                    <span className={form.password.length >= 8 ? "hint-met" : ""}>Minimum 8 characters</span>
+                    <span className={/[A-Z]/.test(form.password) ? "hint-met" : ""}>At least one uppercase letter</span>
+                    <span className={/[a-z]/.test(form.password) ? "hint-met" : ""}>At least one lowercase letter</span>
+                    <span className={/[0-9]/.test(form.password) ? "hint-met" : ""}>At least one number</span>
+                  </div>
+                )}
               </div>
             </div>
 

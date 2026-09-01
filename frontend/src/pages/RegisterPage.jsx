@@ -5,7 +5,7 @@ import { auth } from "../services/firebase";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { COURSES } from "../constants/courses";
-import { MdSchool, MdPerson, MdVisibility, MdVisibilityOff, MdEmail, MdLock, MdBadge, MdBook, MdCalendarToday, MdAssignment, MdArrowForward, MdCheckCircle } from "react-icons/md";
+import { MdSchool, MdPerson, MdVisibility, MdVisibilityOff, MdEmail, MdLock, MdBadge, MdBook, MdCalendarToday, MdAssignment, MdArrowForward } from "react-icons/md";
 import toast from "react-hot-toast";
 import "../styles/pages/register.css";
 
@@ -93,13 +93,13 @@ export default function RegisterPage() {
 
   return (
     <div className="register-page">
-      <img src="/slsulucena.jpg" alt="" className="register-bg" />
+      <img src="/slsulucena.jpg" alt="" className="register-bg" loading="eager" width="1920" height="1080" decoding="async" />
       <div className="register-overlay" />
 
       <div className="register-content">
         <div className="register-left">
           <div className="register-brand">
-            <img src="/logo.png" alt="SLSU Logo" className="register-logo" />
+            <img src="/logo.png" alt="SLSU Logo" className="register-logo" loading="eager" width="48" height="48" decoding="async" />
             <span className="register-brand-name">SLSU</span>
           </div>
           <h1 className="register-title">LAB<span className="register-title-bold">TRACK</span></h1>

@@ -5,10 +5,11 @@ import { numOr, getAvailableQuantity } from "../utils/helpers";
 import { filterBySearch } from "../utils/search";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Modal from "../components/ui/Modal";
+import Pagination from "../components/ui/Pagination";
 import toast from "react-hot-toast";
 import "../styles/pages/catalog.css";
 import "../styles/pages/shared-form-panel.css";
-import { MdClose, MdAdd, MdEdit, MdInfo, MdImage, MdAssignment, MdTag, MdQrCode, MdInventory, MdDownload } from "react-icons/md";
+import { MdClose, MdEdit, MdInfo, MdImage, MdAssignment, MdTag, MdQrCode, MdInventory, MdDownload } from "react-icons/md";
 import PageHero from "../components/ui/PageHero";
 import ViewToggle from "../components/ui/ViewToggle";
 
@@ -18,6 +19,8 @@ export default function CatalogPage() {
   const [filterCourse, setFilterCourse] = useState("All");
   const [sort, setSort] = useState("name");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [paginationData, setPaginationData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [showQr, setShowQr] = useState(null);
@@ -27,14 +30,23 @@ export default function CatalogPage() {
   const [uploading, setUploading] = useState(false);
   const [viewMode, setViewMode] = useState("list");
 
+  useEffect(() => { setPage(1); }, [search, filter, filterCourse, sort]);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api.getCatalog();
-      setAllItems(data);
+      const params = `?page=${page}&limit=25&search=${search}&status=${filter !== "All" ? filter : ""}&course=${filterCourse !== "All" ? filterCourse : ""}&sort=${sort}`;
+      const response = await api.getCatalog(params);
+      if (Array.isArray(response)) {
+        setAllItems(response);
+        setPaginationData(null);
+      } else {
+        setAllItems(response.data);
+        setPaginationData(response.pagination);
+      }
     } catch (err) { toast.error(err.message || "Failed to load catalog"); }
     finally { setLoading(false); }
-  }, []);
+  }, [page, search, filter, filterCourse, sort]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -118,7 +130,7 @@ export default function CatalogPage() {
 
   return (
     <section className="catalog-page">
-      <PageHero icon={MdInventory} title="Catalog" subtitle="Manage laboratory tools and equipment inventory">
+      <PageHero icon={MdInventory} title="Catalog">
         <button className="hero-action-btn ghost" onClick={() => setShowCreate(true)}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
           Create Item
@@ -218,114 +230,131 @@ export default function CatalogPage() {
           )}
         </div>
       ) : viewMode === "grid" ? (
-        <div className="catalog-grid">
-          {filteredItems.map((item) => {
-            const avail = getAvailableQuantity(item);
-            const total = Math.max(0, numOr(item.quantity));
-            return (
-              <div className="catalog-card" key={item.id}>
-                <div className="catalog-card-image">
-                  {item.imageUrl ? (
-                    <img src={item.imageUrl} alt={item.itemName} loading="lazy" onClick={() => setImageOverlay(item.imageUrl)} />
-                  ) : (
-                    <div className="item-placeholder">
-                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-                      <span>No image</span>
-                    </div>
-                  )}
-                  <span className={`card-status-badge ${item.status === "Available" ? "status-available" : "status-borrowed"}`}>{item.status || "Available"}</span>
-                </div>
-                <div className="catalog-card-body">
-                  <h3 className="catalog-card-title">{item.itemName || "-"}</h3>
-                  <div className="catalog-card-meta">
-                    {item.category && <span className="category-pill">{item.category}</span>}
-                    {item.condition && <span className={`condition-badge ${conditionClass(item.condition)}`}>{item.condition}</span>}
-                    {item.course && <span className="category-pill" style={{ background: "#e3f2fd", color: "#1565c0" }}>{item.course}</span>}
-                  </div>
-                  {item.created_by_admin_name && (
-                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>Created by: {item.created_by_admin_name}</div>
-                  )}
-                  <div className="catalog-card-quantity">
-                    <div className="qty-info">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-                      <span>{Number.isFinite(Number(item.availableQuantity)) ? `${avail} / ${total}` : total}</span>
-                    </div>
-                    {Number.isFinite(Number(item.availableQuantity)) && (
-                      <div className="qty-bar">
-                        <div className="qty-bar-fill" style={{ width: `${total > 0 ? (avail / total) * 100 : 0}%` }} />
+        <>
+          <div className="catalog-grid">
+            {filteredItems.map((item) => {
+              const avail = getAvailableQuantity(item);
+              const total = Math.max(0, numOr(item.quantity));
+              return (
+                <div className="catalog-card" key={item.id}>
+                  <div className="catalog-card-image">
+                    {item.imageUrl ? (
+                      <img src={item.imageUrl} alt={item.itemName} loading="lazy" width="200" height="200" decoding="async" onClick={() => setImageOverlay(item.imageUrl)} />
+                    ) : (
+                      <div className="item-placeholder">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                        <span>No image</span>
                       </div>
                     )}
+                    <span className={`card-status-badge ${item.status === "Available" ? "status-available" : "status-borrowed"}`}>{item.status || "Available"}</span>
                   </div>
-                  <div className="catalog-card-actions">
-                    <button className="card-btn card-btn-qr" onClick={() => showQrModal(item.id, item.itemName)} title="QR Code">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-                    </button>
-                    <button className="card-btn card-btn-edit" onClick={() => setShowUpdate({ ...item })} title="Update">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                    </button>
-                    <button className="card-btn card-btn-delete" onClick={() => handleDelete(item.id)} title="Delete">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="catalog-table-wrapper">
-          <table className="catalog-table">
-            <thead>
-              <tr>
-                <th>Item Name</th>
-                <th>Category</th>
-                <th>Course</th>
-                <th>Condition</th>
-                <th>Quantity</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredItems.map((item) => {
-                const avail = getAvailableQuantity(item);
-                const total = Math.max(0, numOr(item.quantity));
-                return (
-                  <tr key={item.id}>
-                    <td className="table-name-cell">
-                      <div className="table-item-name">
-                        {item.imageUrl ? (
-                          <img src={item.imageUrl} alt="" className="table-item-thumb" loading="lazy" onClick={() => setImageOverlay(item.imageUrl)} />
-                        ) : (
-                          <div className="table-item-thumb-placeholder">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-                          </div>
-                        )}
-                        <span>{item.itemName || "-"}</span>
+                  <div className="catalog-card-body">
+                    <h3 className="catalog-card-title">{item.itemName || "-"}</h3>
+                    <div className="catalog-card-meta">
+                      {item.category && <span className="category-pill">{item.category}</span>}
+                      {item.condition && <span className={`condition-badge ${conditionClass(item.condition)}`}>{item.condition}</span>}
+                      {item.course && <span className="category-pill" style={{ background: "#e3f2fd", color: "#1565c0" }}>{item.course}</span>}
+                    </div>
+                    {item.created_by_admin_name && (
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>Created by: {item.created_by_admin_name}</div>
+                    )}
+                    <div className="catalog-card-quantity">
+                      <div className="qty-info">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                        <span>{Number.isFinite(Number(item.availableQuantity)) ? `${avail} / ${total}` : total}</span>
                       </div>
-                    </td>
-                    <td>{item.category ? <span className="category-pill">{item.category}</span> : "-"}</td>
-                    <td>{item.course || "-"}</td>
-                    <td>{item.condition ? <span className={`condition-badge ${conditionClass(item.condition)}`}>{item.condition}</span> : "-"}</td>
-                    <td>{Number.isFinite(Number(item.availableQuantity)) ? `${avail} / ${total}` : total}</td>
-                    <td><span className={`card-status-badge ${item.status === "Available" ? "status-available" : "status-borrowed"}`}>{item.status || "Available"}</span></td>
-                    <td className="table-actions-cell">
+                      {Number.isFinite(Number(item.availableQuantity)) && (
+                        <div className="qty-bar">
+                          <div className="qty-bar-fill" style={{ width: `${total > 0 ? (avail / total) * 100 : 0}%` }} />
+                        </div>
+                      )}
+                    </div>
+                    <div className="catalog-card-actions">
                       <button className="card-btn card-btn-qr" onClick={() => showQrModal(item.id, item.itemName)} title="QR Code">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
                       </button>
                       <button className="card-btn card-btn-edit" onClick={() => setShowUpdate({ ...item })} title="Update">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                       </button>
                       <button className="card-btn card-btn-delete" onClick={() => handleDelete(item.id)} title="Delete">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                       </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {paginationData && (
+            <Pagination
+              page={paginationData.page}
+              totalPages={paginationData.totalPages}
+              onPageChange={setPage}
+            />
+          )}
+        </>
+      ) : (
+        <>
+          <div className="catalog-table-wrapper">
+            <table className="catalog-table">
+              <thead>
+                <tr>
+                  <th>Item Name</th>
+                  <th>Category</th>
+                  <th>Course</th>
+                  <th>Condition</th>
+                  <th>Quantity</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredItems.map((item) => {
+                  const avail = getAvailableQuantity(item);
+                  const total = Math.max(0, numOr(item.quantity));
+                  return (
+                    <tr key={item.id}>
+                      <td className="table-name-cell">
+                        <div className="table-item-name">
+                          {item.imageUrl ? (
+                            <img src={item.imageUrl} alt="" className="table-item-thumb" loading="lazy" width="40" height="40" decoding="async" onClick={() => setImageOverlay(item.imageUrl)} />
+                          ) : (
+                            <div className="table-item-thumb-placeholder">
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                            </div>
+                          )}
+                          <span>{item.itemName || "-"}</span>
+                        </div>
+                      </td>
+                      <td>{item.category ? <span className="category-pill">{item.category}</span> : "-"}</td>
+                      <td>{item.course || "-"}</td>
+                      <td>{item.condition ? <span className={`condition-badge ${conditionClass(item.condition)}`}>{item.condition}</span> : "-"}</td>
+                      <td>{Number.isFinite(Number(item.availableQuantity)) ? `${avail} / ${total}` : total}</td>
+                      <td className="table-actions-cell">
+                        <button className="card-btn card-btn-qr" onClick={() => showQrModal(item.id, item.itemName)} title="QR Code">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                        </button>
+                        <button className="card-btn card-btn-edit" onClick={() => setShowUpdate({ ...item })} title="Update">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
+                        <button className="card-btn card-btn-delete" onClick={() => handleDelete(item.id)} title="Delete">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {paginationData && (
+            <Pagination
+              page={paginationData.page}
+              totalPages={paginationData.totalPages}
+              onPageChange={setPage}
+            />
+          )}
+        </>
       )}
 
       <div className={`lab-slide-panel ${showCreate ? "open" : ""}`}>
@@ -562,7 +591,7 @@ export default function CatalogPage() {
       {imageOverlay && (
         <div className="image-overlay" onClick={() => setImageOverlay(null)}>
           <div className="image-overlay-content">
-            <img src={imageOverlay} alt="Large View" />
+            <img src={imageOverlay} alt="Large View" loading="eager" width="800" height="600" decoding="async" />
             <button className="btn-close" onClick={() => setImageOverlay(null)}>&times;</button>
           </div>
         </div>

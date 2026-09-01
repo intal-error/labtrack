@@ -1,4 +1,5 @@
 const { db, admin } = require("../config/firebase");
+const { parsePagination, paginatedResponse } = require("../middleware/pagination");
 
 const COLLECTION = "notifications";
 
@@ -44,6 +45,15 @@ const getAll = async (req, res) => {
         return (db?.getTime?.() || 0) - (da?.getTime?.() || 0);
       });
     }
+
+    if (req.query.unreadOnly === "true") {
+      notifications = notifications.filter((n) => !n.read);
+    }
+
+    const { paginate, page, pageSize } = parsePagination(req);
+    if (paginate) {
+      return res.json(paginatedResponse(notifications, page, pageSize));
+    }
     res.json(notifications);
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
@@ -56,7 +66,7 @@ const getByUser = async (req, res) => {
     const snap = await db.collection(COLLECTION)
       .where("targetUserId", "==", userId)
       .get();
-    const notifications = [];
+    let notifications = [];
     snap.forEach((doc) => {
       const data = doc.data();
       const dismissedBy = data.dismissedBy || [];
@@ -69,6 +79,15 @@ const getByUser = async (req, res) => {
       const db = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
       return (db?.getTime?.() || 0) - (da?.getTime?.() || 0);
     });
+
+    if (req.query.unreadOnly === "true") {
+      notifications = notifications.filter((n) => !n.read);
+    }
+
+    const { paginate, page, pageSize } = parsePagination(req);
+    if (paginate) {
+      return res.json(paginatedResponse(notifications, page, pageSize));
+    }
     res.json(notifications);
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });

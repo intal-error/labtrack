@@ -31,6 +31,7 @@ const AttendanceLogsPage = lazy(() => import("./pages/AttendanceLogsPage"));
 const RoomAttendancePage = lazy(() => import("./pages/RoomAttendancePage"));
 const MyAttendancePage = lazy(() => import("./pages/MyAttendancePage"));
 const AttendanceScannerPage = lazy(() => import("./pages/AttendanceScannerPage"));
+const InventoryPage = lazy(() => import("./pages/InventoryPage"));
 
 
 function ProtectedRoute({ children }) {
@@ -108,6 +109,7 @@ function App() {
               <Route path="borrowed" element={<Navigate to="/transactions" replace />} />
               <Route path="returned" element={<Navigate to="/transactions" replace />} />
               <Route path="catalog" element={<RoleRoute allowed={["admin"]}><CatalogPage /></RoleRoute>} />
+              <Route path="inventory" element={<RoleRoute allowed={["student"]}><InventoryPage /></RoleRoute>} />
               <Route path="persona" element={<RoleRoute allowed={["admin"]}><PersonaPage /></RoleRoute>} />
               <Route path="admin" element={<RoleRoute allowed={["admin"]}><AdminPage /></RoleRoute>} />
               <Route path="maintenance" element={<RoleRoute allowed={["admin"]}><MaintenanceTab /></RoleRoute>} />

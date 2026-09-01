@@ -1,10 +1,17 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
+import { ViteImageOptimizer } from "vite-plugin-image-optimizer";
 
 export default defineConfig({
   plugins: [
     react(),
+    ViteImageOptimizer({
+      png: { quality: 80 },
+      jpeg: { quality: 80 },
+      jpg: { quality: 80 },
+      webp: { lossless: false, quality: 85 },
+    }),
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["logo.png", "slsulucena.jpg"],
@@ -111,6 +118,7 @@ export default defineConfig({
         manualChunks: {
           "vendor-react": ["react", "react-dom", "react-router-dom"],
           "vendor-recharts": ["recharts"],
+          "vendor-toast": ["react-hot-toast"],
         },
       },
     },

@@ -84,21 +84,11 @@
   flex: 1;
   overflow-y: auto;
   padding: 20px 24px 24px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--green) transparent;
+  scrollbar-width: none;
 }
 
 .lab-slide-body::-webkit-scrollbar {
-  width: 6px;
-}
-
-.lab-slide-body::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.lab-slide-body::-webkit-scrollbar-thumb {
-  background: var(--green);
-  border-radius: 3px;
+  width: 0;
 }
 
 /* Section grouping */
@@ -499,4 +489,50 @@ body.dark .lab-slide-close {
 body.dark .lab-slide-close:hover {
   background: rgba(255, 255, 255, .12);
   color: #fff;
+}
+
+.lab-password-hints {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+}
+
+.lab-password-hints span {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.lab-password-hints span::before {
+  content: "\2717";
+  font-size: 10px;
+  color: #c62828;
+}
+
+.lab-password-hints span.hint-met::before {
+  content: "\2713";
+  color: #2e7d32;
+}
+
+.lab-password-hints span.hint-met {
+  color: #2e7d32;
+}
+
+body.dark .lab-password-hints span {
+  color: #777;
+}
+
+body.dark .lab-password-hints span::before {
+  color: #ef9a9a;
+}
+
+body.dark .lab-password-hints span.hint-met::before {
+  color: #81c784;
+}
+
+body.dark .lab-password-hints span.hint-met {
+  color: #81c784;
 }

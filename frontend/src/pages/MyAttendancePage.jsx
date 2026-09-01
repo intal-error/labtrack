@@ -97,7 +97,7 @@ export default function MyAttendancePage() {
 
   return (
     <div className="attendance-page">
-      <PageHero icon={MdEventAvailable} title="My Logs" subtitle="Your laboratory sign-in history">
+      <PageHero icon={MdEventAvailable} title="My Logs">
         <button className="hero-action-btn ghost" onClick={() => navigate("/attendance-scan")}>
           <MdQrCodeScanner size={16} /> Scan Attendance
         </button>

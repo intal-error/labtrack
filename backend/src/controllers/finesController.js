@@ -1,4 +1,5 @@
 const { db } = require("../config/firebase");
+const { parsePagination, paginatedResponse } = require("../middleware/pagination");
 
 const FINES = "fines";
 const TRANS = "transactions";
@@ -29,10 +30,28 @@ const getAllFines = async (req, res) => {
       }
     });
 
-    const enriched = fines.map((f) => ({
+    let enriched = fines.map((f) => ({
       ...f,
       userName: userMap[f.userId] || f.userId || "Unknown",
     }));
+
+    if (req.query.search) {
+      const q = req.query.search.toLowerCase();
+      enriched = enriched.filter(
+        (f) =>
+          (f.userName && f.userName.toLowerCase().includes(q)) ||
+          (f.itemName && f.itemName.toLowerCase().includes(q))
+      );
+    }
+
+    if (req.query.status && req.query.status !== "All") {
+      enriched = enriched.filter((f) => f.status === req.query.status);
+    }
+
+    const { paginate, page, limit } = parsePagination(req);
+    if (paginate) {
+      return res.json(paginatedResponse(enriched, page, limit));
+    }
 
     res.json(enriched);
   } catch (err) {
@@ -59,7 +78,25 @@ const getMyFines = async (req, res) => {
       ? `${userSnap.data().firstName || ""} ${userSnap.data().lastName || ""}`.trim() || userSnap.data().email || uid
       : uid;
 
-    const enriched = fines.map((f) => ({ ...f, userName }));
+    let enriched = fines.map((f) => ({ ...f, userName }));
+
+    if (req.query.search) {
+      const q = req.query.search.toLowerCase();
+      enriched = enriched.filter(
+        (f) =>
+          (f.userName && f.userName.toLowerCase().includes(q)) ||
+          (f.itemName && f.itemName.toLowerCase().includes(q))
+      );
+    }
+
+    if (req.query.status && req.query.status !== "All") {
+      enriched = enriched.filter((f) => f.status === req.query.status);
+    }
+
+    const { paginate, page, limit } = parsePagination(req);
+    if (paginate) {
+      return res.json(paginatedResponse(enriched, page, limit));
+    }
 
     res.json(enriched);
   } catch (err) {

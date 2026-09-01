@@ -41,15 +41,16 @@ async function request(path, options = {}) {
 export const api = {
   getDashboardCounts: () => request("/transactions/counts"),
   getChartData: () => request("/transactions/chart"),
-  getBorrowed: () => request("/transactions/borrowed"),
-  getReturned: () => request("/transactions/returned"),
+  getBorrowed: (params = "") => request(`/transactions/borrowed${params ? "?" + params : ""}`),
+  getReturned: (params = "") => request(`/transactions/returned${params ? "?" + params : ""}`),
   getRecentActivity: () => request("/transactions/recent-activity"),
-  getMyBorrowed: () => request("/transactions/my-borrowed"),
-  getMyReturned: () => request("/transactions/my-returned"),
+  getMyBorrowed: (params = "") => request(`/transactions/my-borrowed${params ? "?" + params : ""}`),
+  getMyReturned: (params = "") => request(`/transactions/my-returned${params ? "?" + params : ""}`),
   recordBorrow: (data) => request("/transactions/borrow", { method: "POST", body: JSON.stringify(data) }),
   recordReturn: (data) => request("/transactions/return", { method: "POST", body: JSON.stringify(data) }),
+  recordMyReturn: (data) => request("/transactions/my-return", { method: "POST", body: JSON.stringify(data) }),
 
-  getCatalog: () => request("/catalog"),
+  getCatalog: (params = "") => request(`/catalog${params ? "?" + params : ""}`),
   createCatalogItem: (data) => request("/catalog", { method: "POST", body: JSON.stringify(data) }),
   updateCatalogItem: (id, data) => request(`/catalog/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteCatalogItem: (id) => request(`/catalog/${id}`, { method: "DELETE" }),
@@ -60,6 +61,8 @@ export const api = {
   createAdmin: (data) => request("/admin", { method: "POST", body: JSON.stringify(data) }),
   updateAdmin: (id, data) => request(`/admin/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteAdmin: (id) => request(`/admin/${id}`, { method: "DELETE" }),
+
+  getReportSummary: () => request("/reports/summary"),
 
   downloadReport: async (type) => {
     let headers = {};
@@ -145,8 +148,8 @@ export const api = {
   changePassword: (data) => request("/auth/password", { method: "PUT", body: JSON.stringify(data) }),
 
   // Notifications
-  getNotifications: () => request("/notifications"),
-  getMyNotifications: () => request("/notifications/user"),
+  getNotifications: (params = "") => request(`/notifications${params ? "?" + params : ""}`),
+  getMyNotifications: (params = "") => request(`/notifications/user${params ? "?" + params : ""}`),
   createNotification: (data) => request("/notifications", { method: "POST", body: JSON.stringify(data) }),
   markNotificationRead: (id) => request(`/notifications/${id}/read`, { method: "PUT" }),
   markAllNotificationsRead: () => request("/notifications/read-all", { method: "PUT" }),
@@ -161,14 +164,14 @@ export const api = {
   saveSettings: (data) => request("/settings", { method: "PUT", body: JSON.stringify(data) }),
 
   // Maintenance
-  getMaintenance: () => request("/maintenance"),
+  getMaintenance: (params = "") => request(`/maintenance${params ? "?" + params : ""}`),
   createMaintenance: (data) => request("/maintenance", { method: "POST", body: JSON.stringify(data) }),
   updateMaintenance: (id, data) => request(`/maintenance/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteMaintenance: (id) => request(`/maintenance/${id}`, { method: "DELETE" }),
 
   // Incidents
-  getIncidents: () => request("/incidents"),
-  getMyIncidents: () => request("/incidents/mine"),
+  getIncidents: (params = "") => request(`/incidents${params ? "?" + params : ""}`),
+  getMyIncidents: (params = "") => request(`/incidents/mine${params ? "?" + params : ""}`),
   createIncident: (data) => request("/incidents", { method: "POST", body: JSON.stringify(data) }),
   updateIncident: (id, data) => request(`/incidents/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteIncident: (id) => request(`/incidents/${id}`, { method: "DELETE" }),
@@ -180,15 +183,15 @@ export const api = {
   deleteManual: (id) => request(`/manuals/${id}`, { method: "DELETE" }),
 
   // Fines
-  getFines: () => request("/fines"),
-  getMyFines: () => request("/fines/my"),
+  getFines: (params = "") => request(`/fines${params ? "?" + params : ""}`),
+  getMyFines: (params = "") => request(`/fines/my${params ? "?" + params : ""}`),
   checkRestriction: (userId) => request(`/fines/check-restriction/${userId}`),
   payFine: (id) => request(`/fines/${id}/pay`, { method: "PUT" }),
   waiveFine: (id, reason) => request(`/fines/${id}/waive`, { method: "PUT", body: JSON.stringify({ reason }) }),
 
   // Borrow Requests
-  getBorrowRequests: () => request("/borrow-requests"),
-  getMyBorrowRequests: () => request("/borrow-requests/my"),
+  getBorrowRequests: (params = "") => request(`/borrow-requests${params ? "?" + params : ""}`),
+  getMyBorrowRequests: (params = "") => request(`/borrow-requests/my${params ? "?" + params : ""}`),
   createBorrowRequest: (data) => request("/borrow-requests", { method: "POST", body: JSON.stringify(data) }),
   approveBorrowRequest: (id, reviewNotes) => request(`/borrow-requests/${id}/approve`, { method: "PUT", body: JSON.stringify({ reviewNotes }) }),
   rejectBorrowRequest: (id, reviewNotes) => request(`/borrow-requests/${id}/reject`, { method: "PUT", body: JSON.stringify({ reviewNotes }) }),

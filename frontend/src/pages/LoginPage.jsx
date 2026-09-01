@@ -5,7 +5,7 @@ import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../services/firebase";
 import { useAuth } from "../context/AuthContext";
 import {
-  MdSchool, MdPerson, MdAdminPanelSettings, MdVisibility, MdVisibilityOff,
+  MdSchool, MdAdminPanelSettings, MdVisibility, MdVisibilityOff,
   MdMailOutline, MdLockOutline, MdErrorOutline, MdCheckCircle, MdWarningAmber,
   MdQrCodeScanner, MdInventory2, MdReceiptLong,
 } from "react-icons/md";
@@ -153,7 +153,7 @@ export default function LoginPage() {
 
   return (
     <div className="login-page">
-      <img src="/slsulucena.jpg" alt="" className="login-bg" />
+      <img src="/slsulucena.jpg" alt="" className="login-bg" loading="eager" width="1920" height="1080" decoding="async" />
       <div className="login-overlay" />
       <div className="login-shape login-shape-1" />
       <div className="login-shape login-shape-2" />
@@ -162,7 +162,7 @@ export default function LoginPage() {
       <div className="login-content">
         <div className="login-left">
           <div className="login-brand">
-            <img src="/logo.png" alt="SLSU Logo" className="login-logo" />
+            <img src="/logo.png" alt="SLSU Logo" className="login-logo" loading="eager" width="48" height="48" decoding="async" />
             <span className="login-brand-name">SLSU</span>
           </div>
           <h1 className="login-title">LAB<span className="login-title-bold">TRACK</span></h1>

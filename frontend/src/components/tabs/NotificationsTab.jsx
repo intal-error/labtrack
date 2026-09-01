@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
 import { MdWarning, MdInfo, MdCheckCircle, MdError, MdNotificationsOff, MdOpenInNew, MdNotifications } from "react-icons/md";
 import PageHero from "../ui/PageHero";
+import Pagination from "../ui/Pagination";
 
 const TYPE_CONFIG = {
   alert: { icon: <MdError size={22} />, label: "Alert", color: "#d32f2f", bg: "linear-gradient(135deg,#ffebee,#ffcdd2)" },
@@ -27,15 +28,25 @@ export default function NotificationsTab() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
   const [selectedNotif, setSelectedNotif] = useState(null);
+  const [page, setPage] = useState(1);
+  const [paginationData, setPaginationData] = useState(null);
 
-  useEffect(() => { loadNotifications(); }, []);
+  useEffect(() => { loadNotifications(); }, [page, filter]);
 
   async function loadNotifications() {
     try {
-      const data = await api.getMyNotifications();
-      setNotifications(Array.isArray(data) ? data : []);
+      const params = `page=${page}&limit=25&unreadOnly=${filter === "unread"}`;
+      const res = await api.getMyNotifications(params);
+      if (Array.isArray(res)) {
+        setNotifications(res);
+        setPaginationData(null);
+      } else {
+        setNotifications(res.data || []);
+        setPaginationData(res.pagination || null);
+      }
     } catch {
       setNotifications([]);
+      setPaginationData(null);
     } finally {
       setLoading(false);
     }
@@ -83,11 +94,6 @@ export default function NotificationsTab() {
   }
 
   const unread = notifications.filter((n) => !n.read).length;
-  const filtered = notifications.filter((n) => {
-    if (filter === "unread") return !n.read;
-    if (filter === "read") return n.read;
-    return true;
-  });
 
   if (loading) return <div className="page-loading"><div className="spinner-lg" /></div>;
 
@@ -102,25 +108,25 @@ export default function NotificationsTab() {
       </PageHero>
 
       <div className="notif-filters">
-        <button className={`notif-filter-btn ${filter === "all" ? "active" : ""}`} onClick={() => setFilter("all")}>
+        <button className={`notif-filter-btn ${filter === "all" ? "active" : ""}`} onClick={() => { setFilter("all"); setPage(1); }}>
           All <span className="notif-filter-count">{notifications.length}</span>
         </button>
-        <button className={`notif-filter-btn ${filter === "unread" ? "active" : ""}`} onClick={() => setFilter("unread")}>
+        <button className={`notif-filter-btn ${filter === "unread" ? "active" : ""}`} onClick={() => { setFilter("unread"); setPage(1); }}>
           Unread <span className="notif-filter-count">{unread}</span>
         </button>
-        <button className={`notif-filter-btn ${filter === "read" ? "active" : ""}`} onClick={() => setFilter("read")}>
+        <button className={`notif-filter-btn ${filter === "read" ? "active" : ""}`} onClick={() => { setFilter("read"); setPage(1); }}>
           Read <span className="notif-filter-count">{notifications.length - unread}</span>
         </button>
       </div>
 
       <div className="notification-list">
-        {filtered.length === 0 ? (
+        {notifications.length === 0 ? (
           <div className="notif-empty">
             <MdNotificationsOff size={48} />
             <h3>No notifications</h3>
             <p>{filter === "all" ? "You're all caught up!" : `No ${filter} notifications`}</p>
           </div>
-        ) : filtered.map((n) => {
+        ) : notifications.map((n) => {
           const config = TYPE_CONFIG[n.type] || TYPE_CONFIG.info;
           return (
             <div className={`notif-card ${n.read ? "read" : "unread"}`} key={n.id} onClick={() => setSelectedNotif(n)}>
@@ -151,6 +157,16 @@ export default function NotificationsTab() {
           );
         })}
       </div>
+
+      {paginationData && (
+        <Pagination
+          currentPage={paginationData.currentPage || page}
+          totalPages={paginationData.totalPages || 1}
+          totalItems={paginationData.totalItems || notifications.length}
+          pageSize={paginationData.pageSize || 25}
+          onPageChange={setPage}
+        />
+      )}
 
       {selectedNotif && (
         <Modal title="Notification Details" onClose={() => setSelectedNotif(null)}>

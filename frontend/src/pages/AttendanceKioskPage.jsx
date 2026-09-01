@@ -194,7 +194,7 @@ export default function AttendanceKioskPage() {
     <div className="kiosk-page">
       <div className="kiosk-header">
         <div className="kiosk-logo">
-          <img src="/slsulucena.jpg" alt="SLSU" />
+          <img src="/slsulucena.jpg" alt="SLSU" loading="lazy" width="1920" height="1080" decoding="async" />
           <span className="kiosk-logo-text">LabTrack</span>
         </div>
         <div className="kiosk-room-badge">

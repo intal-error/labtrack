@@ -1,4 +1,5 @@
 const { db } = require("../config/firebase");
+const { parsePagination, paginatedResponse } = require("../middleware/pagination");
 
 const REQUESTS = "borrowRequests";
 const TRANS = "transactions";
@@ -112,6 +113,29 @@ const getAllRequests = async (req, res) => {
       });
     }
 
+    if (req.query.search) {
+      const s = req.query.search.toLowerCase();
+      requests = requests.filter((r) => {
+        return (
+          (r.firstName || "").toLowerCase().includes(s) ||
+          (r.lastName || "").toLowerCase().includes(s) ||
+          (r.itemName || "").toLowerCase().includes(s) ||
+          (r.schoolID || "").toLowerCase().includes(s)
+        );
+      });
+    }
+
+    if (req.query.status && req.query.status !== "All") {
+      requests = requests.filter((r) => (r.status || "").toLowerCase() === req.query.status.toLowerCase());
+    }
+
+    const { page, limit, paginate } = parsePagination(req);
+    if (paginate) {
+      const total = requests.length;
+      const paged = requests.slice((page - 1) * limit, page * limit);
+      return res.json(paginatedResponse(paged, total, page, limit));
+    }
+
     res.json(requests);
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
@@ -124,13 +148,37 @@ const getMyRequests = async (req, res) => {
     const snap = await db.collection(REQUESTS)
       .where("userId", "==", uid)
       .get();
-    const requests = snap.docs
+    let requests = snap.docs
       .map((doc) => ({ id: doc.id, ...doc.data() }))
       .sort((a, b) => {
         const da = a.createdAt?.toDate?.() || (a.createdAt?.seconds ? new Date(a.createdAt.seconds * 1000) : new Date(0));
         const db2 = b.createdAt?.toDate?.() || (b.createdAt?.seconds ? new Date(b.createdAt.seconds * 1000) : new Date(0));
         return db2 - da;
       });
+
+    if (req.query.search) {
+      const s = req.query.search.toLowerCase();
+      requests = requests.filter((r) => {
+        return (
+          (r.firstName || "").toLowerCase().includes(s) ||
+          (r.lastName || "").toLowerCase().includes(s) ||
+          (r.itemName || "").toLowerCase().includes(s) ||
+          (r.schoolID || "").toLowerCase().includes(s)
+        );
+      });
+    }
+
+    if (req.query.status && req.query.status !== "All") {
+      requests = requests.filter((r) => (r.status || "").toLowerCase() === req.query.status.toLowerCase());
+    }
+
+    const { page, limit, paginate } = parsePagination(req);
+    if (paginate) {
+      const total = requests.length;
+      const paged = requests.slice((page - 1) * limit, page * limit);
+      return res.json(paginatedResponse(paged, total, page, limit));
+    }
+
     res.json(requests);
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });

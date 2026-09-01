@@ -39,11 +39,8 @@
 .sidebar-brand-sub{font-size:10px;color:rgba(255,255,255,.4);line-height:1.3;font-weight:500;margin-top:2px;letter-spacing:.2px}
 
 /* Nav */
-.sidebar nav{width:100%;flex:1;overflow-y:auto;overflow-x:hidden;padding:12px 0 0}
-.sidebar nav::-webkit-scrollbar{width:3px}
-.sidebar nav::-webkit-scrollbar-track{background:transparent}
-.sidebar nav::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:3px}
-.sidebar nav::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.15)}
+.sidebar nav{width:100%;flex:1;overflow-y:auto;overflow-x:hidden;padding:12px 0 0;scrollbar-width:none}
+.sidebar nav::-webkit-scrollbar{width:0}
 .sidebar nav ul{width:100%;padding:0}
 .sidebar li{width:100%}
 

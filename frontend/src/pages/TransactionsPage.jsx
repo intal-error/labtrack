@@ -2,15 +2,17 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "../services/api";
 import { COURSES } from "../constants/courses";
 import { toDate, formatDate, getRemainingQuantity } from "../utils/helpers";
-import { filterBySearch } from "../utils/search";
 import { useAuth } from "../context/AuthContext";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Modal from "../components/ui/Modal";
+import Pagination from "../components/ui/Pagination";
 import toast from "react-hot-toast";
 import "../styles/pages/tables.css";
 import { MdSwapHoriz } from "react-icons/md";
 import PageHero from "../components/ui/PageHero";
 import ViewToggle from "../components/ui/ViewToggle";
+
+const PAGE_LIMIT = 25;
 
 const AVATAR_COLORS = ["#2E7D32", "#1565c0", "#6a1b9a", "#c62828", "#ef6c00", "#00838f", "#4e342e", "#37474f"];
 
@@ -46,6 +48,26 @@ function getOverdueInfo(date, quantity, returnedQuantity) {
   if (days >= 14) return { text: `${days}d overdue`, className: "overdue-critical" };
   if (days >= 7) return { text: `${days}d overdue`, className: "overdue-warning" };
   return null;
+}
+
+function getDateParams(range) {
+  if (!range || range === "all") return {};
+  const now = new Date();
+  if (range === "today") {
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    return { dateFrom: start.toISOString() };
+  }
+  if (range === "week") {
+    const start = new Date(now);
+    start.setDate(start.getDate() - 7);
+    return { dateFrom: start.toISOString() };
+  }
+  if (range === "month") {
+    const start = new Date(now);
+    start.setMonth(start.getMonth() - 1);
+    return { dateFrom: start.toISOString() };
+  }
+  return {};
 }
 
 const SORT_OPTIONS = [
@@ -114,28 +136,55 @@ export default function TransactionsPage() {
   const [viewMode, setViewMode] = useState("list");
   const [returningId, setReturningId] = useState(null);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const [page, setPage] = useState(1);
+  const [paginationData, setPaginationData] = useState(null);
 
   const isStudent = role === "student";
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      const dateParams = getDateParams(dateRange);
+      const paramsObj = {
+        page: String(page),
+        limit: String(PAGE_LIMIT),
+        search: search || "",
+        course: filterCourse !== "All" ? filterCourse : "",
+        ...dateParams,
+      };
+      const params = "?" + Object.entries(paramsObj)
+        .filter(([, v]) => v !== "")
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+        .join("&");
+
       const borrowedFn = isStudent ? api.getMyBorrowed : api.getBorrowed;
       const returnedFn = isStudent ? api.getMyReturned : api.getReturned;
-      const [borrowedData, returnedData] = await Promise.all([
-        borrowedFn(),
-        returnedFn(),
+      const [borrowedRes, returnedRes] = await Promise.all([
+        borrowedFn(params),
+        returnedFn(params),
       ]);
-      setBorrowed(borrowedData || []);
-      setReturned(returnedData || []);
+
+      if (Array.isArray(borrowedRes)) {
+        setBorrowed(borrowedRes);
+        setReturned(returnedRes || []);
+        setPaginationData(null);
+      } else {
+        setBorrowed(borrowedRes.data || []);
+        setPaginationData(borrowedRes.pagination || null);
+        setReturned(returnedRes?.data || []);
+      }
     } catch (err) {
       toast.error(err.message || "Failed to load transactions");
     } finally {
       setLoading(false);
     }
-  }, [isStudent]);
+  }, [isStudent, page, search, filterCourse, dateRange]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab, search, filterCourse, dateRange]);
 
   const stats = useMemo(() => {
     const dueSoon = borrowed.filter((b) => {
@@ -158,30 +207,13 @@ export default function TransactionsPage() {
     };
   }, [borrowed, returned]);
 
-  const filterItems = useCallback((items) => {
-    let result = items;
-    if (filterCourse !== "All") {
-      result = result.filter((item) => item.course === filterCourse || item.equipment_course === filterCourse);
-    }
-    if (dateRange !== "all") {
-      result = result.filter((item) => matchesDateRange(toDate(item.timestamp), dateRange));
-    }
-    if (search) result = filterBySearch(result, search, ["schoolID", "firstName", "lastName", "itemName", "course", "year", "equipment_course", "assigned_admin_id"]);
-    return sortItems(result, sortBy);
-  }, [filterCourse, dateRange, search, sortBy]);
-
   const activeItems = useMemo(() =>
-    activeTab === "borrowed" ? filterItems(borrowed) : filterItems(returned),
-  [activeTab, borrowed, returned, filterItems]);
+    activeTab === "borrowed" ? borrowed : returned,
+  [activeTab, borrowed, returned]);
 
-  const allCount = useMemo(() => {
-    const all = activeTab === "borrowed" ? borrowed : returned;
-    let result = all;
-    if (filterCourse !== "All") result = result.filter((i) => i.course === filterCourse || i.equipment_course === filterCourse);
-    if (dateRange !== "all") result = result.filter((i) => matchesDateRange(toDate(i.timestamp), dateRange));
-    if (search) result = filterBySearch(result, search, ["schoolID", "firstName", "lastName", "itemName", "course", "year", "equipment_course"]);
-    return result.length;
-  }, [activeTab, borrowed, returned, filterCourse, dateRange, search]);
+  const displayItems = useMemo(() => sortItems(activeItems, sortBy), [activeItems, sortBy]);
+
+  const paginationTotal = paginationData?.total ?? activeItems.length;
 
   const downloadReport = async () => {
     try {
@@ -244,7 +276,7 @@ export default function TransactionsPage() {
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
           </div>
           <div className="stat-info">
-            <span className="stat-number">{stats.totalBorrowed}</span>
+            <span className="stat-number">{paginationData?.total ?? stats.totalBorrowed}</span>
             <span className="stat-label">{isStudent ? "My Total Borrowed" : "Total Borrowed"}</span>
           </div>
         </div>
@@ -283,7 +315,7 @@ export default function TransactionsPage() {
             </button>
           </div>
           <div className="transactions-result-count">
-            Showing {activeItems.length} of {allCount}
+            Showing {displayItems.length} of {paginationTotal}
           </div>
         </div>
         <div className="transactions-toolbar-right">
@@ -307,7 +339,7 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      {activeItems.length === 0 ? (
+      {displayItems.length === 0 ? (
         <div className="transactions-empty">
           <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             {activeTab === "borrowed" ? (
@@ -329,7 +361,7 @@ export default function TransactionsPage() {
         </div>
       ) : viewMode === "grid" ? (
         <div className="transactions-grid">
-          {activeItems.map((item) => {
+          {displayItems.map((item) => {
             const date = toDate(item.timestamp);
             const isBorrowed = activeTab === "borrowed";
             const remaining = isBorrowed ? getRemainingQuantity(item) : null;
@@ -346,7 +378,7 @@ export default function TransactionsPage() {
                   <div className="transaction-card-top">
                     <div className="transaction-avatar" style={item.profileURL ? { background: "transparent" } : { background: color }}>
                       {item.profileURL ? (
-                        <img src={item.profileURL} alt={fullName} />
+                        <img src={item.profileURL} alt={fullName} loading="lazy" width="40" height="40" decoding="async" />
                       ) : (
                         getInitials(item.firstName, item.lastName)
                       )}
@@ -427,7 +459,7 @@ export default function TransactionsPage() {
               </tr>
             </thead>
             <tbody>
-              {activeItems.map((item) => {
+              {displayItems.map((item) => {
                 const date = toDate(item.timestamp);
                 const isBorrowed = activeTab === "borrowed";
                 const remaining = isBorrowed ? getRemainingQuantity(item) : null;
@@ -442,7 +474,7 @@ export default function TransactionsPage() {
                       <div className="table-user">
                         <div className="transaction-avatar-sm" style={item.profileURL ? { background: "transparent" } : { background: getAvatarColor(fullName) }}>
                           {item.profileURL ? (
-                            <img src={item.profileURL} alt={fullName} />
+                            <img src={item.profileURL} alt={fullName} loading="lazy" width="40" height="40" decoding="async" />
                           ) : (
                             getInitials(item.firstName, item.lastName)
                           )}
@@ -485,6 +517,16 @@ export default function TransactionsPage() {
         </div>
       )}
 
+      {paginationData && paginationData.totalPages > 1 && (
+        <Pagination
+          currentPage={paginationData.page}
+          totalPages={paginationData.totalPages}
+          totalItems={paginationData.total}
+          pageSize={paginationData.limit}
+          onPageChange={setPage}
+        />
+      )}
+
       {selectedTransaction && (
         <Modal title="Borrower Details" onClose={() => setSelectedTransaction(null)}>
           {(() => {
@@ -504,7 +546,7 @@ export default function TransactionsPage() {
                 <div className="txn-detail-borrower">
                   <div className="txn-detail-avatar" style={item.profileURL ? { background: "transparent" } : { background: color }}>
                     {item.profileURL ? (
-                      <img src={item.profileURL} alt={fullName} />
+                      <img src={item.profileURL} alt={fullName} loading="lazy" width="40" height="40" decoding="async" />
                     ) : (
                       getInitials(item.firstName, item.lastName)
                     )}
@@ -583,13 +625,13 @@ export default function TransactionsPage() {
                     <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                       {item.borrowPhotoURL && (
                         <div style={{ textAlign: "center" }}>
-                          <img src={item.borrowPhotoURL} alt="Borrow condition" style={{ maxWidth: 200, borderRadius: 8, border: "1px solid var(--border)" }} />
+                          <img src={item.borrowPhotoURL} alt="Borrow condition" loading="lazy" width="200" height="200" decoding="async" style={{ maxWidth: 200, borderRadius: 8, border: "1px solid var(--border)" }} />
                           <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>At Borrow</div>
                         </div>
                       )}
                       {item.returnPhotoURL && (
                         <div style={{ textAlign: "center" }}>
-                          <img src={item.returnPhotoURL} alt="Return condition" style={{ maxWidth: 200, borderRadius: 8, border: "1px solid var(--border)" }} />
+                          <img src={item.returnPhotoURL} alt="Return condition" loading="lazy" width="200" height="200" decoding="async" style={{ maxWidth: 200, borderRadius: 8, border: "1px solid var(--border)" }} />
                           <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>At Return</div>
                         </div>
                       )}

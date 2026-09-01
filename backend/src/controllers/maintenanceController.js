@@ -1,12 +1,36 @@
 const { db } = require("../config/firebase");
+const { parsePagination, paginatedResponse } = require("../middleware/pagination");
 
 const COLLECTION = "maintenance";
 
 const getAll = async (req, res) => {
   try {
     const snap = await db.collection(COLLECTION).orderBy("createdAt", "desc").get();
-    const items = [];
+    let items = [];
     snap.forEach((doc) => items.push({ id: doc.id, ...doc.data() }));
+
+    if (req.query.search) {
+      const search = req.query.search.toLowerCase();
+      items = items.filter((item) => {
+        const title = (item.title || "").toLowerCase();
+        const assignedTo = (item.assignedTo || "").toLowerCase();
+        const itemName = (item.itemName || "").toLowerCase();
+        return title.includes(search) || assignedTo.includes(search) || itemName.includes(search);
+      });
+    }
+
+    if (req.query.status && req.query.status !== "All") {
+      items = items.filter((item) => item.status === req.query.status);
+    }
+
+    const { paginate, page, limit } = parsePagination(req);
+    if (paginate) {
+      const total = items.length;
+      const start = (page - 1) * limit;
+      const sliced = items.slice(start, start + limit);
+      return res.json(paginatedResponse(sliced, total, page, limit));
+    }
+
     res.json(items);
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });

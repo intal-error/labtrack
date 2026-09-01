@@ -6,9 +6,10 @@ import toast from "react-hot-toast";
 import { filterBySearch } from "../../utils/search";
 import "../../styles/pages/tabs.css";
 import "../../styles/pages/catalog.css";
-import { MdBuild, MdAdd, MdEdit, MdDelete, MdCalendarToday, MdWarning, MdSearch, MdCheckCircle, MdSchedule, MdPlayArrow, MdAssignment, MdCameraAlt, MdImage, MdGridOn, MdList, MdClose, MdInfo } from "react-icons/md";
+import { MdBuild, MdAdd, MdEdit, MdDelete, MdCalendarToday, MdWarning, MdSearch, MdCheckCircle, MdSchedule, MdPlayArrow, MdAssignment, MdCameraAlt, MdClose, MdInfo } from "react-icons/md";
 import PageHero from "../ui/PageHero";
 import ViewToggle from "../ui/ViewToggle";
+import Pagination from "../ui/Pagination";
 
 const STATUS_COLORS = {
   scheduled: "#1976d2",
@@ -71,14 +72,32 @@ export default function MaintenanceTab() {
   const [selectedItem, setSelectedItem] = useState(null);
   const [viewMode, setViewMode] = useState("list");
   const [uploading, setUploading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [paginationData, setPaginationData] = useState(null);
   const [form, setForm] = useState({ catalogId: "", itemName: "", type: "preventive", description: "", status: "scheduled", scheduledDate: "", assignedTo: "", priority: "medium", photoURL: "" });
 
   useEffect(() => { load(); }, []);
 
+  useEffect(() => { setPage(1); }, [search, filter]);
+
+  useEffect(() => { load(); }, [page]);
+
   async function load() {
     try {
-      const [m, c] = await Promise.all([api.getMaintenance(), api.getCatalog()]);
-      setItems(Array.isArray(m) ? m : []);
+      const params = { page, limit: 10 };
+      if (search.trim()) params.search = search.trim();
+      if (filter !== "all") params.status = filter;
+      const [m, c] = await Promise.all([api.getMaintenance(params), api.getCatalog()]);
+      if (Array.isArray(m)) {
+        setItems(m);
+        setPaginationData(null);
+      } else if (m && m.data) {
+        setItems(m.data);
+        setPaginationData(m.pagination || null);
+      } else {
+        setItems([]);
+        setPaginationData(null);
+      }
       setCatalog(Array.isArray(c) ? c : []);
     } catch {
       toast.error("Failed to load maintenance data");
@@ -205,7 +224,7 @@ export default function MaintenanceTab() {
 
   return (
     <div className="tab-content">
-      <PageHero icon={MdBuild} title="Maintenance" subtitle="Schedule and track equipment maintenance">
+      <PageHero icon={MdBuild} title="Maintenance">
         {role === "admin" && (
           <button className="hero-action-btn ghost" onClick={openCreate}><MdAdd size={16} /> Schedule</button>
         )}
@@ -545,6 +564,14 @@ export default function MaintenanceTab() {
             </div>
           )}
         </Modal>
+      )}
+
+      {paginationData && paginationData.totalPages > 1 && (
+        <Pagination
+          currentPage={page}
+          totalPages={paginationData.totalPages}
+          onPageChange={setPage}
+        />
       )}
     </div>
   );

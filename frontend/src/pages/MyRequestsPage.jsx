@@ -86,7 +86,7 @@ export default function MyRequestsPage() {
 
   return (
     <section className="transactions-page">
-      <PageHero icon={MdAssignment} title="My Requests" subtitle="Track your pending and processed borrow requests" />
+      <PageHero icon={MdAssignment} title="My Requests" />
 
       <div className="transactions-stats">
         <div className="stat-card stat-active">

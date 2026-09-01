@@ -2,11 +2,11 @@ import { useState, useEffect, useMemo } from "react";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import toast from "react-hot-toast";
-import { filterBySearch } from "../../utils/search";
 import "../../styles/pages/tabs.css";
 import "../../styles/pages/shared-form-panel.css";
-import { MdWarning, MdAdd, MdEdit, MdDelete, MdSearch, MdInfo, MdOutlineWarning, MdCameraAlt, MdFilterList, MdClose, MdEvent, MdPerson, MdAssignment, MdSchedule, MdLocationOn } from "react-icons/md";
+import { MdWarning, MdAdd, MdEdit, MdDelete, MdSearch, MdInfo, MdOutlineWarning, MdCameraAlt, MdFilterList, MdClose, MdPerson, MdAssignment, MdSchedule } from "react-icons/md";
 import PageHero from "../ui/PageHero";
+import Pagination from "../ui/Pagination";
 
 const SEVERITY_COLORS = { low: "#43A047", medium: "#f57c00", high: "#d32f2f", critical: "#b71c1c" };
 const STATUS_COLORS = { open: "#d32f2f", investigating: "#f57c00", resolved: "#43A047" };
@@ -56,15 +56,38 @@ export default function IncidentTab() {
   const [resolutionNote, setResolutionNote] = useState("");
   const [imageOverlay, setImageOverlay] = useState(null);
   const [showDetail, setShowDetail] = useState(false);
+  const [page, setPage] = useState(1);
+  const [paginationData, setPaginationData] = useState(null);
 
+  const PAGE_LIMIT = 12;
   const canCreate = true;
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { setPage(1); }, [search, filterStatus, filterSeverity, filterMy, dateFrom, dateTo]);
+  useEffect(() => { load(); }, [page, search, filterStatus, filterSeverity, filterMy, dateFrom, dateTo]);
 
   async function load() {
     try {
-      const [i, c] = await Promise.all([api.getIncidents(), api.getCatalog()]);
-      setIncidents(Array.isArray(i) ? i : []);
+      const params = new URLSearchParams();
+      params.set("page", page);
+      params.set("limit", PAGE_LIMIT);
+      if (search) params.set("search", search);
+      if (filterStatus !== "All") params.set("status", filterStatus.toLowerCase());
+      if (filterSeverity !== "All") params.set("severity", filterSeverity.toLowerCase());
+      if (filterMy) params.set("mine", "true");
+      if (dateFrom) params.set("dateFrom", dateFrom);
+      if (dateTo) params.set("dateTo", dateTo);
+      const qs = params.toString();
+      const [i, c] = await Promise.all([
+        filterMy ? api.getMyIncidents(qs) : api.getIncidents(qs),
+        api.getCatalog(),
+      ]);
+      if (Array.isArray(i)) {
+        setIncidents(i);
+        setPaginationData(null);
+      } else {
+        setIncidents(Array.isArray(i.data) ? i.data : []);
+        setPaginationData(i.pagination || null);
+      }
       setCatalog(Array.isArray(c) ? c : []);
     } catch {
       toast.error("Failed to load incidents");
@@ -97,17 +120,7 @@ export default function IncidentTab() {
     return counts;
   }, [incidents]);
 
-  const filtered = useMemo(() => incidents.filter((inc) => {
-    const matchSearch = !search ||
-      filterBySearch([inc], search, ["title", "description", "reporterName"]).length > 0;
-    const matchStatus = filterStatus === "All" || inc.status === filterStatus.toLowerCase();
-    const matchSeverity = filterSeverity === "All" || inc.severity === filterSeverity.toLowerCase();
-    const matchMy = !filterMy || inc.reportedBy === user?.uid;
-    const incDate = inc.createdAt?.toDate ? inc.createdAt.toDate() : new Date(inc.createdAt);
-    const matchFrom = !dateFrom || incDate >= new Date(dateFrom);
-    const matchTo = !dateTo || incDate <= new Date(dateTo + "T23:59:59");
-    return matchSearch && matchStatus && matchSeverity && matchMy && matchFrom && matchTo;
-  }), [incidents, search, filterStatus, filterSeverity, filterMy, dateFrom, dateTo, user]);
+  const filtered = incidents;
 
   function openAdd() {
     setForm(EMPTY_FORM);
@@ -210,7 +223,7 @@ export default function IncidentTab() {
 
   return (
     <div className="tab-content">
-      <PageHero icon={MdWarning} title="Incident Reports" subtitle="Report and track laboratory incidents">
+      <PageHero icon={MdWarning} title="Incident Reports">
         {canCreate && (
           <button className="hero-action-btn ghost" onClick={openAdd}><MdAdd size={16} /> Report Incident</button>
         )}
@@ -258,14 +271,11 @@ export default function IncidentTab() {
           <button className={`incident-filter-btn incident-my-btn ${filterMy ? "active" : ""}`} onClick={() => setFilterMy(!filterMy)}>
             <MdFilterList size={14} /> My Reports
           </button>
-        </div>
-        <div className="incident-toolbar-right">
+          <div className="incident-filter-divider" />
           <div className="incident-date-range">
-            <label>From</label>
             <input type="date" className="incident-date-filter" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
           </div>
           <div className="incident-date-range">
-            <label>To</label>
             <input type="date" className="incident-date-filter" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
           </div>
           <select className="incident-severity-filter" value={filterSeverity} onChange={(e) => setFilterSeverity(e.target.value)}>
@@ -436,6 +446,16 @@ export default function IncidentTab() {
         </div>
           )}
       </div>
+
+      {paginationData && paginationData.totalPages > 1 && (
+        <Pagination
+          currentPage={page}
+          totalPages={paginationData.totalPages}
+          totalItems={paginationData.total}
+          pageSize={PAGE_LIMIT}
+          onPageChange={setPage}
+        />
+      )}
 
       {selectedIncident && (
         <div className={`lab-slide-panel ${showDetail ? "open" : ""}`}>

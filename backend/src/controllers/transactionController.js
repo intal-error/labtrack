@@ -1,8 +1,11 @@
 const { db } = require("../config/firebase");
+const { parsePagination, paginatedResponse } = require("../middleware/pagination");
 
 const TRANS = "transactions";
 const CATALOG = "catalog";
 const USERS = "users";
+const FINES = "fines";
+const NOTIF = "notifications";
 
 function toDate(value) {
   if (!value) return null;
@@ -36,6 +39,58 @@ function isOpenBorrow(t) {
   return getRemainingQuantity(t) > 0;
 }
 
+async function createFineForLateReturn(borrowData, transactionId) {
+  try {
+    const dueDate = toDate(borrowData.dueDate);
+    if (!dueDate) return;
+
+    const now = new Date();
+    if (now <= dueDate) return;
+
+    const daysOverdue = Math.ceil((now - dueDate) / (1000 * 60 * 60 * 24));
+    if (daysOverdue < 1) return;
+
+    const existing = await db.collection(FINES)
+      .where("transactionId", "==", transactionId)
+      .where("status", "==", "pending")
+      .get();
+    if (!existing.empty) return;
+
+    const settingsDoc = await db.collection("settings").doc("appSettings").get();
+    const settings = settingsDoc.exists ? settingsDoc.data() : {};
+    const finePerDay = Number(settings.finePerDay) || 5;
+    const totalFine = daysOverdue * finePerDay;
+
+    await db.collection(FINES).add({
+      userId: borrowData.userId || "",
+      transactionId,
+      itemName: borrowData.itemName || "Unknown Item",
+      daysOverdue,
+      finePerDay,
+      totalFine,
+      status: "pending",
+      createdAt: new Date(),
+    });
+
+    if (borrowData.userId) {
+      await db.collection(NOTIF).add({
+        targetUserId: borrowData.userId,
+        type: "warning",
+        title: "Fine Issued",
+        message: `A fine of ₱${totalFine} has been issued for "${borrowData.itemName}" (${daysOverdue} days overdue). Please settle the fine.`,
+        read: false,
+        dismissedBy: [],
+        link: "/transactions",
+        createdAt: new Date(),
+      });
+    }
+
+    console.log(`Late return fine created for ${transactionId}: ₱${totalFine} (${daysOverdue} days overdue)`);
+  } catch (err) {
+    console.error(`Failed to create late return fine:`, err.message);
+  }
+}
+
 async function enrichWithProfileURL(items) {
   const userIds = [...new Set(items.map((i) => i.userId).filter(Boolean))];
   if (userIds.length === 0) return items;
@@ -56,10 +111,42 @@ async function enrichWithProfileURL(items) {
 const getBorrowed = async (req, res) => {
   try {
     const snap = await db.collection(TRANS).where("action", "==", "borrowed").get();
-    const items = snap.docs
+    let items = snap.docs
       .map((doc) => ({ id: doc.id, ...doc.data() }))
       .filter((d) => isOpenBorrow(d))
       .sort((a, b) => (toDate(b.timestamp)?.getTime() || 0) - (toDate(a.timestamp)?.getTime() || 0));
+
+    if (req.query.search) {
+      const q = req.query.search.toLowerCase();
+      items = items.filter((i) =>
+        `${i.firstName || ""} ${i.lastName || ""}`.toLowerCase().includes(q) ||
+        (i.schoolID || "").toLowerCase().includes(q) ||
+        (i.itemName || "").toLowerCase().includes(q) ||
+        (i.course || "").toLowerCase().includes(q)
+      );
+    }
+    if (req.query.course) {
+      items = items.filter((i) => i.course === req.query.course || i.equipment_course === req.query.course);
+    }
+    if (req.query.dateFrom) {
+      const from = new Date(req.query.dateFrom);
+      items = items.filter((i) => { const d = toDate(i.timestamp); return d && d >= from; });
+    }
+    if (req.query.dateTo) {
+      const to = new Date(req.query.dateTo);
+      to.setHours(23, 59, 59, 999);
+      items = items.filter((i) => { const d = toDate(i.timestamp); return d && d <= to; });
+    }
+
+    const { page, limit, paginate } = parsePagination(req);
+    const total = items.length;
+
+    if (paginate) {
+      const paged = items.slice((page - 1) * limit, page * limit);
+      const enriched = await enrichWithProfileURL(paged);
+      return res.json(paginatedResponse(enriched, total, page, limit));
+    }
+
     const enriched = await enrichWithProfileURL(items);
     res.json(enriched);
   } catch (err) {
@@ -93,6 +180,37 @@ const getReturned = async (req, res) => {
       });
     }
 
+    if (req.query.search) {
+      const q = req.query.search.toLowerCase();
+      items = items.filter((i) =>
+        `${i.firstName || ""} ${i.lastName || ""}`.toLowerCase().includes(q) ||
+        (i.schoolID || "").toLowerCase().includes(q) ||
+        (i.itemName || "").toLowerCase().includes(q) ||
+        (i.course || "").toLowerCase().includes(q)
+      );
+    }
+    if (req.query.course) {
+      items = items.filter((i) => i.course === req.query.course || i.equipment_course === req.query.course);
+    }
+    if (req.query.dateFrom) {
+      const from = new Date(req.query.dateFrom);
+      items = items.filter((i) => { const d = toDate(i.timestamp); return d && d >= from; });
+    }
+    if (req.query.dateTo) {
+      const to = new Date(req.query.dateTo);
+      to.setHours(23, 59, 59, 999);
+      items = items.filter((i) => { const d = toDate(i.timestamp); return d && d <= to; });
+    }
+
+    const { page, limit, paginate } = parsePagination(req);
+    const total = items.length;
+
+    if (paginate) {
+      const paged = items.slice((page - 1) * limit, page * limit);
+      const enriched = await enrichWithProfileURL(paged);
+      return res.json(paginatedResponse(enriched, total, page, limit));
+    }
+
     const enriched = await enrichWithProfileURL(items);
     res.json(enriched);
   } catch (err) {
@@ -107,10 +225,28 @@ const getMyBorrowed = async (req, res) => {
       .where("action", "==", "borrowed")
       .where("userId", "==", uid)
       .get();
-    const items = snap.docs
+    let items = snap.docs
       .map((doc) => ({ id: doc.id, ...doc.data() }))
       .filter((d) => isOpenBorrow(d))
       .sort((a, b) => (toDate(b.timestamp)?.getTime() || 0) - (toDate(a.timestamp)?.getTime() || 0));
+
+    if (req.query.search) {
+      const q = req.query.search.toLowerCase();
+      items = items.filter((i) =>
+        (i.itemName || "").toLowerCase().includes(q) ||
+        (i.course || "").toLowerCase().includes(q)
+      );
+    }
+
+    const { page, limit, paginate } = parsePagination(req);
+    const total = items.length;
+
+    if (paginate) {
+      const paged = items.slice((page - 1) * limit, page * limit);
+      const enriched = await enrichWithProfileURL(paged);
+      return res.json(paginatedResponse(enriched, total, page, limit));
+    }
+
     const enriched = await enrichWithProfileURL(items);
     res.json(enriched);
   } catch (err) {
@@ -146,6 +282,23 @@ const getMyReturned = async (req, res) => {
         }
         return item;
       });
+    }
+
+    if (req.query.search) {
+      const q = req.query.search.toLowerCase();
+      items = items.filter((i) =>
+        (i.itemName || "").toLowerCase().includes(q) ||
+        (i.course || "").toLowerCase().includes(q)
+      );
+    }
+
+    const { page, limit, paginate } = parsePagination(req);
+    const total = items.length;
+
+    if (paginate) {
+      const paged = items.slice((page - 1) * limit, page * limit);
+      const enriched = await enrichWithProfileURL(paged);
+      return res.json(paginatedResponse(enriched, total, page, limit));
     }
 
     const enriched = await enrichWithProfileURL(items);
@@ -323,6 +476,8 @@ const recordReturn = async (req, res) => {
     const borrowRef = db.collection(TRANS).doc(borrowId);
     const returnRef = db.collection(TRANS).doc();
 
+    let capturedBorrow = null;
+
     await db.runTransaction(async (t) => {
       const [catalogSnap, borrowSnap] = await Promise.all([t.get(catalogRef), t.get(borrowRef)]);
       if (!catalogSnap.exists) throw new Error("Catalog item not found");
@@ -334,6 +489,8 @@ const recordReturn = async (req, res) => {
       // No course-based restriction — any admin can process any return
       const remaining = getRemainingQuantity(borrow);
       if (quantity > remaining) throw new Error(`Only ${remaining} remain`);
+
+      capturedBorrow = borrow;
 
       const returned = numberOr(borrow.returnedQuantity) + quantity;
       const remainingQty = Math.max(0, numberOr(borrow.quantity, 1) - returned);
@@ -406,6 +563,10 @@ const recordReturn = async (req, res) => {
       }
     });
 
+    if (capturedBorrow) {
+      createFineForLateReturn(capturedBorrow, borrowId);
+    }
+
     res.status(201).json({ message: "Return recorded" });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
@@ -471,4 +632,106 @@ const getRecentActivity = async (req, res) => {
   }
 };
 
-module.exports = { getBorrowed, getReturned, getMyBorrowed, getMyReturned, getDashboardCounts, getChartData, recordBorrow, recordReturn, getRecentActivity };
+const recordMyReturn = async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const { borrowId, itemId, quantity, returnPhotoURL, conditionOnReturn } = req.body;
+    const catalogRef = db.collection(CATALOG).doc(itemId);
+    const borrowRef = db.collection(TRANS).doc(borrowId);
+    const returnRef = db.collection(TRANS).doc();
+
+    let capturedBorrow = null;
+
+    await db.runTransaction(async (t) => {
+      const [catalogSnap, borrowSnap] = await Promise.all([t.get(catalogRef), t.get(borrowRef)]);
+      if (!catalogSnap.exists) throw new Error("Catalog item not found");
+      if (!borrowSnap.exists) throw new Error("Borrow record not found");
+
+      const borrow = borrowSnap.data();
+      if (!isOpenBorrow(borrow)) throw new Error("Already returned");
+      if (borrow.userId !== uid) throw new Error("You can only return items you borrowed");
+
+      capturedBorrow = borrow;
+
+      const remaining = getRemainingQuantity(borrow);
+      if (quantity > remaining) throw new Error(`Only ${remaining} remain`);
+
+      const returned = numberOr(borrow.returnedQuantity) + quantity;
+      const remainingQty = Math.max(0, numberOr(borrow.quantity, 1) - returned);
+      const fullReturn = remainingQty === 0;
+      const current = catalogSnap.data();
+      const currentAvail = getAvailableQuantity(current);
+      const totalQty = Math.max(numberOr(current.quantity), currentAvail + quantity);
+      const nextAvailable = Math.min(totalQty, currentAvail + quantity);
+
+      const returnData = {
+        action: "returned",
+        status: "returned",
+        originalTransactionId: borrowId,
+        catalogId: itemId,
+        itemName: borrow.itemName,
+        quantity: Number(quantity),
+        schoolID: borrow.schoolID,
+        firstName: borrow.firstName || "",
+        lastName: borrow.lastName || "",
+        course: borrow.course || "",
+        year: borrow.year || "",
+        userId: uid,
+        timestamp: new Date(),
+        returnedAt: new Date(),
+        equipment_course: borrow.equipment_course || "",
+        assigned_admin_id: borrow.assigned_admin_id || "",
+        returnedTo: uid,
+      };
+      if (borrow.email) returnData.email = borrow.email;
+      if (borrow.dueDate) returnData.dueDate = borrow.dueDate;
+      if (borrow.borrowedAt) returnData.borrowedAt = borrow.borrowedAt;
+      if (borrow.timestamp) returnData.borrowedAt = borrow.borrowedAt || borrow.timestamp;
+      if (returnPhotoURL) returnData.returnPhotoURL = returnPhotoURL;
+      if (conditionOnReturn) returnData.conditionOnReturn = conditionOnReturn;
+      if (borrow.borrowPhotoURL) returnData.borrowPhotoURL = borrow.borrowPhotoURL;
+      if (borrow.conditionOnBorrow) returnData.conditionOnBorrow = borrow.conditionOnBorrow;
+
+      t.set(catalogRef, {
+        availableQuantity: nextAvailable,
+        available: nextAvailable > 0,
+        status: nextAvailable < totalQty ? "Borrowed" : "Available",
+        updatedAt: new Date(),
+      }, { merge: true });
+      t.set(borrowRef, {
+        returnedQuantity: returned,
+        quantityRemaining: remainingQty,
+        status: fullReturn ? "returned" : "partially_returned",
+        lastReturnedAt: new Date(),
+        ...(fullReturn ? { returnedAt: new Date() } : {}),
+      }, { merge: true });
+      t.set(returnRef, returnData);
+
+      t.set(db.collection(USERS).doc(uid).collection("borrowed").doc(borrowId), {
+        returnedQuantity: returned,
+        quantityRemaining: remainingQty,
+        status: fullReturn ? "returned" : "borrowed",
+        lastReturnedAt: new Date(),
+      }, { merge: true });
+      t.set(db.collection(USERS).doc(uid).collection("returned").doc(returnRef.id), {
+        transactionId: returnRef.id,
+        originalTransactionId: borrowId,
+        catalogId: itemId,
+        itemName: borrow.itemName,
+        quantity: Number(quantity),
+        status: "returned",
+        timestamp: new Date(),
+      });
+    });
+
+    if (capturedBorrow) {
+      createFineForLateReturn(capturedBorrow, borrowId);
+    }
+
+    res.status(201).json({ message: "Return recorded" });
+  } catch (err) {
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
+  }
+};
+
+module.exports = { getBorrowed, getReturned, getMyBorrowed, getMyReturned, getDashboardCounts, getChartData, recordBorrow, recordReturn, recordMyReturn, getRecentActivity };

@@ -307,7 +307,7 @@ export default function SettingsTab() {
               value={settings.defaultRole}
               onChange={(e) => handleChange("defaultRole", e.target.value)}
             >
-              <option value="student">Student</option>
+              <option value="Student">Student</option>
             </select>
           </label>
         </div>

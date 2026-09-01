@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../services/api";
 import { formatDuration, formatTime, getTodayString } from "../utils/attendanceHelpers";
 import RoomManagementTab from "../components/tabs/RoomManagementTab";
@@ -29,7 +29,8 @@ const TABS = [
 ];
 
 export default function AttendanceLogsPage() {
-  const [activeTab, setActiveTab] = useState("active");
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "active");
   const [stats, setStats] = useState(null);
   const [activeStudents, setActiveStudents] = useState([]);
   const [todayRecords, setTodayRecords] = useState([]);
@@ -141,7 +142,7 @@ export default function AttendanceLogsPage() {
   return (
     <div className="attendance-page">
       {/* Hero Header */}
-      <PageHero icon={MdEventAvailable} title="Attendance Logs" subtitle="Monitor student laboratory attendance in real-time" />
+      <PageHero icon={MdEventAvailable} title="Attendance Logs" />
 
       <div className="attendance-shell">
         {/* Stats */}

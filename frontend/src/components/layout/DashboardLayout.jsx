@@ -38,6 +38,7 @@ const navSections = [
       { path: "/transactions", label: "Transactions", icon: FaExchangeAlt, roles: ["student", "admin"] },
       { path: "/borrow-requests", label: "Borrow Requests", icon: MdAssignment, roles: ["admin"] },
       { path: "/my-requests", label: "My Requests", icon: MdAssignment, roles: ["student"] },
+      { path: "/inventory", label: "Catalog", icon: MdInventory, roles: ["student"] },
       { path: "/catalog", label: "Catalog", icon: MdInventory, roles: ["admin"] },
       { path: "/maintenance", label: "Maintenance", icon: MdBuild, roles: ["admin"] },
     ],
@@ -139,7 +140,7 @@ export default function DashboardLayout() {
       <aside className={`sidebar ${collapsed ? "collapsed" : ""} ${sidebarOpen ? "active" : ""}`}>
         <div className="sidebar-header">
           <div className="sidebar-logo-wrap">
-            <img className="sidebar-logo-icon" src="/slsulucena.jpg" alt="SLSU" />
+            <img className="sidebar-logo-icon" src="/slsulucena.jpg" alt="SLSU" loading="lazy" width="40" height="40" decoding="async" />
             {!collapsed && (
               <div className="sidebar-brand">
                 <div className="sidebar-brand-title">LabTrack</div>

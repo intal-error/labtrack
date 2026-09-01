@@ -194,7 +194,7 @@ app.use("/api/backup", verifyToken, authorize("admin"), backupLimiter, backupRou
 app.use("/api/borrow-requests", verifyToken, methodAwareLimiter, cacheMiddleware(15), borrowRequestRoutes);
 
 // Admin-only routes
-app.use("/api/admin", verifyToken, authorize("admin"), methodAwareLimiter, cacheMiddleware(30), adminRoutes);
+app.use("/api/admin", verifyToken, authorize("admin"), methodAwareLimiter, adminRoutes);
 app.use("/api/settings", verifyToken, authorize("admin"), methodAwareLimiter, cacheMiddleware(60), settingsRoutes);
 
 // Error handler

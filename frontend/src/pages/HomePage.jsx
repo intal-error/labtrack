@@ -110,7 +110,6 @@ export default function HomePage() {
         { label: "Lab Manuals", desc: "Guides & references", icon: MdMenuBook, path: "/manuals" },
       ]
     : [
-        { label: "Scanner", desc: "Process borrow/return", icon: MdQrCodeScanner, path: "/scanner", primary: true },
         { label: "Catalog", desc: "Manage inventory", icon: MdInventory, path: "/catalog" },
         { label: "Transactions", desc: "View all records", icon: MdSwapHoriz, path: "/transactions" },
         { label: "Borrow Requests", desc: "Review requests", icon: MdAssignment, path: "/borrow-requests" },

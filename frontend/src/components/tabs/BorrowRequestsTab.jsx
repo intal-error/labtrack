@@ -2,13 +2,15 @@ import { useState, useEffect, useMemo } from "react";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import Modal from "../ui/Modal";
+import Pagination from "../ui/Pagination";
 import toast from "react-hot-toast";
-import { filterBySearch } from "../../utils/search";
 import "../../styles/pages/tabs.css";
 import "../../styles/pages/catalog.css";
 import { MdAssignment, MdSearch, MdCheckCircle, MdCancel, MdSchedule, MdPerson, MdInventory, MdSort, MdSwapHoriz } from "react-icons/md";
 import PageHero from "../ui/PageHero";
 import ViewToggle from "../ui/ViewToggle";
+
+const PAGE_SIZE = 25;
 
 const STATUS_COLORS = {
   pending: "#f57c00",
@@ -75,22 +77,41 @@ export default function BorrowRequestsTab() {
   const [processing, setProcessing] = useState(null);
   const [viewMode, setViewMode] = useState("list");
   const [sortBy, setSortBy] = useState("newest");
+  const [page, setPage] = useState(1);
+  const [paginationData, setPaginationData] = useState(null);
   // Reassignment state
   const [reassignTarget, setReassignTarget] = useState(null);
   const [reassignAdminId, setReassignAdminId] = useState("");
   const [reassignReason, setReassignReason] = useState("");
   const [reassignLoading, setReassignLoading] = useState(false);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [page, filter, search]);
 
   async function load() {
     try {
-      const [reqs, cat, adminList] = await Promise.all([
-        api.getBorrowRequests(),
+      const params = new URLSearchParams();
+      params.set("page", page);
+      params.set("limit", PAGE_SIZE);
+      if (search.trim()) params.set("search", search.trim());
+      if (filter !== "all") params.set("status", filter);
+
+      const [reqsResult, cat, adminList] = await Promise.all([
+        api.getBorrowRequests(params.toString()),
         api.getCatalog(),
         api.getActiveAdmins().catch(() => []),
       ]);
-      setRequests(reqs || []);
+
+      if (Array.isArray(reqsResult)) {
+        setRequests(reqsResult);
+        setPaginationData(null);
+      } else if (reqsResult && reqsResult.data) {
+        setRequests(reqsResult.data);
+        setPaginationData(reqsResult.pagination || null);
+      } else {
+        setRequests([]);
+        setPaginationData(null);
+      }
+
       setCatalog(Array.isArray(cat) ? cat : []);
       setAdmins(Array.isArray(adminList) ? adminList : []);
     } catch {
@@ -105,6 +126,16 @@ export default function BorrowRequestsTab() {
     catalog.forEach((item) => { map[item.id] = item.imageUrl || ""; });
     return map;
   }, [catalog]);
+
+  function handleFilterChange(newFilter) {
+    setFilter(newFilter);
+    setPage(1);
+  }
+
+  function handleSearchChange(e) {
+    setSearch(e.target.value);
+    setPage(1);
+  }
 
   async function handleApprove(id) {
     setProcessing(id);
@@ -174,10 +205,7 @@ export default function BorrowRequestsTab() {
   }, [requests]);
 
   const filtered = useMemo(() => {
-    let result = requests;
-    if (filter !== "all") result = result.filter((r) => r.status === filter);
-    if (search.trim()) result = filterBySearch(result, search, ["firstName", "lastName", "itemName", "schoolID", "assigned_admin_name", "targetCourse"]);
-    result = [...result].sort((a, b) => {
+    let result = [...requests].sort((a, b) => {
       if (sortBy === "oldest") return (toDate(a.createdAt)?.getTime() || 0) - (toDate(b.createdAt)?.getTime() || 0);
       if (sortBy === "due-date") {
         const aDue = toDate(a.dueDate)?.getTime() || Infinity;
@@ -187,13 +215,16 @@ export default function BorrowRequestsTab() {
       return (toDate(b.createdAt)?.getTime() || 0) - (toDate(a.createdAt)?.getTime() || 0);
     });
     return result;
-  }, [requests, filter, search, sortBy]);
+  }, [requests, sortBy]);
+
+  const totalPages = paginationData ? paginationData.totalPages : 1;
+  const totalItems = paginationData ? paginationData.total : requests.length;
 
   if (loading) return <div className="page-loading"><div className="spinner-lg" /></div>;
 
   return (
     <div className="tab-content">
-      <PageHero icon={MdAssignment} title="Borrow Requests" subtitle="Review and manage student borrow requests" />
+      <PageHero icon={MdAssignment} title="Borrow Requests" />
 
       <div className="maintenance-stats">
         {[
@@ -202,7 +233,7 @@ export default function BorrowRequestsTab() {
           { key: "approved", label: "Approved", count: stats.approved, icon: <MdCheckCircle size={20} /> },
           { key: "rejected", label: "Rejected", count: stats.rejected, icon: <MdCancel size={20} /> },
         ].map((s) => (
-          <div className={`maintenance-stat-card ${filter === s.key ? "active" : ""}`} key={s.key} onClick={() => setFilter(filter === s.key ? "all" : s.key)}>
+          <div className={`maintenance-stat-card ${filter === s.key ? "active" : ""}`} key={s.key} onClick={() => handleFilterChange(filter === s.key ? "all" : s.key)}>
             <div className={`maintenance-stat-icon ${s.key}`}>{s.icon}</div>
             <div className="maintenance-stat-info">
               <span className="maintenance-stat-number">{s.count}</span>
@@ -215,7 +246,7 @@ export default function BorrowRequestsTab() {
       <div className="maintenance-toolbar">
         <div className="maintenance-filter-tabs">
           {["all", "pending", "approved", "rejected", "cancelled"].map((f) => (
-            <button key={f} className={`maintenance-filter-btn ${filter === f ? "active" : ""}`} onClick={() => setFilter(f)}>
+            <button key={f} className={`maintenance-filter-btn ${filter === f ? "active" : ""}`} onClick={() => handleFilterChange(f)}>
               {f.charAt(0).toUpperCase() + f.slice(1)}
             </button>
           ))}
@@ -223,7 +254,7 @@ export default function BorrowRequestsTab() {
         <div className="maintenance-toolbar-right">
           <div className="maintenance-search">
             <MdSearch size={16} />
-            <input type="text" placeholder="Search name, item, ID..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input type="text" placeholder="Search name, item, ID..." value={search} onChange={handleSearchChange} />
           </div>
           <div className="maintenance-sort">
             <MdSort size={14} />
@@ -378,6 +409,14 @@ export default function BorrowRequestsTab() {
           </table>
         </div>
       )}
+
+      <Pagination
+        currentPage={page}
+        totalPages={totalPages}
+        totalItems={totalItems}
+        pageSize={PAGE_SIZE}
+        onPageChange={setPage}
+      />
 
       {/* Request Detail Modal */}
       {selectedRequest && (
