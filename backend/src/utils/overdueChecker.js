@@ -44,7 +44,7 @@ const checkOverdueTransactions = async () => {
               message: `Your borrowed "${d.itemName || "Unknown Item"}" is past its due date. Please return it as soon as possible.`,
               read: false,
               dismissedBy: [],
-              link: "/transactions",
+              link: "/fines",
               createdAt: new Date(),
             });
           }

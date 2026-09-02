@@ -174,7 +174,6 @@ export default function InventoryPage() {
                         <span>No image</span>
                       </div>
                     )}
-                    <span className={`card-status-badge ${item.status === "Available" ? "status-available" : "status-borrowed"}`}>{item.status || "Available"}</span>
                   </div>
                   <div className="catalog-card-body">
                     <h3 className="catalog-card-title">{item.itemName || "-"}</h3>
@@ -218,7 +217,6 @@ export default function InventoryPage() {
                   <th>Course</th>
                   <th>Condition</th>
                   <th>Quantity</th>
-                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -243,7 +241,6 @@ export default function InventoryPage() {
                       <td>{item.course || "-"}</td>
                       <td>{item.condition ? <span className={`condition-badge ${conditionClass(item.condition)}`}>{item.condition}</span> : "-"}</td>
                       <td>{Number.isFinite(Number(item.availableQuantity)) ? `${avail} / ${total}` : total}</td>
-                      <td><span className={`card-status-badge ${item.status === "Available" ? "status-available" : "status-borrowed"}`}>{item.status || "Available"}</span></td>
                     </tr>
                   );
                 })}

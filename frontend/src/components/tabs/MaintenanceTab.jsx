@@ -6,34 +6,20 @@ import toast from "react-hot-toast";
 import { filterBySearch } from "../../utils/search";
 import "../../styles/pages/tabs.css";
 import "../../styles/pages/catalog.css";
-import { MdBuild, MdAdd, MdEdit, MdDelete, MdCalendarToday, MdWarning, MdSearch, MdCheckCircle, MdSchedule, MdPlayArrow, MdAssignment, MdCameraAlt, MdClose, MdInfo } from "react-icons/md";
+import "../../styles/pages/shared-form-panel.css";
+import "../../styles/pages/tables.css";
+import { MdBuild, MdAdd, MdEdit, MdDelete, MdCalendarToday, MdWarning, MdSearch, MdCheckCircle, MdSchedule, MdPlayArrow, MdAssignment, MdCameraAlt, MdClose, MdInfo, MdLocationOn, MdBusiness } from "react-icons/md";
 import PageHero from "../ui/PageHero";
 import ViewToggle from "../ui/ViewToggle";
 import Pagination from "../ui/Pagination";
 
-const STATUS_COLORS = {
-  scheduled: "#1976d2",
-  "in-progress": "#f57c00",
-  completed: "#43A047",
-};
-
-const PRIORITY_COLORS = {
-  low: "#43A047",
-  medium: "#f57c00",
-  high: "#d32f2f",
-  critical: "#b71c1c",
-};
-
-const PRIORITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
-
-const TYPE_LABELS = { preventive: "Preventive", corrective: "Corrective" };
+const STATUS_COLORS = { scheduled: "#1976d2", "in-progress": "#f57c00", completed: "#43A047" };
+const STAT_ICONS = { total: <MdAssignment size={20} />, scheduled: <MdSchedule size={20} />, "in-progress": <MdPlayArrow size={20} />, completed: <MdCheckCircle size={20} /> };
 
 function getRelativeDate(dateStr) {
   if (!dateStr) return null;
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const target = new Date(dateStr);
-  target.setHours(0, 0, 0, 0);
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  const target = new Date(dateStr); target.setHours(0, 0, 0, 0);
   const diffMs = target - now;
   const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
   if (diffDays < 0) return { text: `${Math.abs(diffDays)}d overdue`, className: "date-overdue" };
@@ -45,19 +31,50 @@ function getRelativeDate(dateStr) {
 
 function getDateBorderStyle(item) {
   if (item.status === "completed") return "";
-  if (!item.scheduledDate) return "";
-  const rel = getRelativeDate(item.scheduledDate);
+  const dateField = item.inspectedDate || item.scheduledDate;
+  if (!dateField) return "";
+  const rel = getRelativeDate(dateField);
   if (!rel) return "";
   if (rel.className === "date-overdue") return "card-overdue";
   if (rel.className === "date-today" || rel.className === "date-urgent") return "card-urgent";
   return "";
 }
 
-const STAT_ICONS = {
-  total: <MdAssignment size={20} />,
-  scheduled: <MdSchedule size={20} />,
-  "in-progress": <MdPlayArrow size={20} />,
-  completed: <MdCheckCircle size={20} />,
+function fmtDateTime(date) {
+  if (!date) return "-";
+  const d = date?.toDate ? date.toDate() : new Date(date);
+  return isNaN(d.getTime()) ? "-" : d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function fmtDate(date) {
+  if (!date) return "-";
+  const d = date?.toDate ? date.toDate() : new Date(date);
+  return isNaN(d.getTime()) ? "-" : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function toLocalDateTime(date) {
+  if (!date) return "";
+  const d = date?.toDate ? date.toDate() : new Date(date);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function toLocalDate(date) {
+  if (!date) return "";
+  const d = date?.toDate ? date.toDate() : new Date(date);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+const EMPTY_FORM = {
+  catalogId: "", itemName: "", status: "scheduled",
+  inspectedDate: "", collegeBuilding: "", location: "",
+  findings: "", recommendation: "", materialsNeeded: "", assignedPersonnel: "",
+  estimatedDays: "", dateStarted: "", dateFinished: "",
+  remarks: "", inspectedBy: "", notedBy: "",
+  photoURL: "",
 };
 
 export default function MaintenanceTab() {
@@ -74,12 +91,10 @@ export default function MaintenanceTab() {
   const [uploading, setUploading] = useState(false);
   const [page, setPage] = useState(1);
   const [paginationData, setPaginationData] = useState(null);
-  const [form, setForm] = useState({ catalogId: "", itemName: "", type: "preventive", description: "", status: "scheduled", scheduledDate: "", assignedTo: "", priority: "medium", photoURL: "" });
+  const [form, setForm] = useState({ ...EMPTY_FORM });
 
   useEffect(() => { load(); }, []);
-
   useEffect(() => { setPage(1); }, [search, filter]);
-
   useEffect(() => { load(); }, [page]);
 
   async function load() {
@@ -88,26 +103,16 @@ export default function MaintenanceTab() {
       if (search.trim()) params.search = search.trim();
       if (filter !== "all") params.status = filter;
       const [m, c] = await Promise.all([api.getMaintenance(params), api.getCatalog()]);
-      if (Array.isArray(m)) {
-        setItems(m);
-        setPaginationData(null);
-      } else if (m && m.data) {
-        setItems(m.data);
-        setPaginationData(m.pagination || null);
-      } else {
-        setItems([]);
-        setPaginationData(null);
-      }
+      if (Array.isArray(m)) { setItems(m); setPaginationData(null); }
+      else if (m?.data) { setItems(m.data); setPaginationData(m.pagination || null); }
+      else { setItems([]); setPaginationData(null); }
       setCatalog(Array.isArray(c) ? c : []);
-    } catch {
-      toast.error("Failed to load maintenance data");
-    } finally {
-      setLoading(false);
-    }
+    } catch { toast.error("Failed to load maintenance data"); }
+    finally { setLoading(false); }
   }
 
   function openCreate() {
-    setForm({ catalogId: "", itemName: "", type: "preventive", description: "", status: "scheduled", scheduledDate: "", assignedTo: "", priority: "medium", photoURL: "" });
+    setForm({ ...EMPTY_FORM });
     setEditing(null);
     setShowForm(true);
   }
@@ -116,12 +121,20 @@ export default function MaintenanceTab() {
     setForm({
       catalogId: item.catalogId || "",
       itemName: item.itemName || "",
-      type: item.type || "preventive",
-      description: item.description || "",
       status: item.status || "scheduled",
-      scheduledDate: item.scheduledDate ? new Date(item.scheduledDate).toISOString().split("T")[0] : "",
-      assignedTo: item.assignedTo || "",
-      priority: item.priority || "medium",
+      inspectedDate: toLocalDateTime(item.inspectedDate || item.scheduledDate),
+      collegeBuilding: item.collegeBuilding || "",
+      location: item.location || "",
+      findings: item.findings || item.description || "",
+      recommendation: item.recommendation || "",
+      materialsNeeded: item.materialsNeeded || "",
+      assignedPersonnel: item.assignedPersonnel || item.assignedTo || "",
+      estimatedDays: item.estimatedDays || "",
+      dateStarted: toLocalDateTime(item.dateStarted),
+      dateFinished: toLocalDateTime(item.dateFinished),
+      remarks: item.remarks || "",
+      inspectedBy: item.inspectedBy || "",
+      notedBy: item.notedBy || "",
       photoURL: item.photoURL || "",
     });
     setEditing(item.id);
@@ -136,7 +149,12 @@ export default function MaintenanceTab() {
   async function handleSubmit(e) {
     e.preventDefault();
     try {
-      const data = { ...form, scheduledDate: form.scheduledDate ? new Date(form.scheduledDate) : null };
+      const data = {
+        ...form,
+        inspectedDate: form.inspectedDate ? new Date(form.inspectedDate) : null,
+        dateStarted: form.dateStarted ? new Date(form.dateStarted) : null,
+        dateFinished: form.dateFinished ? new Date(form.dateFinished) : null,
+      };
       if (editing) {
         await api.updateMaintenance(editing, data);
         toast.success("Maintenance updated");
@@ -146,46 +164,27 @@ export default function MaintenanceTab() {
       }
       setShowForm(false);
       load();
-    } catch {
-      toast.error("Failed to save maintenance");
-    }
+    } catch { toast.error("Failed to save maintenance"); }
   }
 
   async function handleDelete(id) {
     if (!confirm("Delete this maintenance record?")) return;
-    try {
-      await api.deleteMaintenance(id);
-      toast.success("Deleted");
-      load();
-    } catch {
-      toast.error("Failed to delete");
-    }
+    try { await api.deleteMaintenance(id); toast.success("Deleted"); load(); }
+    catch { toast.error("Failed to delete"); }
   }
 
   async function handlePhotoUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
-    try {
-      const { url } = await api.uploadImage(file);
-      setForm((f) => ({ ...f, photoURL: url }));
-      toast.success("Photo uploaded!");
-    } catch {
-      toast.error("Upload failed");
-    } finally {
-      setUploading(false);
-    }
+    try { const { url } = await api.uploadImage(file); setForm((f) => ({ ...f, photoURL: url })); toast.success("Photo uploaded!"); }
+    catch { toast.error("Upload failed"); }
+    finally { setUploading(false); }
   }
 
   async function updateStatus(id, status) {
-    try {
-      await api.updateMaintenance(id, { status });
-      toast.success("Status updated");
-      setSelectedItem(null);
-      load();
-    } catch {
-      toast.error("Failed to update");
-    }
+    try { await api.updateMaintenance(id, { status }); toast.success("Status updated"); setSelectedItem(null); load(); }
+    catch { toast.error("Failed to update"); }
   }
 
   const stats = useMemo(() => {
@@ -194,8 +193,10 @@ export default function MaintenanceTab() {
     const inProgress = items.filter((i) => i.status === "in-progress").length;
     const completed = items.filter((i) => i.status === "completed").length;
     const overdue = items.filter((i) => {
-      if (i.status === "completed" || !i.scheduledDate) return false;
-      const rel = getRelativeDate(i.scheduledDate);
+      if (i.status === "completed") return false;
+      const dateField = i.inspectedDate || i.scheduledDate;
+      if (!dateField) return false;
+      const rel = getRelativeDate(dateField);
       return rel?.className === "date-overdue";
     }).length;
     return { total, scheduled, "in-progress": inProgress, completed, overdue };
@@ -203,19 +204,14 @@ export default function MaintenanceTab() {
 
   const filtered = useMemo(() => {
     let result = [...items];
-    if (filter !== "all") {
-      result = result.filter((i) => i.status === filter);
-    }
-    if (search.trim()) result = filterBySearch(result, search, ["itemName", "assignedTo", "description"]);
+    if (filter !== "all") result = result.filter((i) => i.status === filter);
+    if (search.trim()) result = filterBySearch(result, search, ["itemName", "collegeBuilding", "location", "findings", "inspectedBy", "notedBy", "assignedPersonnel", "assignedTo"]);
     result.sort((a, b) => {
       if (a.status === "completed" && b.status !== "completed") return 1;
       if (a.status !== "completed" && b.status === "completed") return -1;
-      const aDate = a.scheduledDate ? new Date(a.scheduledDate).getTime() : Infinity;
-      const bDate = b.scheduledDate ? new Date(b.scheduledDate).getTime() : Infinity;
-      if (aDate !== bDate) return aDate - bDate;
-      const aPri = PRIORITY_ORDER[a.priority] ?? 2;
-      const bPri = PRIORITY_ORDER[b.priority] ?? 2;
-      return aPri - bPri;
+      const aDate = (a.inspectedDate || a.scheduledDate) ? new Date(a.inspectedDate || a.scheduledDate).getTime() : Infinity;
+      const bDate = (b.inspectedDate || b.scheduledDate) ? new Date(b.inspectedDate || b.scheduledDate).getTime() : Infinity;
+      return aDate - bDate;
     });
     return result;
   }, [items, filter, search]);
@@ -226,7 +222,7 @@ export default function MaintenanceTab() {
     <div className="tab-content">
       <PageHero icon={MdBuild} title="Maintenance">
         {role === "admin" && (
-          <button className="hero-action-btn ghost" onClick={openCreate}><MdAdd size={16} /> Schedule</button>
+          <button className="hero-action-btn ghost" onClick={openCreate}><MdAdd size={16} /> New MAF</button>
         )}
       </PageHero>
 
@@ -237,9 +233,7 @@ export default function MaintenanceTab() {
             <div className="maintenance-stat-info">
               <span className="maintenance-stat-number">
                 {stats[key]}
-                {key === "total" && stats.overdue > 0 && (
-                  <span className="maintenance-overdue-badge">{stats.overdue} overdue</span>
-                )}
+                {key === "total" && stats.overdue > 0 && <span className="maintenance-overdue-badge">{stats.overdue} overdue</span>}
               </span>
               <span className="maintenance-stat-label">{key === "in-progress" ? "In Progress" : key.charAt(0).toUpperCase() + key.slice(1)}</span>
             </div>
@@ -258,7 +252,7 @@ export default function MaintenanceTab() {
         <div className="maintenance-toolbar-right">
           <div className="maintenance-search">
             <MdSearch size={16} />
-            <input type="text" placeholder="Search items, technician..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input type="text" placeholder="Search items, location, inspector..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <ViewToggle value={viewMode} onChange={setViewMode} localStorageKey="labtrack-maintenance-view" />
         </div>
@@ -266,85 +260,50 @@ export default function MaintenanceTab() {
 
       <div className={`lab-slide-panel ${showForm ? "open" : ""}`}>
         <div className="lab-slide-header">
-          <h2>{editing ? "Edit Maintenance" : "Schedule Maintenance"}</h2>
-          <button className="lab-slide-close" onClick={() => setShowForm(false)}>
-            <MdClose size={20} />
-          </button>
+          <h2>{editing ? "Edit MAF" : "New MAF"}</h2>
+          <button className="lab-slide-close" onClick={() => setShowForm(false)}><MdClose size={20} /></button>
         </div>
         <div className="lab-slide-body">
           <div className="lab-slide-accent" />
           <form onSubmit={handleSubmit}>
             <div className="lab-form-section">
               <div className="lab-form-section-header">
-                <div className="lab-form-section-icon inc-details"><MdBuild size={14} /></div>
-                <span className="lab-form-section-title">Task Info</span>
-              </div>
-              <div className="lab-form-field">
-                <label>Lab Item <span className="lab-required" /></label>
-                <div className="lab-input-wrap">
-                  <select value={form.catalogId} onChange={(e) => handleItemChange(e.target.value)} required>
-                    <option value="">Select item</option>
-                    {catalog.map((c) => <option key={c.id} value={c.id}>{c.itemName}</option>)}
-                  </select>
-                  <MdAssignment size={16} />
-                </div>
+                <div className="lab-form-section-icon inc-details"><MdInfo size={14} /></div>
+                <span className="lab-form-section-title">Inspection Info</span>
               </div>
               <div className="lab-form-row">
                 <div className="lab-form-field">
-                  <label>Type</label>
+                  <label>Date & Time Inspected</label>
                   <div className="lab-input-wrap">
-                    <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-                      <option value="preventive">Preventive</option>
-                      <option value="corrective">Corrective</option>
-                    </select>
-                    <MdBuild size={16} />
-                  </div>
-                </div>
-                <div className="lab-form-field">
-                  <label>Priority</label>
-                  <div className="lab-input-wrap">
-                    <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
-                      <option value="critical">Critical</option>
-                    </select>
-                    <MdWarning size={16} />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="lab-form-section">
-              <div className="lab-form-section-header">
-                <div className="lab-form-section-icon inc-classification"><MdSchedule size={14} /></div>
-                <span className="lab-form-section-title">Schedule</span>
-              </div>
-              <div className="lab-form-row">
-                <div className="lab-form-field">
-                  <label>Status</label>
-                  <div className="lab-input-wrap">
-                    <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                      <option value="scheduled">Scheduled</option>
-                      <option value="in-progress">In Progress</option>
-                      <option value="completed">Completed</option>
-                    </select>
-                    <MdInfo size={16} />
-                  </div>
-                </div>
-                <div className="lab-form-field">
-                  <label>Scheduled Date</label>
-                  <div className="lab-input-wrap">
-                    <input type="date" value={form.scheduledDate} onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })} />
+                    <input type="datetime-local" value={form.inspectedDate} onChange={(e) => setForm({ ...form, inspectedDate: e.target.value })} />
                     <MdCalendarToday size={16} />
                   </div>
                 </div>
+                <div className="lab-form-field">
+                  <label>College/Building Name</label>
+                  <div className="lab-input-wrap">
+                    <input type="text" value={form.collegeBuilding} onChange={(e) => setForm({ ...form, collegeBuilding: e.target.value })} placeholder="e.g. College of Engineering" />
+                    <MdBusiness size={16} />
+                  </div>
+                </div>
               </div>
-              <div className="lab-form-field">
-                <label>Assigned To</label>
-                <div className="lab-input-wrap">
-                  <input type="text" value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })} placeholder="Technician name" />
-                  <MdInfo size={16} />
+              <div className="lab-form-row">
+                <div className="lab-form-field">
+                  <label>Serial #/Equipment Concern</label>
+                  <div className="lab-input-wrap">
+                    <select value={form.catalogId} onChange={(e) => handleItemChange(e.target.value)} required>
+                      <option value="">Select equipment</option>
+                      {catalog.map((c) => <option key={c.id} value={c.id}>{c.itemName}</option>)}
+                    </select>
+                    <MdAssignment size={16} />
+                  </div>
+                </div>
+                <div className="lab-form-field">
+                  <label>Location</label>
+                  <div className="lab-input-wrap">
+                    <input type="text" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="e.g. Room 301, Lab A" />
+                    <MdLocationOn size={16} />
+                  </div>
                 </div>
               </div>
             </div>
@@ -352,11 +311,121 @@ export default function MaintenanceTab() {
             <div className="lab-form-section">
               <div className="lab-form-section-header">
                 <div className="lab-form-section-icon inc-description"><MdInfo size={14} /></div>
-                <span className="lab-form-section-title">Details</span>
+                <span className="lab-form-section-title">I. Findings & Observation</span>
               </div>
               <div className="lab-form-field">
-                <label>Description</label>
-                <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} placeholder="Describe the maintenance task..." />
+                <textarea value={form.findings} onChange={(e) => setForm({ ...form, findings: e.target.value })} rows={3} placeholder="Describe inspector's findings and observations..." />
+              </div>
+            </div>
+
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon inc-classification"><MdInfo size={14} /></div>
+                <span className="lab-form-section-title">II. Recommendation</span>
+              </div>
+              <div className="lab-form-field">
+                <textarea value={form.recommendation} onChange={(e) => setForm({ ...form, recommendation: e.target.value })} rows={3} placeholder="Recommendations for maintenance..." />
+              </div>
+            </div>
+
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon inc-details"><MdInfo size={14} /></div>
+                <span className="lab-form-section-title">III. Materials Needed</span>
+              </div>
+              <div className="lab-form-field">
+                <textarea value={form.materialsNeeded} onChange={(e) => setForm({ ...form, materialsNeeded: e.target.value })} rows={2} placeholder="List materials needed (if any)..." />
+              </div>
+            </div>
+
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon inc-classification"><MdInfo size={14} /></div>
+                <span className="lab-form-section-title">IV. Personnel or Manpower Assigned</span>
+              </div>
+              <div className="lab-form-field">
+                <textarea value={form.assignedPersonnel} onChange={(e) => setForm({ ...form, assignedPersonnel: e.target.value })} rows={2} placeholder="Names of personnel assigned..." />
+              </div>
+            </div>
+
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon inc-details"><MdSchedule size={14} /></div>
+                <span className="lab-form-section-title">V. Work Schedule</span>
+              </div>
+              <div className="lab-form-field">
+                <label>No. of Days or Hours to Complete</label>
+                <div className="lab-input-wrap">
+                  <input type="text" value={form.estimatedDays} onChange={(e) => setForm({ ...form, estimatedDays: e.target.value })} placeholder="e.g. 3 days, 5 hours" />
+                  <MdInfo size={16} />
+                </div>
+              </div>
+              <div className="lab-form-row">
+                <div className="lab-form-field">
+                  <label>Date & Time Started</label>
+                  <div className="lab-input-wrap">
+                    <input type="datetime-local" value={form.dateStarted} onChange={(e) => setForm({ ...form, dateStarted: e.target.value })} />
+                    <MdCalendarToday size={16} />
+                  </div>
+                </div>
+                <div className="lab-form-field">
+                  <label>Date & Time Finished</label>
+                  <div className="lab-input-wrap">
+                    <input type="datetime-local" value={form.dateFinished} onChange={(e) => setForm({ ...form, dateFinished: e.target.value })} />
+                    <MdCalendarToday size={16} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon inc-description"><MdInfo size={14} /></div>
+                <span className="lab-form-section-title">Remarks</span>
+              </div>
+              <div className="lab-form-field">
+                <textarea value={form.remarks} onChange={(e) => setForm({ ...form, remarks: e.target.value })} rows={2} placeholder="Additional remarks..." />
+              </div>
+            </div>
+
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon inc-classification"><MdAssignment size={14} /></div>
+                <span className="lab-form-section-title">Signatures</span>
+              </div>
+              <div className="lab-form-row">
+                <div className="lab-form-field">
+                  <label>Inspected By</label>
+                  <div className="lab-input-wrap">
+                    <input type="text" value={form.inspectedBy} onChange={(e) => setForm({ ...form, inspectedBy: e.target.value })} placeholder="Name" />
+                    <MdAssignment size={16} />
+                  </div>
+                </div>
+                <div className="lab-form-field">
+                  <label>Noted By</label>
+                  <div className="lab-input-wrap">
+                    <input type="text" value={form.notedBy} onChange={(e) => setForm({ ...form, notedBy: e.target.value })} placeholder="Name" />
+                    <MdAssignment size={16} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="lab-form-section">
+              <div className="lab-form-section-header">
+                <div className="lab-form-section-icon inc-details"><MdInfo size={14} /></div>
+                <span className="lab-form-section-title">Status & Photo</span>
+              </div>
+              <div className="lab-form-field">
+                <label>Status</label>
+                <div className="lab-input-wrap">
+                  <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                    <option value="scheduled">Scheduled</option>
+                    <option value="in-progress">In Progress</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                  <MdInfo size={16} />
+                </div>
               </div>
               <div className="lab-form-field">
                 <label>Photo (optional)</label>
@@ -396,12 +465,13 @@ export default function MaintenanceTab() {
         <div className="maintenance-empty">
           <MdBuild size={48} />
           <h3>{search || filter !== "all" ? "No matching records" : "No maintenance scheduled"}</h3>
-          <p>{search || filter !== "all" ? "Try adjusting your search or filter" : "Click 'Schedule Maintenance' to create your first record"}</p>
+          <p>{search || filter !== "all" ? "Try adjusting your search or filter" : "Click 'New MAF' to create your first record"}</p>
         </div>
       ) : viewMode === "grid" ? (
         <div className="catalog-grid">
           {filtered.map((item) => {
-            const relDate = getRelativeDate(item.scheduledDate);
+            const dateField = item.inspectedDate || item.scheduledDate;
+            const relDate = getRelativeDate(dateField);
             return (
               <div className="catalog-card" key={item.id} onClick={() => setSelectedItem(item)}>
                 {item.photoURL && (
@@ -412,20 +482,16 @@ export default function MaintenanceTab() {
                 <div className="catalog-card-body">
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                     <h4 className="catalog-card-title" style={{ margin: 0 }}>{item.itemName}</h4>
-                    <span className="maintenance-priority-badge" style={{ background: `${PRIORITY_COLORS[item.priority] || PRIORITY_COLORS.medium}20`, color: PRIORITY_COLORS[item.priority] || PRIORITY_COLORS.medium, flexShrink: 0 }}>
-                      {item.priority || "medium"}
-                    </span>
-                  </div>
-                  <div className="catalog-card-meta">
-                    <span className={`condition-badge ${item.type === "preventive" ? "cond-good" : "cond-fair"}`}>{TYPE_LABELS[item.type] || item.type}</span>
-                    <span className="badge" style={{ background: `${STATUS_COLORS[item.status] || "#666"}20`, color: STATUS_COLORS[item.status] || "#666" }}>
+                    <span className="badge" style={{ background: `${STATUS_COLORS[item.status] || "#666"}20`, color: STATUS_COLORS[item.status] || "#666", flexShrink: 0 }}>
                       {item.status === "in-progress" ? "In Progress" : item.status}
                     </span>
                   </div>
+                  {item.collegeBuilding && <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "2px 0" }}><MdBusiness size={12} style={{ verticalAlign: -2 }} /> {item.collegeBuilding}</p>}
+                  {item.location && <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "2px 0" }}><MdLocationOn size={12} style={{ verticalAlign: -2 }} /> {item.location}</p>}
                   {relDate && item.status !== "completed" && (
                     <span className={`maintenance-date-badge ${relDate.className}`} style={{ marginBottom: 6, display: "inline-block" }}>{relDate.text}</span>
                   )}
-                  {item.assignedTo && <p className="catalog-card-desc" style={{ fontSize: 12, color: "var(--text-muted)", margin: "4px 0 0" }}>Assigned: {item.assignedTo}</p>}
+                  {item.inspectedBy && <p className="catalog-card-desc" style={{ fontSize: 12, color: "var(--text-muted)", margin: "4px 0 0" }}>Inspected by: {item.inspectedBy}</p>}
                 </div>
               </div>
             );
@@ -434,7 +500,8 @@ export default function MaintenanceTab() {
       ) : (
         <div className="maintenance-list">
           {filtered.map((item) => {
-            const relDate = getRelativeDate(item.scheduledDate);
+            const dateField = item.inspectedDate || item.scheduledDate;
+            const relDate = getRelativeDate(dateField);
             const dateStyle = getDateBorderStyle(item);
             return (
               <div className={`maintenance-card ${dateStyle}`} key={item.id} onClick={() => setSelectedItem(item)}>
@@ -449,9 +516,6 @@ export default function MaintenanceTab() {
                     <span>{item.itemName}</span>
                   </div>
                   <div className="maintenance-card-badges">
-                    <span className="maintenance-priority-badge" style={{ background: `${PRIORITY_COLORS[item.priority] || PRIORITY_COLORS.medium}20`, color: PRIORITY_COLORS[item.priority] || PRIORITY_COLORS.medium }}>
-                      {item.priority || "medium"}
-                    </span>
                     <span className="badge" style={{ background: `${STATUS_COLORS[item.status] || "#666"}20`, color: STATUS_COLORS[item.status] || "#666" }}>
                       {item.status === "in-progress" ? "In Progress" : item.status}
                     </span>
@@ -459,18 +523,17 @@ export default function MaintenanceTab() {
                 </div>
                 <div className="maintenance-card-body">
                   <div className="maintenance-meta">
-                    <span className={`maintenance-type-badge ${item.type}`}>
-                      <MdWarning size={14} /> {TYPE_LABELS[item.type] || item.type}
-                    </span>
-                    {item.scheduledDate && (
+                    {item.collegeBuilding && <span className="maintenance-assigned"><MdBusiness size={14} /> {item.collegeBuilding}</span>}
+                    {item.location && <span className="maintenance-assigned"><MdLocationOn size={14} /> {item.location}</span>}
+                    {dateField && (
                       <span className={`maintenance-date-badge ${relDate?.className || ""}`}>
-                        <MdCalendarToday size={14} /> {new Date(item.scheduledDate).toLocaleDateString()}
+                        <MdCalendarToday size={14} /> {fmtDate(dateField)}
                         {relDate && item.status !== "completed" && <span className="relative-date">{relDate.text}</span>}
                       </span>
                     )}
-                    {item.assignedTo && <span className="maintenance-assigned"><MdAssignment size={14} /> {item.assignedTo}</span>}
+                    {item.inspectedBy && <span className="maintenance-assigned"><MdAssignment size={14} /> {item.inspectedBy}</span>}
                   </div>
-                  {item.description && <p className="maintenance-desc">{item.description}</p>}
+                  {item.findings && <p className="maintenance-desc">{item.findings.length > 120 ? item.findings.slice(0, 120) + "..." : item.findings}</p>}
                 </div>
               </div>
             );
@@ -479,7 +542,7 @@ export default function MaintenanceTab() {
       )}
 
       {selectedItem && (
-        <Modal title="Maintenance Details" onClose={() => setSelectedItem(null)}>
+        <Modal title="Maintenance Action Form" onClose={() => setSelectedItem(null)}>
           {selectedItem.photoURL && (
             <div className="maintenance-detail-photo">
               <img src={selectedItem.photoURL} alt={selectedItem.itemName} />
@@ -487,9 +550,10 @@ export default function MaintenanceTab() {
           )}
           <div className="txn-detail-modal">
             <div className="txn-detail-section">
+              <h5>Inspection Info</h5>
               <div className="txn-detail-grid">
                 <div className="txn-detail-row">
-                  <span className="txn-detail-label">Item</span>
+                  <span className="txn-detail-label">Equipment</span>
                   <span className="txn-detail-value">{selectedItem.itemName || "-"}</span>
                 </div>
                 <div className="txn-detail-row">
@@ -499,49 +563,135 @@ export default function MaintenanceTab() {
                   </span>
                 </div>
                 <div className="txn-detail-row">
-                  <span className="txn-detail-label">Priority</span>
-                  <span className="txn-detail-value">
-                    <span className="maintenance-priority-badge" style={{ background: `${PRIORITY_COLORS[selectedItem.priority] || PRIORITY_COLORS.medium}20`, color: PRIORITY_COLORS[selectedItem.priority] || PRIORITY_COLORS.medium }}>
-                      {selectedItem.priority || "medium"}
-                    </span>
-                  </span>
+                  <span className="txn-detail-label">Date/Time Inspected</span>
+                  <span className="txn-detail-value">{fmtDateTime(selectedItem.inspectedDate || selectedItem.scheduledDate)}</span>
                 </div>
-                <div className="txn-detail-row">
-                  <span className="txn-detail-label">Type</span>
-                  <span className="txn-detail-value">{TYPE_LABELS[selectedItem.type] || selectedItem.type || "-"}</span>
-                </div>
-                <div className="txn-detail-row">
-                  <span className="txn-detail-label">Scheduled Date</span>
-                  <span className="txn-detail-value">
-                    {selectedItem.scheduledDate
-                      ? new Date(selectedItem.scheduledDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-                      : "-"}
-                  </span>
-                </div>
-                <div className="txn-detail-row">
-                  <span className="txn-detail-label">Assigned To</span>
-                  <span className="txn-detail-value">{selectedItem.assignedTo || "-"}</span>
-                </div>
-                {selectedItem.description && (
+                {selectedItem.collegeBuilding && (
                   <div className="txn-detail-row">
-                    <span className="txn-detail-label">Description</span>
-                    <span className="txn-detail-value" style={{ textAlign: "left", maxWidth: "60%" }}>{selectedItem.description}</span>
+                    <span className="txn-detail-label">College/Building</span>
+                    <span className="txn-detail-value">{selectedItem.collegeBuilding}</span>
                   </div>
                 )}
+                {selectedItem.location && (
+                  <div className="txn-detail-row">
+                    <span className="txn-detail-label">Location</span>
+                    <span className="txn-detail-value">{selectedItem.location}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {selectedItem.findings && (
+              <div className="txn-detail-section">
+                <h5>I. Findings & Observation</h5>
+                <div className="txn-detail-grid">
+                  <div className="txn-detail-row">
+                    <span className="txn-detail-value" style={{ textAlign: "left", maxWidth: "100%", whiteSpace: "pre-wrap" }}>{selectedItem.findings}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {selectedItem.recommendation && (
+              <div className="txn-detail-section">
+                <h5>II. Recommendation</h5>
+                <div className="txn-detail-grid">
+                  <div className="txn-detail-row">
+                    <span className="txn-detail-value" style={{ textAlign: "left", maxWidth: "100%", whiteSpace: "pre-wrap" }}>{selectedItem.recommendation}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {selectedItem.materialsNeeded && (
+              <div className="txn-detail-section">
+                <h5>III. Materials Needed</h5>
+                <div className="txn-detail-grid">
+                  <div className="txn-detail-row">
+                    <span className="txn-detail-value" style={{ textAlign: "left", maxWidth: "100%", whiteSpace: "pre-wrap" }}>{selectedItem.materialsNeeded}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {(selectedItem.assignedPersonnel || selectedItem.assignedTo) && (
+              <div className="txn-detail-section">
+                <h5>IV. Personnel Assigned</h5>
+                <div className="txn-detail-grid">
+                  <div className="txn-detail-row">
+                    <span className="txn-detail-value" style={{ textAlign: "left", maxWidth: "100%", whiteSpace: "pre-wrap" }}>{selectedItem.assignedPersonnel || selectedItem.assignedTo}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {(selectedItem.estimatedDays || selectedItem.dateStarted || selectedItem.dateFinished) && (
+              <div className="txn-detail-section">
+                <h5>V. Work Schedule</h5>
+                <div className="txn-detail-grid">
+                  {selectedItem.estimatedDays && (
+                    <div className="txn-detail-row">
+                      <span className="txn-detail-label">Est. Time to Complete</span>
+                      <span className="txn-detail-value">{selectedItem.estimatedDays}</span>
+                    </div>
+                  )}
+                  {selectedItem.dateStarted && (
+                    <div className="txn-detail-row">
+                      <span className="txn-detail-label">Date/Time Started</span>
+                      <span className="txn-detail-value">{fmtDateTime(selectedItem.dateStarted)}</span>
+                    </div>
+                  )}
+                  {selectedItem.dateFinished && (
+                    <div className="txn-detail-row">
+                      <span className="txn-detail-label">Date/Time Finished</span>
+                      <span className="txn-detail-value">{fmtDateTime(selectedItem.dateFinished)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {selectedItem.remarks && (
+              <div className="txn-detail-section">
+                <h5>Remarks</h5>
+                <div className="txn-detail-grid">
+                  <div className="txn-detail-row">
+                    <span className="txn-detail-value" style={{ textAlign: "left", maxWidth: "100%", whiteSpace: "pre-wrap" }}>{selectedItem.remarks}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {(selectedItem.inspectedBy || selectedItem.notedBy) && (
+              <div className="txn-detail-section">
+                <h5>Signatures</h5>
+                <div className="txn-detail-grid">
+                  {selectedItem.inspectedBy && (
+                    <div className="txn-detail-row">
+                      <span className="txn-detail-label">Inspected By</span>
+                      <span className="txn-detail-value">{selectedItem.inspectedBy}</span>
+                    </div>
+                  )}
+                  {selectedItem.notedBy && (
+                    <div className="txn-detail-row">
+                      <span className="txn-detail-label">Noted By</span>
+                      <span className="txn-detail-value">{selectedItem.notedBy}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="txn-detail-section">
+              <div className="txn-detail-grid">
                 <div className="txn-detail-row">
                   <span className="txn-detail-label">Created</span>
-                  <span className="txn-detail-value">
-                    {selectedItem.createdAt
-                      ? new Date(selectedItem.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-                      : "-"}
-                  </span>
+                  <span className="txn-detail-value">{fmtDate(selectedItem.createdAt)}</span>
                 </div>
                 {selectedItem.updatedAt && (
                   <div className="txn-detail-row">
                     <span className="txn-detail-label">Last Updated</span>
-                    <span className="txn-detail-value">
-                      {new Date(selectedItem.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                    </span>
+                    <span className="txn-detail-value">{fmtDate(selectedItem.updatedAt)}</span>
                   </div>
                 )}
               </div>
@@ -550,14 +700,10 @@ export default function MaintenanceTab() {
           {role === "admin" && (
             <div className="maintenance-detail-actions">
               {selectedItem.status === "scheduled" && (
-                <button className="btn btn-primary" onClick={() => updateStatus(selectedItem.id, "in-progress")}>
-                  <MdPlayArrow size={14} /> Start
-                </button>
+                <button className="btn btn-primary" onClick={() => updateStatus(selectedItem.id, "in-progress")}><MdPlayArrow size={14} /> Start</button>
               )}
               {selectedItem.status === "in-progress" && (
-                <button className="btn btn-primary" onClick={() => updateStatus(selectedItem.id, "completed")}>
-                  <MdCheckCircle size={14} /> Complete
-                </button>
+                <button className="btn btn-primary" onClick={() => updateStatus(selectedItem.id, "completed")}><MdCheckCircle size={14} /> Complete</button>
               )}
               <button className="btn btn-outline" onClick={() => { setSelectedItem(null); openEdit(selectedItem); }}><MdEdit size={14} /> Edit</button>
               <button className="btn btn-danger" onClick={async () => { await handleDelete(selectedItem.id); setSelectedItem(null); }}><MdDelete size={14} /> Delete</button>
@@ -567,11 +713,7 @@ export default function MaintenanceTab() {
       )}
 
       {paginationData && paginationData.totalPages > 1 && (
-        <Pagination
-          currentPage={page}
-          totalPages={paginationData.totalPages}
-          onPageChange={setPage}
-        />
+        <Pagination currentPage={page} totalPages={paginationData.totalPages} onPageChange={setPage} />
       )}
     </div>
   );

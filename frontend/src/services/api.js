@@ -185,6 +185,7 @@ export const api = {
   // Fines
   getFines: (params = "") => request(`/fines${params ? "?" + params : ""}`),
   getMyFines: (params = "") => request(`/fines/my${params ? "?" + params : ""}`),
+  getOverdueCount: () => request("/fines/overdue-count"),
   checkRestriction: (userId) => request(`/fines/check-restriction/${userId}`),
   payFine: (id) => request(`/fines/${id}/pay`, { method: "PUT" }),
   waiveFine: (id, reason) => request(`/fines/${id}/waive`, { method: "PUT", body: JSON.stringify({ reason }) }),

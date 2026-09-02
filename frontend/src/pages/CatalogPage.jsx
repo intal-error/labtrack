@@ -8,10 +8,12 @@ import Modal from "../components/ui/Modal";
 import Pagination from "../components/ui/Pagination";
 import toast from "react-hot-toast";
 import "../styles/pages/catalog.css";
+import "../styles/pages/scanner.css";
 import "../styles/pages/shared-form-panel.css";
-import { MdClose, MdEdit, MdInfo, MdImage, MdAssignment, MdTag, MdQrCode, MdInventory, MdDownload } from "react-icons/md";
+import { MdClose, MdEdit, MdInfo, MdImage, MdAssignment, MdTag, MdQrCode, MdInventory, MdDownload, MdMoreVert, MdQrCodeScanner, MdDelete, MdWarning } from "react-icons/md";
 import PageHero from "../components/ui/PageHero";
 import ViewToggle from "../components/ui/ViewToggle";
+import { useAuth } from "../context/AuthContext";
 
 export default function CatalogPage() {
   const [allItems, setAllItems] = useState([]);
@@ -29,8 +31,23 @@ export default function CatalogPage() {
   const [form, setForm] = useState({ itemName: "", category: "", course: "", quantity: "", condition: "", status: "Available", imageUrl: "", barcode: "" });
   const [uploading, setUploading] = useState(false);
   const [viewMode, setViewMode] = useState("list");
+  const [openKebab, setOpenKebab] = useState(null);
+  const { role, userProfile } = useAuth();
+  const [restriction, setRestriction] = useState(null);
 
   useEffect(() => { setPage(1); }, [search, filter, filterCourse, sort]);
+
+  useEffect(() => {
+    const handler = (e) => { if (!e.target.closest(".catalog-kebab-wrap")) setOpenKebab(null); };
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, []);
+
+  useEffect(() => {
+    if (role === "student" && userProfile?.id) {
+      api.checkRestriction(userProfile.id).then((d) => setRestriction(d)).catch(() => {});
+    }
+  }, [role, userProfile]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -140,6 +157,18 @@ export default function CatalogPage() {
         </button>
       </PageHero>
 
+      {restriction?.restricted && (
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 18px", background: "linear-gradient(135deg, rgba(211,47,47,.06), rgba(211,47,47,.02))", border: "1.5px solid rgba(211,47,47,.2)", borderRadius: 12, marginBottom: 16 }}>
+          <MdWarning size={20} style={{ color: "#d32f2f", flexShrink: 0, marginTop: 2 }} />
+          <div>
+            <div style={{ fontWeight: 700, color: "#d32f2f", fontSize: 13, marginBottom: 2 }}>Borrowing Restricted</div>
+            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+              {restriction.message || "You have an unpaid fine. Please settle it before borrowing equipment."}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="catalog-stats">
         <div className="stat-card stat-total">
           <div className="stat-icon">
@@ -246,7 +275,6 @@ export default function CatalogPage() {
                         <span>No image</span>
                       </div>
                     )}
-                    <span className={`card-status-badge ${item.status === "Available" ? "status-available" : "status-borrowed"}`}>{item.status || "Available"}</span>
                   </div>
                   <div className="catalog-card-body">
                     <h3 className="catalog-card-title">{item.itemName || "-"}</h3>
@@ -304,7 +332,6 @@ export default function CatalogPage() {
                   <th>Course</th>
                   <th>Condition</th>
                   <th>Quantity</th>
-                  <th>Status</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -331,15 +358,24 @@ export default function CatalogPage() {
                       <td>{item.condition ? <span className={`condition-badge ${conditionClass(item.condition)}`}>{item.condition}</span> : "-"}</td>
                       <td>{Number.isFinite(Number(item.availableQuantity)) ? `${avail} / ${total}` : total}</td>
                       <td className="table-actions-cell">
-                        <button className="card-btn card-btn-qr" onClick={() => showQrModal(item.id, item.itemName)} title="QR Code">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-                        </button>
-                        <button className="card-btn card-btn-edit" onClick={() => setShowUpdate({ ...item })} title="Update">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                        </button>
-                        <button className="card-btn card-btn-delete" onClick={() => handleDelete(item.id)} title="Delete">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                        </button>
+                        <div className="catalog-kebab-wrap">
+                          <button className="catalog-kebab-btn" onClick={() => setOpenKebab(openKebab === item.id ? null : item.id)}>
+                            <MdMoreVert size={18} />
+                          </button>
+                          {openKebab === item.id && (
+                            <div className="catalog-kebab-dropdown">
+                              <button onClick={() => { setOpenKebab(null); showQrModal(item.id, item.itemName); }}>
+                                <MdQrCodeScanner size={14} /> QR Code
+                              </button>
+                              <button onClick={() => { setOpenKebab(null); setShowUpdate({ ...item }); }}>
+                                <MdEdit size={14} /> Edit
+                              </button>
+                              <button className="danger" onClick={() => { setOpenKebab(null); handleDelete(item.id); }}>
+                                <MdDelete size={14} /> Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -468,7 +504,6 @@ export default function CatalogPage() {
 
       {showQr && (
         <Modal title={showQr.name || "Item QR Code"} onClose={() => setShowQr(null)} wide>
-          <p>Print this code and attach it to the item.</p>
           <div className="qr-canvas"><img src={showQr.dataUrl} alt="QR Code" /></div>
           <p className="qr-value">{showQr.value}</p>
           <div className="catalog-actions">

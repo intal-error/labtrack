@@ -80,7 +80,7 @@ async function createFineForLateReturn(borrowData, transactionId) {
         message: `A fine of ₱${totalFine} has been issued for "${borrowData.itemName}" (${daysOverdue} days overdue). Please settle the fine.`,
         read: false,
         dismissedBy: [],
-        link: "/transactions",
+        link: "/fines",
         createdAt: new Date(),
       });
     }

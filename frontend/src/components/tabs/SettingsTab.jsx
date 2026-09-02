@@ -4,8 +4,9 @@ import { useTheme } from "../../context/ThemeContext";
 import toast from "react-hot-toast";
 import {
   MdDarkMode, MdNotifications, MdSecurity, MdPeople,
-  MdSave, MdRestartAlt, MdWarning, MdAttachMoney, MdBackup, MdSettings
+  MdSave, MdRestartAlt, MdWarning, MdBackup, MdSettings
 } from "react-icons/md";
+import PesoIcon from "../ui/PesoIcon";
 import PageHero from "../ui/PageHero";
 import "../../styles/pages/tabs.css";
 
@@ -314,7 +315,7 @@ export default function SettingsTab() {
 
         <div className="settings-section">
           <div className="settings-section-header">
-            <MdAttachMoney size={20} />
+            <PesoIcon size={20} />
             <h3>Fine Management</h3>
           </div>
           <label className="settings-row settings-row-select">

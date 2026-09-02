@@ -9,13 +9,25 @@ const getAll = async (req, res) => {
     let items = [];
     snap.forEach((doc) => items.push({ id: doc.id, ...doc.data() }));
 
+    items = items.map((item) => {
+      if (!item.findings && item.description) item.findings = item.description;
+      if (!item.assignedPersonnel && item.assignedTo) item.assignedPersonnel = item.assignedTo;
+      if (!item.inspectedDate && item.scheduledDate) item.inspectedDate = item.scheduledDate;
+      return item;
+    });
+
     if (req.query.search) {
       const search = req.query.search.toLowerCase();
       items = items.filter((item) => {
-        const title = (item.title || "").toLowerCase();
-        const assignedTo = (item.assignedTo || "").toLowerCase();
         const itemName = (item.itemName || "").toLowerCase();
-        return title.includes(search) || assignedTo.includes(search) || itemName.includes(search);
+        const collegeBuilding = (item.collegeBuilding || "").toLowerCase();
+        const location = (item.location || "").toLowerCase();
+        const findings = (item.findings || "").toLowerCase();
+        const inspectedBy = (item.inspectedBy || "").toLowerCase();
+        const notedBy = (item.notedBy || "").toLowerCase();
+        const assignedTo = (item.assignedTo || "").toLowerCase();
+        const assignedPersonnel = (item.assignedPersonnel || "").toLowerCase();
+        return itemName.includes(search) || collegeBuilding.includes(search) || location.includes(search) || findings.includes(search) || inspectedBy.includes(search) || notedBy.includes(search) || assignedTo.includes(search) || assignedPersonnel.includes(search);
       });
     }
 
@@ -39,7 +51,7 @@ const getAll = async (req, res) => {
 
 const create = async (req, res) => {
   try {
-    const allowed = ["title", "description", "scheduledDate", "type", "status", "priority", "assignedTo", "catalogId", "itemName", "photoURL"];
+    const allowed = ["title", "description", "scheduledDate", "type", "status", "priority", "assignedTo", "catalogId", "itemName", "photoURL", "collegeBuilding", "location", "findings", "recommendation", "materialsNeeded", "estimatedDays", "dateStarted", "dateFinished", "remarks", "inspectedBy", "notedBy", "inspectedDate", "assignedPersonnel"];
     const sanitized = {};
     for (const key of allowed) {
       if (req.body[key] !== undefined) sanitized[key] = req.body[key];
@@ -56,7 +68,7 @@ const create = async (req, res) => {
 const update = async (req, res) => {
   try {
     const { id } = req.params;
-    const allowed = ["title", "description", "scheduledDate", "type", "status", "priority", "assignedTo", "catalogId", "itemName", "photoURL"];
+    const allowed = ["title", "description", "scheduledDate", "type", "status", "priority", "assignedTo", "catalogId", "itemName", "photoURL", "collegeBuilding", "location", "findings", "recommendation", "materialsNeeded", "estimatedDays", "dateStarted", "dateFinished", "remarks", "inspectedBy", "notedBy", "inspectedDate", "assignedPersonnel"];
     const sanitized = {};
     for (const key of allowed) {
       if (req.body[key] !== undefined) sanitized[key] = req.body[key];

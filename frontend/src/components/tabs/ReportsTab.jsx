@@ -4,8 +4,9 @@ import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
 import {
   MdAssessment, MdDownload, MdPeople, MdInventory, MdWarning, MdBuild, MdSchedule,
-  MdAssignment, MdAttachMoney, MdEventAvailable, MdWarningAmber
+  MdAssignment, MdEventAvailable, MdWarningAmber
 } from "react-icons/md";
+import PesoIcon from "../ui/PesoIcon";
 import PageHero from "../ui/PageHero";
 import {
   BarChart, Bar, PieChart, Pie, Cell,
@@ -174,7 +175,7 @@ export default function ReportsTab() {
           </div>
         </div>
         <div className="overview-metric-card">
-          <div className="overview-metric-icon" style={{ background: "rgba(229,57,53,.1)", color: "#e53935" }}><MdAttachMoney size={20} /></div>
+          <div className="overview-metric-icon" style={{ background: "rgba(229,57,53,.1)", color: "#e53935" }}><PesoIcon size={20} /></div>
           <div className="overview-metric-body">
             <div className="overview-metric-value">₱{stats.totalPendingFineAmount.toLocaleString()}</div>
             <div className="overview-metric-label">Pending Fines</div>

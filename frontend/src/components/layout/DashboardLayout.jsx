@@ -10,8 +10,9 @@ import {
   MdNotifications, MdFolderOpen, MdSettings,
   MdChevronLeft, MdChevronRight, MdExpandMore, MdExpandLess,
   MdBuild, MdWarning, MdMenuBook, MdHistory, MdAssessment, MdAccountCircle,
-  MdAttachMoney, MdAssignment, MdEventAvailable, MdQrCode
+  MdAssignment, MdEventAvailable, MdQrCode
 } from "react-icons/md";
+import PesoIcon from "../ui/PesoIcon";
 import { FaExchangeAlt } from "react-icons/fa";
 import "../../styles/pages/layout.css";
 
@@ -48,7 +49,7 @@ const navSections = [
     items: [
       { path: "/notifications", label: "Notifications", icon: MdNotifications, roles: ["student", "admin"] },
       { path: "/incidents", label: "Incidents", icon: MdWarning, roles: ["admin", "student"] },
-      { path: "/fines", label: "Fines", icon: MdAttachMoney, roles: ["student", "admin"] },
+      { path: "/fines", label: "Fines", icon: PesoIcon, roles: ["student", "admin"] },
       { path: "/manuals", label: "Lab Manuals", icon: MdMenuBook, roles: ["student", "admin"] },
       { path: "/documents", label: "Documents", icon: MdFolderOpen, roles: ["admin"] },
       { path: "/settings", label: "Settings", icon: MdSettings, roles: ["admin"] },

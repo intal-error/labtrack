@@ -1034,3 +1034,88 @@ body.dark .lab-form-section-icon.inc-actions {
 /* Overview - Overdue Table Dark Mode */
 body.dark .overview-overdue-box{background:rgba(211,47,47,.08);border-color:rgba(211,47,47,.2)}
 body.dark .overview-overdue-table td,body.dark .overview-overdue-table th{border-color:rgba(211,47,47,.15)}
+
+/* ========== FINES TABLE ========== */
+.fines-table-wrapper{background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:var(--card-shadow);max-height:calc(100vh - 320px);overflow-y:auto;scrollbar-width:none}
+.fines-table-wrapper::-webkit-scrollbar{width:0}
+.fines-table{width:100%;border-collapse:collapse;font-size:13px}
+.fines-table thead th{background:var(--dark-green);color:#fff;text-transform:uppercase;font-weight:700;font-size:11px;text-align:left;padding:12px 14px;border:none;position:sticky;top:0;z-index:2}
+.fines-table thead th:first-child{border-top-left-radius:12px}
+.fines-table thead th:last-child{border-top-right-radius:12px}
+.fines-table tbody td{padding:10px 14px;border-bottom:1px solid var(--border);text-align:left;color:var(--text);vertical-align:middle}
+.fines-table tbody tr:hover{background:var(--bg)}
+.fines-table tbody tr{cursor:pointer;transition:background .15s}
+.fines-borrower-cell{display:flex;align-items:center;gap:10px}
+.fines-borrower-avatar{width:30px;height:30px;border-radius:8px;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+.fines-borrower-info{display:flex;flex-direction:column;min-width:0}
+.fines-borrower-name{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fines-borrower-id{font-size:11px;color:var(--text-muted)}
+.fines-status-badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:600;white-space:nowrap}
+.fines-status-unpaid{background:rgba(245,124,0,.12);color:#f57c00}
+.fines-status-paid{background:rgba(67,160,71,.12);color:#43A047}
+.fines-status-waived{background:rgba(25,118,210,.12);color:#1976d2}
+.fines-actions-cell{display:flex;align-items:center;gap:6px}
+.fines-kebab-wrap{position:relative}
+.fines-kebab-btn{width:30px;height:30px;border-radius:8px;border:none;background:transparent;color:var(--text-muted);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s}
+.fines-kebab-btn:hover{background:var(--bg);color:var(--text)}
+.fines-kebab-dropdown{position:absolute;top:100%;right:0;margin-top:4px;background:var(--bg-card);border:1.5px solid var(--border);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:100;min-width:150px;padding:6px;animation:fadeInUp .15s ease}
+.fines-kebab-dropdown button{display:flex;align-items:center;gap:8px;width:100%;padding:8px 12px;border:none;border-radius:8px;background:transparent;color:var(--text);font-size:13px;font-weight:500;cursor:pointer;transition:background .15s;text-align:left;font-family:inherit}
+.fines-kebab-dropdown button:hover{background:var(--bg)}
+.fines-kebab-dropdown button.danger{color:#c62828}
+.fines-kebab-dropdown button.danger:hover{background:#ffebee}
+.fines-view-btn{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-muted);font-size:11px;font-weight:500;cursor:pointer;transition:all .2s}
+.fines-view-btn:hover{border-color:var(--green);color:var(--green)}
+body.dark .fines-table{background:#131313}
+body.dark .fines-table thead th{background:#1a3a2a}
+body.dark .fines-table tbody td{border-color:rgba(255,255,255,.1);color:#FFFFFF}
+body.dark .fines-table tbody tr:hover{background:#1a1a1a}
+body.dark .fines-table-wrapper{border-color:rgba(255,255,255,.1);background:#131313}
+body.dark .fines-kebab-btn{color:#888}
+body.dark .fines-kebab-btn:hover{background:#1a1a1a;color:#fff}
+body.dark .fines-kebab-dropdown{background:#131313;border-color:rgba(255,255,255,.1);box-shadow:0 8px 24px rgba(0,0,0,.4)}
+body.dark .fines-kebab-dropdown button{color:#ccc}
+body.dark .fines-kebab-dropdown button:hover{background:#1a1a1a;color:#fff}
+body.dark .fines-kebab-dropdown button.danger{color:#ef9a9a}
+body.dark .fines-kebab-dropdown button.danger:hover{background:#3a1b1b}
+
+/* ========== STUDENT OUTSTANDING BANNER ========== */
+.fines-outstanding{background:linear-gradient(135deg,rgba(245,124,0,.08),rgba(245,124,0,.03));border:1.5px solid rgba(245,124,0,.3);border-radius:14px;padding:20px;margin-bottom:20px}
+.fines-outstanding-header{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.fines-outstanding-icon{width:40px;height:40px;border-radius:10px;background:rgba(245,124,0,.12);color:#f57c00;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fines-outstanding-title{font-size:15px;font-weight:700;color:var(--text)}
+.fines-outstanding-subtitle{font-size:12px;color:var(--text-muted)}
+.fines-outstanding-item{font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px}
+.fines-outstanding-detail{font-size:12px;color:var(--text-muted);margin-bottom:2px}
+.fines-outstanding-amount{font-size:20px;font-weight:800;color:#f57c00;margin:8px 0}
+.fines-outstanding-more{font-size:12px;color:var(--text-muted);margin-bottom:12px}
+.fines-outstanding-actions{display:flex;gap:8px}
+body.dark .fines-outstanding{background:rgba(245,124,0,.05);border-color:rgba(245,124,0,.2)}
+
+/* ========== DETAIL MODAL SECTIONS ========== */
+.fines-detail-modal{padding:4px 0;max-height:70vh;overflow-y:auto}
+.fines-detail-section{margin-bottom:20px}
+.fines-detail-section:last-child{margin-bottom:0}
+.fines-detail-section-title{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:0 0 12px 0;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.fines-detail-section-icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fines-detail-grid{display:flex;flex-direction:column;gap:0}
+.fines-detail-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)}
+.fines-detail-row:last-child{border-bottom:none}
+.fines-detail-label{font-size:12px;color:var(--text-muted);font-weight:500}
+.fines-detail-value{font-size:13px;color:var(--text);font-weight:600;text-align:right;max-width:60%;word-break:break-word}
+.fines-detail-value.highlight{color:#f57c00;font-size:16px;font-weight:800}
+.fines-detail-value.status-unpaid{color:#f57c00;font-weight:700}
+.fines-detail-value.status-paid{color:#43A047;font-weight:700}
+.fines-detail-value.status-waived{color:#1976d2;font-weight:700}
+.fines-detail-waive{margin-top:12px;padding:12px;background:var(--bg);border-radius:10px}
+.fines-detail-waive h5{font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:0 0 8px 0}
+body.dark .fines-detail-section-title{color:#888;border-color:#2a2a2a}
+body.dark .fines-detail-row{border-color:#2a2a2a}
+body.dark .fines-detail-label{color:#888}
+body.dark .fines-detail-value{color:#FFFFFF}
+body.dark .fines-detail-waive{background:#0a0a0a}
+
+/* ========== STAT CARD OVERRIDES ========== */
+.fines-stat-icon.outstanding{background:linear-gradient(135deg,#fff3e0,#ffe0b2);color:#f57c00}
+.fines-stat-icon.overdue{background:linear-gradient(135deg,#ffebee,#ffcdd2);color:#c62828}
+body.dark .fines-stat-icon.outstanding{background:linear-gradient(135deg,#3a2a1b,#4d3526);color:#ffb74d}
+body.dark .fines-stat-icon.overdue{background:linear-gradient(135deg,#3a1b1b,#4d2020);color:#ef9a9a}

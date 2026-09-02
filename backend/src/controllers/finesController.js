@@ -15,45 +15,103 @@ function toDate(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function formatDate(date) {
+  if (!date) return null;
+  const d = toDate(date);
+  return d ? d.toISOString() : null;
+}
+
+async function enrichFines(fines) {
+  if (fines.length === 0) return [];
+
+  const userIds = [...new Set(fines.map((f) => f.userId).filter(Boolean))];
+  const txIds = [...new Set(fines.map((f) => f.transactionId).filter(Boolean))];
+
+  const [userSnaps, txSnaps] = await Promise.all([
+    Promise.all(userIds.map((id) => db.collection(USERS).doc(id).get())),
+    Promise.all(txIds.map((id) => db.collection(TRANS).doc(id).get())),
+  ]);
+
+  const userMap = {};
+  userSnaps.forEach((snap) => {
+    if (snap.exists) {
+      const d = snap.data();
+      userMap[snap.id] = {
+        userName: `${d.firstName || ""} ${d.lastName || ""}`.trim() || d.email || snap.id,
+        schoolId: d.schoolId || d.schoolID || "",
+        course: d.course || "",
+        userRole: d.role || "",
+      };
+    }
+  });
+
+  const txMap = {};
+  txSnaps.forEach((snap) => {
+    if (snap.exists) {
+      const d = snap.data();
+      txMap[snap.id] = {
+        dueDate: d.dueDate || null,
+        borrowedAt: d.borrowedAt || d.timestamp || null,
+        returnedAt: d.returnedAt || null,
+        transactionStatus: d.status || "",
+        itemId: d.itemId || "",
+        course: d.course || "",
+        schoolId: d.schoolID || d.schoolId || "",
+        borrowerName: `${d.firstName || ""} ${d.lastName || ""}`.trim() || "",
+      };
+    }
+  });
+
+  return fines.map((f) => {
+    const user = userMap[f.userId] || {};
+    const tx = txMap[f.transactionId] || {};
+    return {
+      ...f,
+      userName: user.userName || tx.borrowerName || f.userId || "Unknown",
+      schoolId: user.schoolId || tx.schoolId || "",
+      course: user.course || tx.course || "",
+      userRole: user.userRole || "",
+      dueDate: tx.dueDate || null,
+      borrowedAt: tx.borrowedAt || null,
+      returnedAt: tx.returnedAt || null,
+      transactionStatus: tx.transactionStatus || "",
+      itemId: tx.itemId || "",
+    };
+  });
+}
+
 const getAllFines = async (req, res) => {
   try {
     const snap = await db.collection(FINES).orderBy("createdAt", "desc").get();
-    const fines = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    let fines = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
-    const userIds = [...new Set(fines.map((f) => f.userId).filter(Boolean))];
-    const userSnaps = await Promise.all(userIds.map((id) => db.collection(USERS).doc(id).get()));
-    const userMap = {};
-    userSnaps.forEach((snap) => {
-      if (snap.exists) {
-        const data = snap.data();
-        userMap[snap.id] = `${data.firstName || ""} ${data.lastName || ""}`.trim() || data.email || snap.id;
-      }
-    });
-
-    let enriched = fines.map((f) => ({
-      ...f,
-      userName: userMap[f.userId] || f.userId || "Unknown",
-    }));
+    fines = await enrichFines(fines);
 
     if (req.query.search) {
       const q = req.query.search.toLowerCase();
-      enriched = enriched.filter(
+      fines = fines.filter(
         (f) =>
           (f.userName && f.userName.toLowerCase().includes(q)) ||
-          (f.itemName && f.itemName.toLowerCase().includes(q))
+          (f.itemName && f.itemName.toLowerCase().includes(q)) ||
+          (f.schoolId && f.schoolId.toLowerCase().includes(q)) ||
+          (f.transactionId && f.transactionId.toLowerCase().includes(q))
       );
     }
 
     if (req.query.status && req.query.status !== "All") {
-      enriched = enriched.filter((f) => f.status === req.query.status);
+      fines = fines.filter((f) => f.status === req.query.status);
+    }
+
+    if (req.query.course && req.query.course !== "All") {
+      fines = fines.filter((f) => f.course === req.query.course);
     }
 
     const { paginate, page, limit } = parsePagination(req);
     if (paginate) {
-      return res.json(paginatedResponse(enriched, page, limit));
+      return res.json(paginatedResponse(fines, page, limit));
     }
 
-    res.json(enriched);
+    res.json(fines);
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -65,7 +123,7 @@ const getMyFines = async (req, res) => {
     const snap = await db.collection(FINES)
       .where("userId", "==", uid)
       .get();
-    const fines = snap.docs
+    let fines = snap.docs
       .map((doc) => ({ id: doc.id, ...doc.data() }))
       .sort((a, b) => {
         const da = a.createdAt?.toDate?.() || (a.createdAt?.seconds ? new Date(a.createdAt.seconds * 1000) : new Date(0));
@@ -73,32 +131,27 @@ const getMyFines = async (req, res) => {
         return db2 - da;
       });
 
-    const userSnap = await db.collection(USERS).doc(uid).get();
-    const userName = userSnap.exists
-      ? `${userSnap.data().firstName || ""} ${userSnap.data().lastName || ""}`.trim() || userSnap.data().email || uid
-      : uid;
-
-    let enriched = fines.map((f) => ({ ...f, userName }));
+    fines = await enrichFines(fines);
 
     if (req.query.search) {
       const q = req.query.search.toLowerCase();
-      enriched = enriched.filter(
+      fines = fines.filter(
         (f) =>
-          (f.userName && f.userName.toLowerCase().includes(q)) ||
-          (f.itemName && f.itemName.toLowerCase().includes(q))
+          (f.itemName && f.itemName.toLowerCase().includes(q)) ||
+          (f.transactionId && f.transactionId.toLowerCase().includes(q))
       );
     }
 
     if (req.query.status && req.query.status !== "All") {
-      enriched = enriched.filter((f) => f.status === req.query.status);
+      fines = fines.filter((f) => f.status === req.query.status);
     }
 
     const { paginate, page, limit } = parsePagination(req);
     if (paginate) {
-      return res.json(paginatedResponse(enriched, page, limit));
+      return res.json(paginatedResponse(fines, page, limit));
     }
 
-    res.json(enriched);
+    res.json(fines);
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -133,6 +186,30 @@ const checkRestriction = async (req, res) => {
   }
 };
 
+const getOverdueCount = async (req, res) => {
+  try {
+    const snap = await db.collection(TRANS)
+      .where("action", "==", "borrowed")
+      .get();
+
+    const now = new Date();
+    const overdueUserIds = new Set();
+
+    snap.docs.forEach((doc) => {
+      const tx = doc.data();
+      if (tx.status === "returned") return;
+      const dueDate = toDate(tx.dueDate);
+      if (dueDate && now > dueDate && tx.userId) {
+        overdueUserIds.add(tx.userId);
+      }
+    });
+
+    res.json({ overdueBorrowers: overdueUserIds.size });
+  } catch (err) {
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
+  }
+};
+
 const payFine = async (req, res) => {
   try {
     const { id } = req.params;
@@ -149,6 +226,19 @@ const payFine = async (req, res) => {
       paidBy: req.user.uid,
     }, { merge: true });
 
+    if (fine.userId) {
+      await db.collection(NOTIF).add({
+        targetUserId: fine.userId,
+        type: "success",
+        title: "Fine Settled",
+        message: `Your ₱${fine.totalFine} fine for "${fine.itemName}" has been marked as paid.`,
+        read: false,
+        dismissedBy: [],
+        link: "/fines",
+        createdAt: new Date(),
+      });
+    }
+
     res.json({ message: "Fine marked as paid" });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
@@ -159,16 +249,34 @@ const waiveFine = async (req, res) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ error: "Waiver reason is required" });
+    }
     const fineRef = db.collection(FINES).doc(id);
     const fineSnap = await fineRef.get();
     if (!fineSnap.exists) return res.status(404).json({ error: "Fine not found" });
 
+    const fine = fineSnap.data();
+
     await fineRef.set({
       status: "waived",
       waivedBy: req.user.uid,
-      waiveReason: reason || "",
+      waiveReason: reason.trim(),
       waivedAt: new Date(),
     }, { merge: true });
+
+    if (fine.userId) {
+      await db.collection(NOTIF).add({
+        targetUserId: fine.userId,
+        type: "info",
+        title: "Fine Waived",
+        message: `Your fine for "${fine.itemName}" (₱${fine.totalFine}) has been waived by the laboratory administrator.`,
+        read: false,
+        dismissedBy: [],
+        link: "/fines",
+        createdAt: new Date(),
+      });
+    }
 
     res.json({ message: "Fine waived" });
   } catch (err) {
@@ -225,7 +333,7 @@ const createFineForOverdue = async (transactionId) => {
         message: `A fine of ₱${totalFine} has been issued for "${tx.itemName}" (${daysOverdue} days overdue). Please return the item and settle the fine.`,
         read: false,
         dismissedBy: [],
-        link: "/transactions",
+        link: "/fines",
         createdAt: new Date(),
       });
     }
@@ -236,4 +344,4 @@ const createFineForOverdue = async (transactionId) => {
   }
 };
 
-module.exports = { getAllFines, getMyFines, checkRestriction, payFine, waiveFine, createFineForOverdue };
+module.exports = { getAllFines, getMyFines, checkRestriction, getOverdueCount, payFine, waiveFine, createFineForOverdue };
