@@ -543,6 +543,7 @@ body.dark .attendance-active-timer { background: rgba(102,187,106,.1); }
   overflow-x: auto;
   scrollbar-width: none;
 }
+@media(max-width:1024px){.attendance-table-wrapper{max-height:calc(100vh - 400px)}.attendance-table-wrapper::-webkit-scrollbar{width:4px;height:4px}.attendance-table-wrapper::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}}
 
 .attendance-table-wrapper::-webkit-scrollbar {
   width: 0;
@@ -1144,7 +1145,8 @@ body.dark .attendance-date-filter {
 
 @media (max-width: 600px) {
   .attendance-stats { grid-template-columns: 1fr; }
-  .attendance-tabs { justify-content: center; flex-wrap: wrap; }
+  .attendance-tabs { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; justify-content: flex-start; }
+  .attendance-tabs::-webkit-scrollbar{width:0}
   .attendance-search input { min-width: 0; width: 100%; }
   .attendance-header { padding: 20px 18px; }
   .attendance-header h1 { font-size: 1.25rem; }

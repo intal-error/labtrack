@@ -1,4 +1,5 @@
 .catalog-page{max-width:1200px;margin:0 auto;display:flex;flex-direction:column;height:calc(100vh - 48px);min-height:calc(100vh - 48px)}
+@media(max-width:1024px){.catalog-page{height:auto;min-height:calc(100vh - 120px)}}
 
 .catalog-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;flex-wrap:wrap;gap:16px;flex-shrink:0}
 .catalog-header-left h1{font-size:1.6rem;color:var(--dark-green);margin-bottom:4px}
@@ -43,6 +44,7 @@
 
 .catalog-table-wrapper{background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:var(--card-shadow);flex:1;overflow-y:auto;max-height:calc(100vh - 280px);scrollbar-width:none}
 .catalog-table-wrapper::-webkit-scrollbar{width:0}
+@media(max-width:1024px){.catalog-table-wrapper{max-height:calc(100vh - 350px)}.catalog-table-wrapper::-webkit-scrollbar{width:4px;height:4px}.catalog-table-wrapper::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}}
 .catalog-table{width:100%;border-collapse:collapse;font-size:13px}
 .catalog-table thead th{background:var(--dark-green);color:#fff;text-transform:uppercase;font-weight:700;font-size:11px;text-align:left;padding:12px 14px;border:none}
 .catalog-table tbody td{padding:10px 14px;border-bottom:1px solid var(--border);text-align:left;color:var(--text)}
@@ -55,6 +57,7 @@
 
 .catalog-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;padding-bottom:8px;max-height:calc(100vh - 280px);overflow-y:auto;scrollbar-width:none}
 .catalog-grid::-webkit-scrollbar{width:0}
+@media(max-width:1024px){.catalog-grid{max-height:calc(100vh - 350px)}.catalog-grid::-webkit-scrollbar{width:4px;height:4px}.catalog-grid::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}}
 .catalog-card{background:var(--bg-card);border:1.5px solid var(--border);border-radius:10px;transition:all .3s;box-shadow:var(--card-shadow)}
 .catalog-card:hover{transform:translateY(-4px);box-shadow:0 12px 28px rgba(0,0,0,.12)}
 .catalog-card-image{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;border-radius:10px 10px 0 0;background:#f0f4f1}
@@ -117,7 +120,7 @@
   .catalog-toolbar{margin-bottom:12px}
 }
 @media(max-width:600px){
-  .catalog-page{height:auto;min-height:calc(100vh - 48px)}
+  .catalog-page{height:auto;min-height:calc(100vh - 120px)}
   .catalog-stats{grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
   .stat-card{padding:12px 14px;gap:10px}
   .stat-icon{width:36px;height:36px;border-radius:8px}

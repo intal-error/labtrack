@@ -32,6 +32,7 @@
 .lab-slide-panel.open {
   transform: translateX(0);
 }
+@media(max-width:768px){.lab-slide-panel{width:100vw}}
 
 /* Header */
 .lab-slide-header {
