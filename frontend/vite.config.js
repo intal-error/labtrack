@@ -21,11 +21,15 @@ export default defineConfig({
         description:
           "Laboratory Equipment Borrowing and Tracking System for SLSU",
         theme_color: "#1a1a2e",
-        background_color: "#1a1a2e",
+        background_color: "#0f3418",
         display: "standalone",
         orientation: "portrait",
         scope: "/",
         start_url: "/",
+        categories: ["education", "utilities"],
+        lang: "en",
+        dir: "ltr",
+        prefer_related_applications: false,
         icons: [
           {
             src: "/icons/icon-72x72.png",

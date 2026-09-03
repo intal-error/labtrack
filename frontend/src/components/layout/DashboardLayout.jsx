@@ -14,6 +14,7 @@ import {
 } from "react-icons/md";
 import PesoIcon from "../ui/PesoIcon";
 import { FaExchangeAlt } from "react-icons/fa";
+import BottomNav from "./BottomNav";
 import "../../styles/pages/layout.css";
 
 const navSections = [
@@ -220,6 +221,8 @@ export default function DashboardLayout() {
       <main className="main-content">
         <Outlet />
       </main>
+
+      <BottomNav />
     </div>
   );
 }

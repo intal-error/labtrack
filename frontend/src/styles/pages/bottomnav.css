@@ -1,0 +1,102 @@
+.bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(15, 52, 24, 0.98);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 6px 0;
+  padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+  z-index: 1000;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  flex: 1;
+  padding: 8px 4px;
+  color: rgba(255, 255, 255, 0.45);
+  text-decoration: none;
+  font-size: 10px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  position: relative;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bottom-nav-item:active {
+  transform: scale(0.92);
+}
+
+.bottom-nav-item.active {
+  color: #66bb6a;
+}
+
+.bottom-nav-item.active::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 3px;
+  background: linear-gradient(90deg, #43A047, #66BB6A);
+  border-radius: 0 0 4px 4px;
+}
+
+.bottom-nav-item svg {
+  transition: transform 0.2s ease;
+}
+
+.bottom-nav-item.active svg {
+  transform: scale(1.1);
+  filter: drop-shadow(0 2px 6px rgba(102, 187, 106, 0.4));
+}
+
+/* Dark mode */
+body.dark .bottom-nav {
+  background: rgba(0, 0, 0, 0.98);
+  border-top-color: rgba(255, 255, 255, 0.05);
+}
+
+body.dark .bottom-nav-item {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+body.dark .bottom-nav-item.active {
+  color: #66bb6a;
+}
+
+/* Mobile only */
+@media (max-width: 1024px) {
+  .bottom-nav {
+    display: flex;
+  }
+
+  /* Add padding to main content to account for bottom nav */
+  .main-content {
+    padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+/* Extra safe area for newer iPhones */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .bottom-nav {
+    padding-bottom: calc(6px + env(safe-area-inset-bottom));
+  }
+}
+
+/* Hide bottom nav when sidebar is open on mobile */
+@media (max-width: 1024px) {
+  .sidebar.active ~ .main-content .bottom-nav,
+  .sidebar.active ~ .bottom-nav {
+    display: none !important;
+  }
+}

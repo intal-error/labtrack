@@ -1,8 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
-import { Component, Suspense, lazy } from "react";
+import { Component, Suspense, lazy, useState } from "react";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
+import SplashScreen from "./components/ui/SplashScreen";
+import InstallPrompt from "./components/ui/InstallPrompt";
 
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage"));
@@ -85,12 +87,16 @@ class ErrorBoundary extends Component {
 }
 
 function App() {
+  const [splashComplete, setSplashComplete] = useState(false);
+
   return (
     <BrowserRouter>
       <AuthProvider>
         <ThemeProvider>
           <ErrorBoundary>
+          {!splashComplete && <SplashScreen onComplete={() => setSplashComplete(true)} />}
           <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
+          <InstallPrompt />
           <Suspense fallback={<div className="loading-screen"><div className="spinner-lg" /></div>}>
           <Routes>
             <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />

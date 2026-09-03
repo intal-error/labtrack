@@ -63,3 +63,71 @@ body.dark .card:hover{box-shadow:0 4px 16px rgba(0,0,0,.25)}
   .btn{min-height:44px}
   input,select,textarea{min-height:44px;font-size:16px}
 }
+
+/* PWA Standalone Mode - iOS & Android */
+@supports (padding-top: env(safe-area-inset-top)) {
+  body {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
+/* iOS Standalone Mode Adjustments */
+@media all and (display-mode: standalone) {
+  body {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  /* Prevent bounce/overscroll on iOS */
+  html {
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Hide browser UI hints */
+  .main-content {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  /* Fix for iOS status bar in standalone */
+  @supports (padding-top: env(safe-area-inset-top)) {
+    .app-layout {
+      padding-top: env(safe-area-inset-top);
+    }
+  }
+}
+
+/* Android Standalone Mode Adjustments */
+@media all and (display-mode: standalone) {
+  body {
+    overscroll-behavior: none;
+  }
+}
+
+/* Prevent text selection on interactive elements */
+.bottom-nav-item,
+.burger-btn,
+.sidebar a {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Smooth scrolling for mobile */
+@media (max-width: 1024px) {
+  .main-content {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+}
+
+/* Prevent pull-to-refresh on mobile */
+@media (max-width: 1024px) {
+  body {
+    overscroll-behavior-y: contain;
+  }
+}

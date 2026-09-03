@@ -1,0 +1,135 @@
+.install-prompt {
+  position: fixed;
+  bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  left: 16px;
+  right: 16px;
+  background: linear-gradient(135deg, #0f3418 0%, #081e0e 100%);
+  border: 1px solid rgba(102, 187, 106, 0.3);
+  border-radius: 16px;
+  padding: 16px;
+  z-index: 999;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  animation: slideUp 0.3s ease-out;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.install-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.install-close:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.install-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.install-icon {
+  width: 48px;
+  height: 48px;
+  background: rgba(102, 187, 106, 0.2);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #66bb6a;
+  flex-shrink: 0;
+}
+
+.install-text {
+  flex: 1;
+}
+
+.install-text h3 {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 2px;
+}
+
+.install-text p {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0;
+}
+
+.install-btn {
+  background: linear-gradient(135deg, #43A047, #66BB6A);
+  color: #000;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.install-btn:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(102, 187, 106, 0.4);
+}
+
+.install-btn:active {
+  transform: scale(0.98);
+}
+
+/* iOS specific */
+.ios-install {
+  background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1a 100%);
+  border-color: rgba(102, 187, 106, 0.2);
+}
+
+/* Dark mode */
+body.dark .install-prompt {
+  background: linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%);
+  border-color: rgba(102, 187, 106, 0.2);
+}
+
+body.dark .install-icon {
+  background: rgba(102, 187, 106, 0.15);
+}
+
+/* Mobile only */
+@media (min-width: 1025px) {
+  .install-prompt {
+    display: none;
+  }
+}
+
+/* Hide when bottom nav is visible */
+@media (max-width: 1024px) {
+  .install-prompt {
+    bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+  }
+}
