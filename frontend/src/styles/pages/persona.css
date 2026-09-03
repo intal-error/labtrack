@@ -80,6 +80,9 @@
   .persona-items-section{grid-template-columns:1fr}
   .persona-profile-card{flex-direction:column;text-align:center}
 }
+@media(max-width:600px){
+  .persona-details-grid{grid-template-columns:1fr}
+}
 
 /* Dark Mode */
 body.dark .persona-header h1{color:#FFFFFF}
