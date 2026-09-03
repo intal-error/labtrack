@@ -1,18 +1,5 @@
 {
   "rewrites": [
-    {
-      "source": "/((?!assets/|sw\\.js|registerSW\\.js|workbox-.*\\.js|manifest\\.webmanifest|icons/|.*\\.(png|jpg|ico|svg|webp|css|js)$).*)",
-      "destination": "/index.html"
-    }
-  ],
-  "headers": [
-    {
-      "source": "/sw.js",
-      "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
-    },
-    {
-      "source": "/registerSW.js",
-      "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
-    }
+    { "source": "/((?!assets/).*)", "destination": "/index.html" }
   ]
 }
