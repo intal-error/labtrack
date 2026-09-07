@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import Modal from "../ui/Modal";
@@ -6,6 +6,7 @@ import Pagination from "../ui/Pagination";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
 import "../../styles/pages/catalog.css";
+import "../../styles/pages/tables.css";
 import { MdAssignment, MdSearch, MdCheckCircle, MdCancel, MdSchedule, MdPerson, MdInventory, MdSort, MdSwapHoriz } from "react-icons/md";
 import PageHero from "../ui/PageHero";
 import ViewToggle from "../ui/ViewToggle";
@@ -84,15 +85,24 @@ export default function BorrowRequestsTab() {
   const [reassignAdminId, setReassignAdminId] = useState("");
   const [reassignReason, setReassignReason] = useState("");
   const [reassignLoading, setReassignLoading] = useState(false);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const searchTimer = useRef(null);
 
-  useEffect(() => { load(); }, [page, filter, search]);
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(searchTimer.current);
+  }, [search]);
+
+  useEffect(() => { setPage(1); }, [debouncedSearch, filter]);
+  useEffect(() => { load(); }, [page, filter, debouncedSearch]);
 
   async function load() {
     try {
       const params = new URLSearchParams();
       params.set("page", page);
       params.set("limit", PAGE_SIZE);
-      if (search.trim()) params.set("search", search.trim());
+      if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
       if (filter !== "all") params.set("status", filter);
 
       const [reqsResult, cat, adminList] = await Promise.all([
@@ -376,7 +386,7 @@ export default function BorrowRequestsTab() {
                 return (
                   <tr key={req.id} onClick={() => setSelectedRequest(req)} style={{ cursor: "pointer" }}>
                     <td>{req.firstName} {req.lastName}</td>
-                    <td>{req.schoolID || "-"}</td>
+                    <td>{req.schoolId || "-"}</td>
                     <td>{req.itemName}</td>
                     <td>{req.quantity}</td>
                     <td>
@@ -387,7 +397,7 @@ export default function BorrowRequestsTab() {
                     <td>{req.assigned_admin_name || <span style={{ color: "var(--text-muted)" }}>Unassigned</span>}</td>
                     <td>
                       <span className={dueInfo ? `maintenance-date-badge ${dueInfo.cls}` : ""}>
-                        {req.dueDate ? new Date(req.dueDate?.toDate?.() || req.dueDate).toLocaleDateString() : "-"}
+                        {req.dueDate ? new Date(req.dueDate).toLocaleDateString() : "-"}
                         {dueInfo && <small style={{ marginLeft: 6, fontSize: 10 }}>({dueInfo.label})</small>}
                       </span>
                     </td>
@@ -430,7 +440,7 @@ export default function BorrowRequestsTab() {
                 </div>
                 <div className="txn-detail-row">
                   <span className="txn-detail-label">School ID</span>
-                  <span className="txn-detail-value">{selectedRequest.schoolID || "-"}</span>
+                  <span className="txn-detail-value">{selectedRequest.schoolId || "-"}</span>
                 </div>
                 <div className="txn-detail-row">
                   <span className="txn-detail-label">Student Course</span>
@@ -462,7 +472,7 @@ export default function BorrowRequestsTab() {
                 <div className="txn-detail-row">
                   <span className="txn-detail-label">Due Date</span>
                   <span className="txn-detail-value">
-                    {selectedRequest.dueDate ? new Date(selectedRequest.dueDate?.toDate?.() || selectedRequest.dueDate).toLocaleDateString() : "-"}
+                    {selectedRequest.dueDate ? new Date(selectedRequest.dueDate).toLocaleDateString() : "-"}
                   </span>
                 </div>
                 <div className="txn-detail-row">

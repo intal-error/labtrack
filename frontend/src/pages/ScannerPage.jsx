@@ -204,7 +204,7 @@ export default function ScannerPage() {
         const match = (allBorrowed || [])
           .map((d) => ({ id: d.id, data: d }))
           .filter(({ data }) => isOpenBorrow(data))
-          .filter(({ data }) => normalize(data.schoolID) === normalizedSid)
+          .filter(({ data }) => normalize(data.schoolId) === normalizedSid)
           .filter(({ data }) => (data.catalogId || data.itemId) === selectedItem.id)
           .sort((a, b) => (toDate(b.data.timestamp)?.getTime() || 0) - (toDate(a.data.timestamp)?.getTime() || 0))[0];
         if (!match) throw new Error("No active loan found");

@@ -28,7 +28,7 @@ export default function CatalogPage() {
   const [showQr, setShowQr] = useState(null);
   const [showUpdate, setShowUpdate] = useState(null);
   const [imageOverlay, setImageOverlay] = useState(null);
-  const [form, setForm] = useState({ itemName: "", category: "", course: "", quantity: "", condition: "", status: "Available", imageUrl: "", barcode: "" });
+  const [form, setForm] = useState({ itemName: "", category: "", course: "", quantity: "", condition: "", status: "Available", imageUrl: "", barcode: "", assetTag: "" });
   const [uploading, setUploading] = useState(false);
   const [viewMode, setViewMode] = useState("list");
   const [openKebab, setOpenKebab] = useState(null);
@@ -74,7 +74,7 @@ export default function CatalogPage() {
     if (search) result = filterBySearch(result, search, ["itemName"]);
     if (sort === "name") result.sort((a, b) => (a.itemName || "").localeCompare(b.itemName || ""));
     else if (sort === "number") result.sort((a, b) => (parseFloat(a.itemName) || 0) - (parseFloat(b.itemName) || 0));
-    else if (sort === "date") result.sort((a, b) => new Date(b.createdAt?.seconds * 1000 || 0) - new Date(a.createdAt?.seconds * 1000 || 0));
+    else if (sort === "date") result.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
     return result;
   }, [allItems, filter, filterCourse, search, sort]);
 
@@ -104,7 +104,7 @@ export default function CatalogPage() {
       await api.createCatalogItem({ ...form, quantity: Number(form.quantity) || 0 });
       toast.success("Item created!");
       setShowCreate(false);
-      setForm({ itemName: "", category: "", course: "", quantity: "", condition: "", status: "Available", imageUrl: "", barcode: "" });
+      setForm({ itemName: "", category: "", course: "", quantity: "", condition: "", status: "Available", imageUrl: "", barcode: "", assetTag: "" });
       load();
     } catch (err) { toast.error(err.message); }
   };
@@ -315,8 +315,10 @@ export default function CatalogPage() {
           </div>
           {paginationData && (
             <Pagination
-              page={paginationData.page}
+              currentPage={paginationData.page}
               totalPages={paginationData.totalPages}
+              totalItems={paginationData.total}
+              pageSize={paginationData.limit}
               onPageChange={setPage}
             />
           )}
@@ -385,8 +387,10 @@ export default function CatalogPage() {
           </div>
           {paginationData && (
             <Pagination
-              page={paginationData.page}
+              currentPage={paginationData.page}
               totalPages={paginationData.totalPages}
+              totalItems={paginationData.total}
+              pageSize={paginationData.limit}
               onPageChange={setPage}
             />
           )}
@@ -454,21 +458,30 @@ export default function CatalogPage() {
                   </div>
                 </div>
                 <div className="lab-form-field">
+                  <label>Condition <span className="lab-required" /></label>
+                  <div className="lab-input-wrap">
+                    <select value={form.condition} onChange={(e) => setForm({ ...form, condition: e.target.value })} required>
+                      <option value="" disabled>Select Condition</option>
+                      {["Excellent", "Good", "Fair", "Damaged", "For Repair", "Missing"].map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <MdInfo size={16} />
+                  </div>
+                </div>
+              </div>
+              <div className="lab-form-row">
+                <div className="lab-form-field">
                   <label>Barcode</label>
                   <div className="lab-input-wrap">
                     <input type="text" value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} placeholder="Optional" />
                     <MdQrCode size={16} />
                   </div>
                 </div>
-              </div>
-              <div className="lab-form-field">
-                <label>Condition <span className="lab-required" /></label>
-                <div className="lab-input-wrap">
-                  <select value={form.condition} onChange={(e) => setForm({ ...form, condition: e.target.value })} required>
-                    <option value="" disabled>Select Condition</option>
-                    {["Excellent", "Good", "Fair", "Damaged", "For Repair", "Missing"].map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                  <MdInfo size={16} />
+                <div className="lab-form-field">
+                  <label>Asset Tag</label>
+                  <div className="lab-input-wrap">
+                    <input type="text" value={form.assetTag} onChange={(e) => setForm({ ...form, assetTag: e.target.value })} placeholder="Optional" />
+                    <MdTag size={16} />
+                  </div>
                 </div>
               </div>
             </div>
@@ -595,6 +608,22 @@ export default function CatalogPage() {
                     <option value="Borrowed">Borrowed</option>
                   </select>
                   <MdInfo size={16} />
+                </div>
+              </div>
+              <div className="lab-form-row">
+                <div className="lab-form-field">
+                  <label>Barcode</label>
+                  <div className="lab-input-wrap">
+                    <input type="text" value={showUpdate.barcode || ""} onChange={(e) => setShowUpdate({ ...showUpdate, barcode: e.target.value })} placeholder="Optional" />
+                    <MdQrCode size={16} />
+                  </div>
+                </div>
+                <div className="lab-form-field">
+                  <label>Asset Tag</label>
+                  <div className="lab-input-wrap">
+                    <input type="text" value={showUpdate.assetTag || ""} onChange={(e) => setShowUpdate({ ...showUpdate, assetTag: e.target.value })} placeholder="Optional" />
+                    <MdTag size={16} />
+                  </div>
                 </div>
               </div>
             </div>

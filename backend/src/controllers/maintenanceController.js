@@ -1,38 +1,41 @@
-const { db } = require("../config/firebase");
+const { supabase } = require("../config/supabase");
 const { parsePagination, paginatedResponse } = require("../middleware/pagination");
+const { randomUUID } = require("crypto");
+const { transformKeys } = require("../utils/transformKeys");
 
-const COLLECTION = "maintenance";
+const TABLE = "maintenance";
 
 const getAll = async (req, res) => {
   try {
-    const snap = await db.collection(COLLECTION).orderBy("createdAt", "desc").get();
-    let items = [];
-    snap.forEach((doc) => items.push({ id: doc.id, ...doc.data() }));
+    let query = supabase.from(TABLE).select("*").order("created_at", { ascending: false });
 
-    items = items.map((item) => {
+    if (req.query.status && req.query.status !== "All") {
+      query = query.eq("status", req.query.status);
+    }
+
+    const { data: allItems, error } = await query;
+    if (error) throw error;
+
+    let items = allItems.map((item) => {
       if (!item.findings && item.description) item.findings = item.description;
-      if (!item.assignedPersonnel && item.assignedTo) item.assignedPersonnel = item.assignedTo;
-      if (!item.inspectedDate && item.scheduledDate) item.inspectedDate = item.scheduledDate;
+      if (!item.assigned_personnel && item.assigned_to) item.assigned_personnel = item.assigned_to;
+      if (!item.inspected_date && item.scheduled_date) item.inspected_date = item.scheduled_date;
       return item;
     });
 
     if (req.query.search) {
       const search = req.query.search.toLowerCase();
       items = items.filter((item) => {
-        const itemName = (item.itemName || "").toLowerCase();
-        const collegeBuilding = (item.collegeBuilding || "").toLowerCase();
+        const itemName = (item.item_name || "").toLowerCase();
+        const collegeBuilding = (item.college_building || "").toLowerCase();
         const location = (item.location || "").toLowerCase();
         const findings = (item.findings || "").toLowerCase();
-        const inspectedBy = (item.inspectedBy || "").toLowerCase();
-        const notedBy = (item.notedBy || "").toLowerCase();
-        const assignedTo = (item.assignedTo || "").toLowerCase();
-        const assignedPersonnel = (item.assignedPersonnel || "").toLowerCase();
+        const inspectedBy = (item.inspected_by || "").toLowerCase();
+        const notedBy = (item.noted_by || "").toLowerCase();
+        const assignedTo = (item.assigned_to || "").toLowerCase();
+        const assignedPersonnel = (item.assigned_personnel || "").toLowerCase();
         return itemName.includes(search) || collegeBuilding.includes(search) || location.includes(search) || findings.includes(search) || inspectedBy.includes(search) || notedBy.includes(search) || assignedTo.includes(search) || assignedPersonnel.includes(search);
       });
-    }
-
-    if (req.query.status && req.query.status !== "All") {
-      items = items.filter((item) => item.status === req.query.status);
     }
 
     const { paginate, page, limit } = parsePagination(req);
@@ -40,10 +43,10 @@ const getAll = async (req, res) => {
       const total = items.length;
       const start = (page - 1) * limit;
       const sliced = items.slice(start, start + limit);
-      return res.json(paginatedResponse(sliced, total, page, limit));
+      return res.json(paginatedResponse(transformKeys(sliced), total, page, limit));
     }
 
-    res.json(items);
+    res.json(transformKeys(items));
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -51,15 +54,21 @@ const getAll = async (req, res) => {
 
 const create = async (req, res) => {
   try {
-    const allowed = ["title", "description", "scheduledDate", "type", "status", "priority", "assignedTo", "catalogId", "itemName", "photoURL", "collegeBuilding", "location", "findings", "recommendation", "materialsNeeded", "estimatedDays", "dateStarted", "dateFinished", "remarks", "inspectedBy", "notedBy", "inspectedDate", "assignedPersonnel"];
+    const allowed = ["title", "description", "scheduled_date", "type", "status", "priority", "assigned_to", "catalog_id", "item_name", "photo_url", "college_building", "location", "findings", "recommendation", "materials_needed", "estimated_days", "date_started", "date_finished", "remarks", "inspected_by", "noted_by", "inspected_date", "assigned_personnel"];
     const sanitized = {};
     for (const key of allowed) {
       if (req.body[key] !== undefined) sanitized[key] = req.body[key];
     }
-    sanitized.createdBy = req.user.uid;
-    sanitized.createdAt = new Date();
-    const ref = await db.collection(COLLECTION).add(sanitized);
-    res.status(201).json({ id: ref.id, message: "Maintenance scheduled" });
+    sanitized.created_by = req.user.uid;
+    sanitized.id = randomUUID();
+    sanitized.created_at = new Date().toISOString();
+    const { data, error } = await supabase
+      .from(TABLE)
+      .insert(sanitized)
+      .select()
+      .single();
+    if (error) throw error;
+    res.status(201).json({ id: data.id, message: "Maintenance scheduled" });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -68,13 +77,17 @@ const create = async (req, res) => {
 const update = async (req, res) => {
   try {
     const { id } = req.params;
-    const allowed = ["title", "description", "scheduledDate", "type", "status", "priority", "assignedTo", "catalogId", "itemName", "photoURL", "collegeBuilding", "location", "findings", "recommendation", "materialsNeeded", "estimatedDays", "dateStarted", "dateFinished", "remarks", "inspectedBy", "notedBy", "inspectedDate", "assignedPersonnel"];
+    const allowed = ["title", "description", "scheduled_date", "type", "status", "priority", "assigned_to", "catalog_id", "item_name", "photo_url", "college_building", "location", "findings", "recommendation", "materials_needed", "estimated_days", "date_started", "date_finished", "remarks", "inspected_by", "noted_by", "inspected_date", "assigned_personnel"];
     const sanitized = {};
     for (const key of allowed) {
       if (req.body[key] !== undefined) sanitized[key] = req.body[key];
     }
-    sanitized.updatedAt = new Date();
-    await db.collection(COLLECTION).doc(id).set(sanitized, { merge: true });
+    sanitized.updated_at = new Date().toISOString();
+    const { error } = await supabase
+      .from(TABLE)
+      .update(sanitized)
+      .eq("id", id);
+    if (error) throw error;
     res.json({ message: "Maintenance updated" });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
@@ -84,9 +97,18 @@ const update = async (req, res) => {
 const remove = async (req, res) => {
   try {
     const { id } = req.params;
-    const doc = await db.collection(COLLECTION).doc(id).get();
-    if (!doc.exists) return res.status(404).json({ error: "Maintenance record not found" });
-    await db.collection(COLLECTION).doc(id).delete();
+    const { data: existing, error: fetchErr } = await supabase
+      .from(TABLE)
+      .select("id")
+      .eq("id", id)
+      .single();
+    if (fetchErr || !existing) return res.status(404).json({ error: "Maintenance record not found" });
+
+    const { error } = await supabase
+      .from(TABLE)
+      .delete()
+      .eq("id", id);
+    if (error) throw error;
     res.json({ message: "Maintenance deleted" });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });

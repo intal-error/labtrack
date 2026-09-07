@@ -1,8 +1,10 @@
-const { db } = require("../config/firebase");
+const { supabase } = require("../config/supabase");
+const { randomUUID } = require("crypto");
 
 const COLLECTIONS = [
-  "users", "admins", "catalog", "transactions", "notifications",
+  "catalog", "transactions", "notifications",
   "documents", "manuals", "maintenance", "incidents", "fines", "settings",
+  "borrow_requests", "lab_attendance", "lab_rooms",
 ];
 
 const exportBackup = async (req, res) => {
@@ -10,11 +12,9 @@ const exportBackup = async (req, res) => {
     const backup = { createdAt: new Date().toISOString(), collections: {} };
 
     for (const col of COLLECTIONS) {
-      const snap = await db.collection(col).get();
-      backup.collections[col] = snap.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+      const { data, error } = await supabase.from(col).select("*");
+      if (error) throw error;
+      backup.collections[col] = data || [];
     }
 
     let totalDocs = 0;
@@ -23,12 +23,19 @@ const exportBackup = async (req, res) => {
     }
     backup.totalDocuments = totalDocs;
 
-    const backupDoc = await db.collection("backups").add({
-      createdAt: new Date(),
-      totalDocuments: totalDocs,
-      collections: COLLECTIONS,
-      createdBy: req.user.uid,
-    });
+    const { data: backupDoc, error: insertError } = await supabase
+      .from("backups")
+      .insert({
+        id: randomUUID(),
+        created_at: new Date().toISOString(),
+        total_documents: totalDocs,
+        collections: COLLECTIONS,
+        created_by: req.user.uid,
+      })
+      .select()
+      .single();
+
+    if (insertError) throw insertError;
 
     res.json({
       id: backupDoc.id,
@@ -44,11 +51,9 @@ const downloadBackup = async (req, res) => {
     const backup = { createdAt: new Date().toISOString(), collections: {} };
 
     for (const col of COLLECTIONS) {
-      const snap = await db.collection(col).get();
-      backup.collections[col] = snap.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+      const { data, error } = await supabase.from(col).select("*");
+      if (error) throw error;
+      backup.collections[col] = data || [];
     }
 
     let totalDocs = 0;
@@ -74,43 +79,51 @@ const importBackup = async (req, res) => {
 
     let imported = 0;
     let skipped = 0;
-    const BATCH_SIZE = 500;
 
     for (const col of COLLECTIONS) {
       const docs = backupData.collections[col];
       if (!docs || !Array.isArray(docs)) continue;
 
-      for (let i = 0; i < docs.length; i += BATCH_SIZE) {
-        const batch = db.batch();
-        const chunk = docs.slice(i, i + BATCH_SIZE);
-
-        for (const doc of chunk) {
-          const { id, ...data } = doc;
-          if (!id) continue;
-
-          if (!overwrite) {
-            const existing = await db.collection(col).doc(id).get();
-            if (existing.exists) {
-              skipped++;
-              continue;
-            }
-          }
-
-          batch.set(db.collection(col).doc(id), data, { merge: true });
-          imported++;
+      if (overwrite) {
+        const docsToUpsert = docs.filter((doc) => doc.id);
+        if (docsToUpsert.length > 0) {
+          const { error } = await supabase
+            .from(col)
+            .upsert(docsToUpsert, { onConflict: "id" });
+          if (error) throw error;
+          imported += docsToUpsert.length;
         }
+      } else {
+        const ids = docs.filter((doc) => doc.id).map((doc) => doc.id);
+        if (ids.length === 0) continue;
 
-        await batch.commit();
+        const { data: existing } = await supabase
+          .from(col)
+          .select("id")
+          .in("id", ids);
+
+        const existingIds = new Set((existing || []).map((e) => e.id));
+        const newDocs = docs.filter((doc) => doc.id && !existingIds.has(doc.id));
+        skipped += ids.length - newDocs.length;
+
+        if (newDocs.length > 0) {
+          const { error } = await supabase
+            .from(col)
+            .upsert(newDocs, { onConflict: "id" });
+          if (error) throw error;
+          imported += newDocs.length;
+        }
       }
     }
 
-    await db.collection("backups").add({
-      createdAt: new Date(),
+    await supabase.from("backups").insert({
+      id: randomUUID(),
+      created_at: new Date().toISOString(),
       type: "import",
       imported,
       skipped,
       overwrite,
-      createdBy: req.user.uid,
+      created_by: req.user.uid,
     });
 
     res.json({
@@ -125,12 +138,14 @@ const importBackup = async (req, res) => {
 
 const getBackupHistory = async (req, res) => {
   try {
-    const snap = await db.collection("backups")
-      .orderBy("createdAt", "desc")
-      .limit(20)
-      .get();
-    const history = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    res.json(history);
+    const { data, error } = await supabase
+      .from("backups")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (error) throw error;
+    res.json(data || []);
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }

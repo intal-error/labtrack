@@ -1,5 +1,7 @@
 const multer = require("multer");
-const { db } = require("../config/firebase");
+const { supabase } = require("../config/supabase");
+const { randomUUID } = require("crypto");
+const { transformKeys } = require("../utils/transformKeys");
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -83,16 +85,22 @@ const uploadDocument = async (req, res) => {
       : `${(req.file.size / 1024).toFixed(0)} KB`;
 
     const docData = {
+      id: randomUUID(),
       name: req.file.originalname,
       category: "Uploads",
       type,
       size,
-      fileUrl: data.secure_url,
-      createdAt: new Date(),
+      file_url: data.secure_url,
+      created_at: new Date().toISOString(),
     };
 
-    const docRef = await db.collection("documents").add(docData);
-    res.status(201).json({ id: docRef.id, ...docData });
+    const { data: inserted, error } = await supabase
+      .from("documents")
+      .insert(docData)
+      .select()
+      .single();
+    if (error) throw error;
+    res.status(201).json(transformKeys(inserted));
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }

@@ -22,9 +22,9 @@ async function request(path, options = {}) {
   let res;
   try {
     res = await fetch(`${API_URL}${path}`, {
-      headers,
-      signal: controller.signal,
       ...options,
+      headers: { ...headers, ...options.headers },
+      signal: controller.signal,
     });
   } catch {
     throw new Error("Server is offline. Please try again later.");
@@ -178,6 +178,7 @@ export const api = {
 
   // Manuals
   getManuals: () => request("/manuals"),
+  getManual: (id) => request(`/manuals/${id}`),
   createManual: (data) => request("/manuals", { method: "POST", body: JSON.stringify(data) }),
   updateManual: (id, data) => request(`/manuals/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteManual: (id) => request(`/manuals/${id}`, { method: "DELETE" }),

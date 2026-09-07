@@ -1,0 +1,16 @@
+-- Run this FIRST to start clean
+-- Drops all LabTrack tables (order matters due to foreign keys)
+
+DROP TABLE IF EXISTS lab_attendance CASCADE;
+DROP TABLE IF EXISTS lab_rooms CASCADE;
+DROP TABLE IF EXISTS backups CASCADE;
+DROP TABLE IF EXISTS settings CASCADE;
+DROP TABLE IF EXISTS incidents CASCADE;
+DROP TABLE IF EXISTS maintenance CASCADE;
+DROP TABLE IF EXISTS manuals CASCADE;
+DROP TABLE IF EXISTS documents CASCADE;
+DROP TABLE IF EXISTS notifications CASCADE;
+DROP TABLE IF EXISTS fines CASCADE;
+DROP TABLE IF EXISTS borrow_requests CASCADE;
+DROP TABLE IF EXISTS transactions CASCADE;
+DROP TABLE IF EXISTS catalog CASCADE;

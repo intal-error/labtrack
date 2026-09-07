@@ -1,20 +1,8 @@
 const { db } = require("../config/firebase");
+const { supabase } = require("../config/supabase");
 const { parsePagination, paginatedResponse } = require("../middleware/pagination");
-
-const TRANS = "transactions";
-const CATALOG = "catalog";
-const USERS = "users";
-const FINES = "fines";
-const NOTIF = "notifications";
-
-function toDate(value) {
-  if (!value) return null;
-  if (typeof value.toDate === "function") return value.toDate();
-  if (value instanceof Date) return value;
-  if (typeof value.seconds === "number") return new Date(value.seconds * 1000);
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
+const { randomUUID } = require("crypto");
+const { transformKeys } = require("../utils/transformKeys");
 
 function numberOr(value, fallback = 0) {
   const parsed = Number(value);
@@ -22,15 +10,17 @@ function numberOr(value, fallback = 0) {
 }
 
 function getAvailableQuantity(item) {
-  if (Number.isFinite(Number(item?.availableQuantity))) {
-    return Math.max(0, numberOr(item.availableQuantity));
+  const avail = item?.available_quantity ?? item?.availableQuantity;
+  if (Number.isFinite(Number(avail))) {
+    return Math.max(0, numberOr(avail));
   }
   const quantity = Math.max(0, numberOr(item?.quantity));
   return (item?.status || "").toLowerCase() === "borrowed" ? 0 : quantity;
 }
 
 function getRemainingQuantity(t) {
-  return Math.max(0, numberOr(t?.quantity, 1) - numberOr(t?.returnedQuantity));
+  const ret = t?.returned_quantity ?? t?.returnedQuantity;
+  return Math.max(0, numberOr(t?.quantity, 1) - numberOr(ret));
 }
 
 function isOpenBorrow(t) {
@@ -41,8 +31,8 @@ function isOpenBorrow(t) {
 
 async function createFineForLateReturn(borrowData, transactionId) {
   try {
-    const dueDate = toDate(borrowData.dueDate);
-    if (!dueDate) return;
+    const dueDate = new Date(borrowData.due_date || borrowData.dueDate);
+    if (isNaN(dueDate.getTime())) return;
 
     const now = new Date();
     if (now <= dueDate) return;
@@ -50,38 +40,43 @@ async function createFineForLateReturn(borrowData, transactionId) {
     const daysOverdue = Math.ceil((now - dueDate) / (1000 * 60 * 60 * 24));
     if (daysOverdue < 1) return;
 
-    const existing = await db.collection(FINES)
-      .where("transactionId", "==", transactionId)
-      .where("status", "==", "pending")
-      .get();
-    if (!existing.empty) return;
+    const { data: existing } = await supabase
+      .from("fines").select("id")
+      .eq("transaction_id", transactionId)
+      .eq("status", "pending");
+    if (existing && existing.length > 0) return;
 
-    const settingsDoc = await db.collection("settings").doc("appSettings").get();
-    const settings = settingsDoc.exists ? settingsDoc.data() : {};
-    const finePerDay = Number(settings.finePerDay) || 5;
+    const { data: settings } = await supabase
+      .from("settings").select("*").eq("id", "appSettings").single();
+    const finePerDay = Number(settings?.fine_per_day) || 5;
     const totalFine = daysOverdue * finePerDay;
 
-    await db.collection(FINES).add({
-      userId: borrowData.userId || "",
-      transactionId,
-      itemName: borrowData.itemName || "Unknown Item",
-      daysOverdue,
-      finePerDay,
-      totalFine,
+    const userId = borrowData.user_id || borrowData.userId || "";
+    const itemName = borrowData.item_name || borrowData.itemName || "Unknown Item";
+
+    await supabase.from("fines").insert({
+      id: randomUUID(),
+      user_id: userId,
+      transaction_id: transactionId,
+      item_name: itemName,
+      days_overdue: daysOverdue,
+      fine_per_day: finePerDay,
+      total_fine: totalFine,
       status: "pending",
-      createdAt: new Date(),
+      created_at: new Date().toISOString(),
     });
 
-    if (borrowData.userId) {
-      await db.collection(NOTIF).add({
-        targetUserId: borrowData.userId,
+    if (userId) {
+      await supabase.from("notifications").insert({
+        id: randomUUID(),
+        target_user_id: userId,
         type: "warning",
         title: "Fine Issued",
-        message: `A fine of ₱${totalFine} has been issued for "${borrowData.itemName}" (${daysOverdue} days overdue). Please settle the fine.`,
+        message: `A fine of ₱${totalFine} has been issued for "${itemName}" (${daysOverdue} days overdue). Please settle the fine.`,
         read: false,
-        dismissedBy: [],
+        dismissed_by: [],
         link: "/fines",
-        createdAt: new Date(),
+        created_at: new Date().toISOString(),
       });
     }
 
@@ -92,9 +87,9 @@ async function createFineForLateReturn(borrowData, transactionId) {
 }
 
 async function enrichWithProfileURL(items) {
-  const userIds = [...new Set(items.map((i) => i.userId).filter(Boolean))];
+  const userIds = [...new Set(items.map((i) => i.user_id || i.userId).filter(Boolean))];
   if (userIds.length === 0) return items;
-  const userSnaps = await Promise.all(userIds.map((id) => db.collection(USERS).doc(id).get()));
+  const userSnaps = await Promise.all(userIds.map((id) => db.collection("users").doc(id).get()));
   const profileMap = {};
   userSnaps.forEach((snap) => {
     if (snap.exists) {
@@ -104,24 +99,27 @@ async function enrichWithProfileURL(items) {
   });
   return items.map((item) => ({
     ...item,
-    profileURL: item.profileURL || profileMap[item.userId] || "",
+    profileURL: item.profileURL || item.profile_url || profileMap[item.user_id || item.userId] || "",
   }));
 }
 
 const getBorrowed = async (req, res) => {
   try {
-    const snap = await db.collection(TRANS).where("action", "==", "borrowed").get();
-    let items = snap.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }))
+    const { data, error } = await supabase
+      .from("transactions").select("*")
+      .eq("action", "borrowed");
+    if (error) throw new Error(error.message);
+
+    let items = (data || [])
       .filter((d) => isOpenBorrow(d))
-      .sort((a, b) => (toDate(b.timestamp)?.getTime() || 0) - (toDate(a.timestamp)?.getTime() || 0));
+      .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
 
     if (req.query.search) {
       const q = req.query.search.toLowerCase();
       items = items.filter((i) =>
-        `${i.firstName || ""} ${i.lastName || ""}`.toLowerCase().includes(q) ||
-        (i.schoolID || "").toLowerCase().includes(q) ||
-        (i.itemName || "").toLowerCase().includes(q) ||
+        `${i.first_name || ""} ${i.last_name || ""}`.toLowerCase().includes(q) ||
+        (i.school_id || "").toLowerCase().includes(q) ||
+        (i.item_name || "").toLowerCase().includes(q) ||
         (i.course || "").toLowerCase().includes(q)
       );
     }
@@ -130,12 +128,12 @@ const getBorrowed = async (req, res) => {
     }
     if (req.query.dateFrom) {
       const from = new Date(req.query.dateFrom);
-      items = items.filter((i) => { const d = toDate(i.timestamp); return d && d >= from; });
+      items = items.filter((i) => { const d = new Date(i.timestamp); return !isNaN(d.getTime()) && d >= from; });
     }
     if (req.query.dateTo) {
       const to = new Date(req.query.dateTo);
       to.setHours(23, 59, 59, 999);
-      items = items.filter((i) => { const d = toDate(i.timestamp); return d && d <= to; });
+      items = items.filter((i) => { const d = new Date(i.timestamp); return !isNaN(d.getTime()) && d <= to; });
     }
 
     const { page, limit, paginate } = parsePagination(req);
@@ -144,11 +142,11 @@ const getBorrowed = async (req, res) => {
     if (paginate) {
       const paged = items.slice((page - 1) * limit, page * limit);
       const enriched = await enrichWithProfileURL(paged);
-      return res.json(paginatedResponse(enriched, total, page, limit));
+      return res.json(paginatedResponse(transformKeys(enriched), total, page, limit));
     }
 
     const enriched = await enrichWithProfileURL(items);
-    res.json(enriched);
+    res.json(transformKeys(enriched));
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -156,24 +154,28 @@ const getBorrowed = async (req, res) => {
 
 const getReturned = async (req, res) => {
   try {
-    const snap = await db.collection(TRANS).where("action", "==", "returned").get();
-    let items = snap.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }))
-      .sort((a, b) => (toDate(b.timestamp)?.getTime() || 0) - (toDate(a.timestamp)?.getTime() || 0));
+    const { data, error } = await supabase
+      .from("transactions").select("*")
+      .eq("action", "returned");
+    if (error) throw new Error(error.message);
 
-    const missingDates = items.filter((i) => !i.borrowedAt && i.originalTransactionId);
+    let items = (data || [])
+      .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+
+    const missingDates = items.filter((i) => !i.borrowed_at && i.original_transaction_id);
     if (missingDates.length > 0) {
-      const borrowIds = [...new Set(missingDates.map((i) => i.originalTransactionId))];
-      const borrowSnaps = await Promise.all(borrowIds.map((id) => db.collection(TRANS).doc(id).get()));
+      const borrowIds = [...new Set(missingDates.map((i) => i.original_transaction_id))];
+      const { data: borrowRecords } = await supabase
+        .from("transactions").select("*").in("id", borrowIds);
       const borrowMap = {};
-      borrowSnaps.forEach((s) => { if (s.exists) borrowMap[s.id] = s.data(); });
+      if (borrowRecords) borrowRecords.forEach((r) => { borrowMap[r.id] = r; });
       items = items.map((item) => {
-        if (!item.borrowedAt && item.originalTransactionId && borrowMap[item.originalTransactionId]) {
-          const borrow = borrowMap[item.originalTransactionId];
+        if (!item.borrowed_at && item.original_transaction_id && borrowMap[item.original_transaction_id]) {
+          const borrow = borrowMap[item.original_transaction_id];
           return {
             ...item,
-            borrowedAt: borrow.borrowedAt || borrow.timestamp || null,
-            dueDate: item.dueDate || borrow.dueDate || null,
+            borrowed_at: borrow.borrowed_at || borrow.timestamp || null,
+            due_date: item.due_date || borrow.due_date || null,
           };
         }
         return item;
@@ -183,9 +185,9 @@ const getReturned = async (req, res) => {
     if (req.query.search) {
       const q = req.query.search.toLowerCase();
       items = items.filter((i) =>
-        `${i.firstName || ""} ${i.lastName || ""}`.toLowerCase().includes(q) ||
-        (i.schoolID || "").toLowerCase().includes(q) ||
-        (i.itemName || "").toLowerCase().includes(q) ||
+        `${i.first_name || ""} ${i.last_name || ""}`.toLowerCase().includes(q) ||
+        (i.school_id || "").toLowerCase().includes(q) ||
+        (i.item_name || "").toLowerCase().includes(q) ||
         (i.course || "").toLowerCase().includes(q)
       );
     }
@@ -194,12 +196,12 @@ const getReturned = async (req, res) => {
     }
     if (req.query.dateFrom) {
       const from = new Date(req.query.dateFrom);
-      items = items.filter((i) => { const d = toDate(i.timestamp); return d && d >= from; });
+      items = items.filter((i) => { const d = new Date(i.timestamp); return !isNaN(d.getTime()) && d >= from; });
     }
     if (req.query.dateTo) {
       const to = new Date(req.query.dateTo);
       to.setHours(23, 59, 59, 999);
-      items = items.filter((i) => { const d = toDate(i.timestamp); return d && d <= to; });
+      items = items.filter((i) => { const d = new Date(i.timestamp); return !isNaN(d.getTime()) && d <= to; });
     }
 
     const { page, limit, paginate } = parsePagination(req);
@@ -208,11 +210,11 @@ const getReturned = async (req, res) => {
     if (paginate) {
       const paged = items.slice((page - 1) * limit, page * limit);
       const enriched = await enrichWithProfileURL(paged);
-      return res.json(paginatedResponse(enriched, total, page, limit));
+      return res.json(paginatedResponse(transformKeys(enriched), total, page, limit));
     }
 
     const enriched = await enrichWithProfileURL(items);
-    res.json(enriched);
+    res.json(transformKeys(enriched));
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -221,19 +223,20 @@ const getReturned = async (req, res) => {
 const getMyBorrowed = async (req, res) => {
   try {
     const uid = req.user.uid;
-    const snap = await db.collection(TRANS)
-      .where("action", "==", "borrowed")
-      .where("userId", "==", uid)
-      .get();
-    let items = snap.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }))
+    const { data, error } = await supabase
+      .from("transactions").select("*")
+      .eq("action", "borrowed")
+      .eq("user_id", uid);
+    if (error) throw new Error(error.message);
+
+    let items = (data || [])
       .filter((d) => isOpenBorrow(d))
-      .sort((a, b) => (toDate(b.timestamp)?.getTime() || 0) - (toDate(a.timestamp)?.getTime() || 0));
+      .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
 
     if (req.query.search) {
       const q = req.query.search.toLowerCase();
       items = items.filter((i) =>
-        (i.itemName || "").toLowerCase().includes(q) ||
+        (i.item_name || "").toLowerCase().includes(q) ||
         (i.course || "").toLowerCase().includes(q)
       );
     }
@@ -244,11 +247,11 @@ const getMyBorrowed = async (req, res) => {
     if (paginate) {
       const paged = items.slice((page - 1) * limit, page * limit);
       const enriched = await enrichWithProfileURL(paged);
-      return res.json(paginatedResponse(enriched, total, page, limit));
+      return res.json(paginatedResponse(transformKeys(enriched), total, page, limit));
     }
 
     const enriched = await enrichWithProfileURL(items);
-    res.json(enriched);
+    res.json(transformKeys(enriched));
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -257,27 +260,29 @@ const getMyBorrowed = async (req, res) => {
 const getMyReturned = async (req, res) => {
   try {
     const uid = req.user.uid;
-    const snap = await db.collection(TRANS)
-      .where("action", "==", "returned")
-      .where("userId", "==", uid)
-      .get();
-    let items = snap.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }))
-      .sort((a, b) => (toDate(b.timestamp)?.getTime() || 0) - (toDate(a.timestamp)?.getTime() || 0));
+    const { data, error } = await supabase
+      .from("transactions").select("*")
+      .eq("action", "returned")
+      .eq("user_id", uid);
+    if (error) throw new Error(error.message);
 
-    const missingDates = items.filter((i) => !i.borrowedAt && i.originalTransactionId);
+    let items = (data || [])
+      .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+
+    const missingDates = items.filter((i) => !i.borrowed_at && i.original_transaction_id);
     if (missingDates.length > 0) {
-      const borrowIds = [...new Set(missingDates.map((i) => i.originalTransactionId))];
-      const borrowSnaps = await Promise.all(borrowIds.map((id) => db.collection(TRANS).doc(id).get()));
+      const borrowIds = [...new Set(missingDates.map((i) => i.original_transaction_id))];
+      const { data: borrowRecords } = await supabase
+        .from("transactions").select("*").in("id", borrowIds);
       const borrowMap = {};
-      borrowSnaps.forEach((s) => { if (s.exists) borrowMap[s.id] = s.data(); });
+      if (borrowRecords) borrowRecords.forEach((r) => { borrowMap[r.id] = r; });
       items = items.map((item) => {
-        if (!item.borrowedAt && item.originalTransactionId && borrowMap[item.originalTransactionId]) {
-          const borrow = borrowMap[item.originalTransactionId];
+        if (!item.borrowed_at && item.original_transaction_id && borrowMap[item.original_transaction_id]) {
+          const borrow = borrowMap[item.original_transaction_id];
           return {
             ...item,
-            borrowedAt: borrow.borrowedAt || borrow.timestamp || null,
-            dueDate: item.dueDate || borrow.dueDate || null,
+            borrowed_at: borrow.borrowed_at || borrow.timestamp || null,
+            due_date: item.due_date || borrow.due_date || null,
           };
         }
         return item;
@@ -287,7 +292,7 @@ const getMyReturned = async (req, res) => {
     if (req.query.search) {
       const q = req.query.search.toLowerCase();
       items = items.filter((i) =>
-        (i.itemName || "").toLowerCase().includes(q) ||
+        (i.item_name || "").toLowerCase().includes(q) ||
         (i.course || "").toLowerCase().includes(q)
       );
     }
@@ -298,11 +303,11 @@ const getMyReturned = async (req, res) => {
     if (paginate) {
       const paged = items.slice((page - 1) * limit, page * limit);
       const enriched = await enrichWithProfileURL(paged);
-      return res.json(paginatedResponse(enriched, total, page, limit));
+      return res.json(paginatedResponse(transformKeys(enriched), total, page, limit));
     }
 
     const enriched = await enrichWithProfileURL(items);
-    res.json(enriched);
+    res.json(transformKeys(enriched));
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -310,16 +315,18 @@ const getMyReturned = async (req, res) => {
 
 const getDashboardCounts = async (req, res) => {
   try {
-    const [borrowedSnap, returnedSnap, studentsSnap, usersSnap] = await Promise.all([
-      db.collection(TRANS).where("action", "==", "borrowed").get(),
-      db.collection(TRANS).where("action", "==", "returned").get(),
-      db.collection(USERS).where("role", "==", "student").get(),
-      db.collection(USERS).get(),
+    const [borrowedResult, returnedResult, studentsSnap, usersSnap] = await Promise.all([
+      supabase.from("transactions").select("id, action, status, quantity, returned_quantity").eq("action", "borrowed"),
+      supabase.from("transactions").select("id").eq("action", "returned"),
+      db.collection("users").where("role", "==", "student").get(),
+      db.collection("users").get(),
     ]);
-    const activeBorrowed = borrowedSnap.docs.filter((doc) => isOpenBorrow(doc.data())).length;
+    const borrowedItems = borrowedResult.data || [];
+    const activeBorrowed = borrowedItems.filter((d) => isOpenBorrow(d)).length;
+    const returnedItems = returnedResult.data || [];
     res.json({
       borrowed: activeBorrowed,
-      returned: returnedSnap.size,
+      returned: returnedItems.length,
       users: usersSnap.size,
       students: studentsSnap.size,
     });
@@ -330,17 +337,17 @@ const getDashboardCounts = async (req, res) => {
 
 const getChartData = async (req, res) => {
   try {
-    const [borrowedSnap, returnedSnap, availableSnap, inventorySnap] = await Promise.all([
-      db.collection(TRANS).where("action", "==", "borrowed").get(),
-      db.collection(TRANS).where("action", "==", "returned").get(),
-      db.collection(CATALOG).where("available", "==", true).get(),
-      db.collection(CATALOG).get(),
+    const [borrowedResult, returnedResult, availableResult, inventoryResult] = await Promise.all([
+      supabase.from("transactions").select("id").eq("action", "borrowed"),
+      supabase.from("transactions").select("id").eq("action", "returned"),
+      supabase.from("catalog").select("id").eq("available", true),
+      supabase.from("catalog").select("id"),
     ]);
     res.json({
-      borrowed: borrowedSnap.size,
-      returned: returnedSnap.size,
-      available: availableSnap.size,
-      inventory: inventorySnap.size,
+      borrowed: (borrowedResult.data || []).length,
+      returned: (returnedResult.data || []).length,
+      available: (availableResult.data || []).length,
+      inventory: (inventoryResult.data || []).length,
     });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
@@ -350,118 +357,87 @@ const getChartData = async (req, res) => {
 const recordBorrow = async (req, res) => {
   try {
     const { itemId, borrower, quantity, dueDate, borrowPhotoURL, conditionOnBorrow } = req.body;
-    const catalogRef = db.collection(CATALOG).doc(itemId);
-    const borrowRef = db.collection(TRANS).doc();
 
-    let userRef;
+    let userId = borrower.userId || null;
     let resolvedUser = null;
-    if (borrower.userId) {
-      userRef = db.collection(USERS).doc(borrower.userId);
-    } else if (borrower.schoolID) {
-      let userSnap = await db.collection(USERS)
+    if (!userId && borrower.schoolID) {
+      let userSnap = await db.collection("users")
         .where("schoolId", "==", borrower.schoolID).limit(1).get();
       if (userSnap.empty) {
-        userSnap = await db.collection(USERS)
+        userSnap = await db.collection("users")
           .where("employeeId", "==", borrower.schoolID).limit(1).get();
       }
       if (!userSnap.empty) {
         resolvedUser = { id: userSnap.docs[0].id, ...userSnap.docs[0].data() };
-        userRef = userSnap.docs[0].ref;
-      } else {
-        userRef = db.collection(USERS).doc();
+        userId = userSnap.docs[0].id;
       }
-    } else {
-      userRef = db.collection(USERS).doc();
     }
 
-    await db.runTransaction(async (t) => {
-      const catalogSnap = await t.get(catalogRef);
-      if (!catalogSnap.exists) throw new Error("Catalog item not found");
-      const current = catalogSnap.data();
-      const available = getAvailableQuantity(current);
-      if (available < quantity) throw new Error(`Only ${available} available`);
+    const { data: catalogItem, error: catalogError } = await supabase
+      .from("catalog").select("*").eq("id", itemId).single();
+    if (catalogError || !catalogItem) throw new Error("Catalog item not found");
 
-      let userCourse = borrower.course || "";
-      if (!userCourse) {
-        const userData = resolvedUser || (await t.get(db.collection(USERS).doc(userRef.id)));
-        if (userData?.data) {
-          userCourse = userData.data.course || "";
-        } else if (userData?.exists) {
-          userCourse = userData.data().course || "";
-        }
+    const available = getAvailableQuantity(catalogItem);
+    if (available < quantity) throw new Error(`Only ${available} available`);
+
+    let userCourse = borrower.course || "";
+    let userYear = borrower.year || "";
+    if (!userCourse || !userYear) {
+      let userData = resolvedUser;
+      if (!userData && userId) {
+        const userSnap = await db.collection("users").doc(userId).get();
+        if (userSnap.exists) userData = userSnap.data();
       }
-
-      let userYear = borrower.year || "";
-      if (!userYear) {
-        const userData = resolvedUser || (await t.get(db.collection(USERS).doc(userRef.id)));
-        if (userData?.data) {
-          userYear = userData.data.year || "";
-        } else if (userData?.exists) {
-          userYear = userData.data().year || "";
-        }
+      if (userData) {
+        if (!userCourse) userCourse = userData.course || "";
+        if (!userYear) userYear = userData.year || "";
       }
+    }
 
-      const nextAvailable = available - quantity;
-      const userData = {
-        schoolID: borrower.schoolID,
-        firstName: borrower.firstName,
-        lastName: borrower.lastName,
-        role: borrower.role || "student",
-        updatedAt: new Date(),
-      };
-      if (borrower.email) userData.email = borrower.email;
-      if (userCourse) userData.course = userCourse;
-      if (!borrower.userId && !resolvedUser) userData.createdAt = new Date();
-
-      const loanData = {
-        action: "borrowed",
-        status: "borrowed",
-        catalogId: itemId,
-        itemName: current.itemName,
-        scanCode: `SLSU-TOOL:${itemId}`,
-        quantity: Number(quantity),
-        returnedQuantity: 0,
-        quantityRemaining: Number(quantity),
-        schoolID: borrower.schoolID,
-        firstName: borrower.firstName,
-        lastName: borrower.lastName,
-        course: userCourse,
-        year: userYear,
-        userId: userRef.id,
-        dueDate: new Date(dueDate),
-        timestamp: new Date(),
-        borrowedAt: new Date(),
-        // Equipment and admin tracking
-        equipment_course: current.course || "",
-        assigned_admin_id: borrower.assigned_admin_id || "",
-        approvedBy: borrower.approvedBy || "",
-      };
-      if (borrower.email) loanData.email = borrower.email;
-      if (borrower.profileURL) loanData.profileURL = borrower.profileURL;
-      if (borrowPhotoURL) loanData.borrowPhotoURL = borrowPhotoURL;
-      if (conditionOnBorrow) loanData.conditionOnBorrow = conditionOnBorrow;
-
-      const totalQty = Math.max(numberOr(current.quantity), nextAvailable);
-      t.set(catalogRef, {
-        availableQuantity: nextAvailable,
+    const nextAvailable = available - quantity;
+    const totalQty = Math.max(numberOr(catalogItem.quantity), nextAvailable);
+    const { error: updateCatalogError } = await supabase
+      .from("catalog").update({
+        available_quantity: nextAvailable,
         available: nextAvailable > 0,
         status: nextAvailable < totalQty ? "Borrowed" : "Available",
-        updatedAt: new Date(),
-      }, { merge: true });
-      t.set(userRef, userData, { merge: true });
-      t.set(borrowRef, loanData);
-      t.set(userRef.collection("borrowed").doc(borrowRef.id), {
-        transactionId: borrowRef.id,
-        catalogId: itemId,
-        itemName: current.itemName,
-        quantity: Number(quantity),
-        returnedQuantity: 0,
-        quantityRemaining: Number(quantity),
-        status: "borrowed",
-        dueDate: new Date(dueDate),
-        timestamp: new Date(),
-      });
-    });
+        updated_at: new Date().toISOString(),
+      }).eq("id", itemId);
+    if (updateCatalogError) throw new Error(updateCatalogError.message);
+
+    const finalUserId = userId || randomUUID();
+
+    const loanData = {
+      id: randomUUID(),
+      created_at: new Date().toISOString(),
+      action: "borrowed",
+      status: "borrowed",
+      catalog_id: itemId,
+      item_name: catalogItem.item_name,
+      scan_code: `SLSU-TOOL:${itemId}`,
+      quantity: Number(quantity),
+      returned_quantity: 0,
+      quantity_remaining: Number(quantity),
+      school_id: borrower.schoolID,
+      first_name: borrower.firstName,
+      last_name: borrower.lastName,
+      course: userCourse,
+      year: userYear,
+      user_id: finalUserId,
+      due_date: new Date(dueDate).toISOString(),
+      timestamp: new Date().toISOString(),
+      borrowed_at: new Date().toISOString(),
+      equipment_course: catalogItem.course || "",
+      assigned_admin_id: borrower.assigned_admin_id || "",
+      approved_by: borrower.approvedBy || "",
+    };
+    if (borrower.email) loanData.email = borrower.email;
+    if (borrower.profileURL) loanData.profile_url = borrower.profileURL;
+    if (borrowPhotoURL) loanData.borrow_photo_url = borrowPhotoURL;
+    if (conditionOnBorrow) loanData.condition_on_borrow = conditionOnBorrow;
+
+    const { error: insertError } = await supabase.from("transactions").insert(loanData);
+    if (insertError) throw new Error(insertError.message);
 
     res.status(201).json({ message: "Borrow recorded" });
   } catch (err) {
@@ -472,100 +448,79 @@ const recordBorrow = async (req, res) => {
 const recordReturn = async (req, res) => {
   try {
     const { borrowId, itemId, schoolID, quantity, returnPhotoURL, conditionOnReturn } = req.body;
-    const catalogRef = db.collection(CATALOG).doc(itemId);
-    const borrowRef = db.collection(TRANS).doc(borrowId);
-    const returnRef = db.collection(TRANS).doc();
 
-    let capturedBorrow = null;
+    const { data: catalogItem, error: catalogError } = await supabase
+      .from("catalog").select("*").eq("id", itemId).single();
+    if (catalogError || !catalogItem) throw new Error("Catalog item not found");
 
-    await db.runTransaction(async (t) => {
-      const [catalogSnap, borrowSnap] = await Promise.all([t.get(catalogRef), t.get(borrowRef)]);
-      if (!catalogSnap.exists) throw new Error("Catalog item not found");
-      if (!borrowSnap.exists) throw new Error("Borrow record not found");
+    const { data: borrow, error: borrowError } = await supabase
+      .from("transactions").select("*").eq("id", borrowId).single();
+    if (borrowError || !borrow) throw new Error("Borrow record not found");
+    if (!isOpenBorrow(borrow)) throw new Error("Already returned");
 
-      const borrow = borrowSnap.data();
-      if (!isOpenBorrow(borrow)) throw new Error("Already returned");
+    const remaining = getRemainingQuantity(borrow);
+    if (quantity > remaining) throw new Error(`Only ${remaining} remain`);
 
-      // No course-based restriction — any admin can process any return
-      const remaining = getRemainingQuantity(borrow);
-      if (quantity > remaining) throw new Error(`Only ${remaining} remain`);
+    const returned = numberOr(borrow.returned_quantity) + quantity;
+    const remainingQty = Math.max(0, numberOr(borrow.quantity, 1) - returned);
+    const fullReturn = remainingQty === 0;
+    const currentAvail = getAvailableQuantity(catalogItem);
+    const totalQty = Math.max(numberOr(catalogItem.quantity), currentAvail + quantity);
+    const nextAvailable = Math.min(totalQty, currentAvail + quantity);
 
-      capturedBorrow = borrow;
-
-      const returned = numberOr(borrow.returnedQuantity) + quantity;
-      const remainingQty = Math.max(0, numberOr(borrow.quantity, 1) - returned);
-      const fullReturn = remainingQty === 0;
-      const current = catalogSnap.data();
-      const currentAvail = getAvailableQuantity(current);
-      const totalQty = Math.max(numberOr(current.quantity), currentAvail + quantity);
-      const nextAvailable = Math.min(totalQty, currentAvail + quantity);
-
-      const returnData = {
-        action: "returned",
-        status: "returned",
-        originalTransactionId: borrowId,
-        catalogId: itemId,
-        itemName: borrow.itemName,
-        quantity: Number(quantity),
-        schoolID: borrow.schoolID,
-        firstName: borrow.firstName || "",
-        lastName: borrow.lastName || "",
-        course: borrow.course || "",
-        year: borrow.year || "",
-        userId: borrow.userId || null,
-        timestamp: new Date(),
-        returnedAt: new Date(),
-        // Equipment and admin tracking
-        equipment_course: borrow.equipment_course || "",
-        assigned_admin_id: borrow.assigned_admin_id || "",
-        returnedTo: req.user.uid,
-      };
-      if (borrow.email) returnData.email = borrow.email;
-      if (borrow.dueDate) returnData.dueDate = borrow.dueDate;
-      if (borrow.borrowedAt) returnData.borrowedAt = borrow.borrowedAt;
-      if (borrow.timestamp) returnData.borrowedAt = borrow.borrowedAt || borrow.timestamp;
-      if (returnPhotoURL) returnData.returnPhotoURL = returnPhotoURL;
-      if (conditionOnReturn) returnData.conditionOnReturn = conditionOnReturn;
-      if (borrow.borrowPhotoURL) returnData.borrowPhotoURL = borrow.borrowPhotoURL;
-      if (borrow.conditionOnBorrow) returnData.conditionOnBorrow = borrow.conditionOnBorrow;
-
-      t.set(catalogRef, {
-        availableQuantity: nextAvailable,
+    const { error: updateCatalogError } = await supabase
+      .from("catalog").update({
+        available_quantity: nextAvailable,
         available: nextAvailable > 0,
         status: nextAvailable < totalQty ? "Borrowed" : "Available",
-        updatedAt: new Date(),
-      }, { merge: true });
-      t.set(borrowRef, {
-        returnedQuantity: returned,
-        quantityRemaining: remainingQty,
+        updated_at: new Date().toISOString(),
+      }).eq("id", itemId);
+    if (updateCatalogError) throw new Error(updateCatalogError.message);
+
+    const { error: updateBorrowError } = await supabase
+      .from("transactions").update({
+        returned_quantity: returned,
+        quantity_remaining: remainingQty,
         status: fullReturn ? "returned" : "partially_returned",
-        lastReturnedAt: new Date(),
-        ...(fullReturn ? { returnedAt: new Date() } : {}),
-      }, { merge: true });
-      t.set(returnRef, returnData);
+        last_returned_at: new Date().toISOString(),
+        ...(fullReturn ? { returned_at: new Date().toISOString() } : {}),
+      }).eq("id", borrowId);
+    if (updateBorrowError) throw new Error(updateBorrowError.message);
 
-      if (borrow.userId) {
-        t.set(db.collection(USERS).doc(borrow.userId).collection("borrowed").doc(borrowId), {
-          returnedQuantity: returned,
-          quantityRemaining: remainingQty,
-          status: fullReturn ? "returned" : "borrowed",
-          lastReturnedAt: new Date(),
-        }, { merge: true });
-        t.set(db.collection(USERS).doc(borrow.userId).collection("returned").doc(returnRef.id), {
-          transactionId: returnRef.id,
-          originalTransactionId: borrowId,
-          catalogId: itemId,
-          itemName: borrow.itemName,
-          quantity: Number(quantity),
-          status: "returned",
-          timestamp: new Date(),
-        });
-      }
-    });
+    const returnData = {
+      id: randomUUID(),
+      created_at: new Date().toISOString(),
+      action: "returned",
+      status: "returned",
+      original_transaction_id: borrowId,
+      catalog_id: itemId,
+      item_name: borrow.item_name,
+      quantity: Number(quantity),
+      school_id: borrow.school_id,
+      first_name: borrow.first_name || "",
+      last_name: borrow.last_name || "",
+      course: borrow.course || "",
+      year: borrow.year || "",
+      user_id: borrow.user_id || null,
+      timestamp: new Date().toISOString(),
+      returned_at: new Date().toISOString(),
+      equipment_course: borrow.equipment_course || "",
+      assigned_admin_id: borrow.assigned_admin_id || "",
+      returned_to: req.user.uid,
+    };
+    if (borrow.email) returnData.email = borrow.email;
+    if (borrow.due_date) returnData.due_date = borrow.due_date;
+    if (borrow.borrowed_at) returnData.borrowed_at = borrow.borrowed_at;
+    if (borrow.timestamp) returnData.borrowed_at = borrow.borrowed_at || borrow.timestamp;
+    if (returnPhotoURL) returnData.return_photo_url = returnPhotoURL;
+    if (conditionOnReturn) returnData.condition_on_return = conditionOnReturn;
+    if (borrow.borrow_photo_url) returnData.borrow_photo_url = borrow.borrow_photo_url;
+    if (borrow.condition_on_borrow) returnData.condition_on_borrow = borrow.condition_on_borrow;
 
-    if (capturedBorrow) {
-      createFineForLateReturn(capturedBorrow, borrowId);
-    }
+    const { error: insertReturnError } = await supabase.from("transactions").insert(returnData);
+    if (insertReturnError) throw new Error(insertReturnError.message);
+
+    createFineForLateReturn(borrow, borrowId);
 
     res.status(201).json({ message: "Return recorded" });
   } catch (err) {
@@ -575,58 +530,48 @@ const recordReturn = async (req, res) => {
 
 const getRecentActivity = async (req, res) => {
   try {
-    const [borrowSnap, returnSnap] = await Promise.all([
-      db.collection(TRANS).where("action", "==", "borrowed").get(),
-      db.collection(TRANS).where("action", "==", "returned").get(),
+    const [borrowResult, returnResult] = await Promise.all([
+      supabase.from("transactions").select("*").eq("action", "borrowed"),
+      supabase.from("transactions").select("*").eq("action", "returned"),
     ]);
 
-    const borrows = borrowSnap.docs
-      .map((doc) => {
-        const d = doc.data();
-        return {
-          id: doc.id,
-          action: "borrowed",
-          firstName: d.firstName || "",
-          lastName: d.lastName || "",
-          itemName: d.itemName || "",
-          quantity: numberOr(d.quantity, 1),
-          timestamp: d.timestamp || d.borrowedAt || null,
-          dueDate: d.dueDate || null,
-          schoolID: d.schoolID || "",
-          course: d.course || "",
-          equipment_course: d.equipment_course || "",
-          email: d.email || "",
-          role: d.role || "",
-        };
-      });
+    const borrows = (borrowResult.data || []).map((d) => ({
+      id: d.id,
+      action: "borrowed",
+      first_name: d.first_name || "",
+      last_name: d.last_name || "",
+      item_name: d.item_name || "",
+      quantity: numberOr(d.quantity, 1),
+      timestamp: d.timestamp || d.borrowed_at || null,
+      due_date: d.due_date || null,
+      school_id: d.school_id || "",
+      course: d.course || "",
+      equipment_course: d.equipment_course || "",
+      email: d.email || "",
+    }));
 
-    const returns = returnSnap.docs
-      .map((doc) => {
-        const d = doc.data();
-        return {
-          id: doc.id,
-          action: "returned",
-          firstName: d.firstName || "",
-          lastName: d.lastName || "",
-          itemName: d.itemName || "",
-          quantity: numberOr(d.quantity, 1),
-          timestamp: d.timestamp || d.returnedAt || null,
-          returnedAt: d.returnedAt || null,
-          dueDate: d.dueDate || null,
-          schoolID: d.schoolID || "",
-          course: d.course || "",
-          equipment_course: d.equipment_course || "",
-          email: d.email || "",
-          role: d.role || "",
-        };
-      });
+    const returns = (returnResult.data || []).map((d) => ({
+      id: d.id,
+      action: "returned",
+      first_name: d.first_name || "",
+      last_name: d.last_name || "",
+      item_name: d.item_name || "",
+      quantity: numberOr(d.quantity, 1),
+      timestamp: d.timestamp || d.returned_at || null,
+      returned_at: d.returned_at || null,
+      due_date: d.due_date || null,
+      school_id: d.school_id || "",
+      course: d.course || "",
+      equipment_course: d.equipment_course || "",
+      email: d.email || "",
+    }));
 
     const merged = [...borrows, ...returns]
-      .sort((a, b) => (toDate(b.timestamp)?.getTime() || 0) - (toDate(a.timestamp)?.getTime() || 0))
+      .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))
       .slice(0, 10);
 
     const enriched = await enrichWithProfileURL(merged);
-    res.json(enriched);
+    res.json(transformKeys(enriched));
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -636,97 +581,80 @@ const recordMyReturn = async (req, res) => {
   try {
     const uid = req.user.uid;
     const { borrowId, itemId, quantity, returnPhotoURL, conditionOnReturn } = req.body;
-    const catalogRef = db.collection(CATALOG).doc(itemId);
-    const borrowRef = db.collection(TRANS).doc(borrowId);
-    const returnRef = db.collection(TRANS).doc();
 
-    let capturedBorrow = null;
+    const { data: catalogItem, error: catalogError } = await supabase
+      .from("catalog").select("*").eq("id", itemId).single();
+    if (catalogError || !catalogItem) throw new Error("Catalog item not found");
 
-    await db.runTransaction(async (t) => {
-      const [catalogSnap, borrowSnap] = await Promise.all([t.get(catalogRef), t.get(borrowRef)]);
-      if (!catalogSnap.exists) throw new Error("Catalog item not found");
-      if (!borrowSnap.exists) throw new Error("Borrow record not found");
+    const { data: borrow, error: borrowError } = await supabase
+      .from("transactions").select("*").eq("id", borrowId).single();
+    if (borrowError || !borrow) throw new Error("Borrow record not found");
+    if (!isOpenBorrow(borrow)) throw new Error("Already returned");
+    if (borrow.user_id !== uid) throw new Error("You can only return items you borrowed");
 
-      const borrow = borrowSnap.data();
-      if (!isOpenBorrow(borrow)) throw new Error("Already returned");
-      if (borrow.userId !== uid) throw new Error("You can only return items you borrowed");
+    const remaining = getRemainingQuantity(borrow);
+    if (quantity > remaining) throw new Error(`Only ${remaining} remain`);
 
-      capturedBorrow = borrow;
+    const returned = numberOr(borrow.returned_quantity) + quantity;
+    const remainingQty = Math.max(0, numberOr(borrow.quantity, 1) - returned);
+    const fullReturn = remainingQty === 0;
+    const currentAvail = getAvailableQuantity(catalogItem);
+    const totalQty = Math.max(numberOr(catalogItem.quantity), currentAvail + quantity);
+    const nextAvailable = Math.min(totalQty, currentAvail + quantity);
 
-      const remaining = getRemainingQuantity(borrow);
-      if (quantity > remaining) throw new Error(`Only ${remaining} remain`);
-
-      const returned = numberOr(borrow.returnedQuantity) + quantity;
-      const remainingQty = Math.max(0, numberOr(borrow.quantity, 1) - returned);
-      const fullReturn = remainingQty === 0;
-      const current = catalogSnap.data();
-      const currentAvail = getAvailableQuantity(current);
-      const totalQty = Math.max(numberOr(current.quantity), currentAvail + quantity);
-      const nextAvailable = Math.min(totalQty, currentAvail + quantity);
-
-      const returnData = {
-        action: "returned",
-        status: "returned",
-        originalTransactionId: borrowId,
-        catalogId: itemId,
-        itemName: borrow.itemName,
-        quantity: Number(quantity),
-        schoolID: borrow.schoolID,
-        firstName: borrow.firstName || "",
-        lastName: borrow.lastName || "",
-        course: borrow.course || "",
-        year: borrow.year || "",
-        userId: uid,
-        timestamp: new Date(),
-        returnedAt: new Date(),
-        equipment_course: borrow.equipment_course || "",
-        assigned_admin_id: borrow.assigned_admin_id || "",
-        returnedTo: uid,
-      };
-      if (borrow.email) returnData.email = borrow.email;
-      if (borrow.dueDate) returnData.dueDate = borrow.dueDate;
-      if (borrow.borrowedAt) returnData.borrowedAt = borrow.borrowedAt;
-      if (borrow.timestamp) returnData.borrowedAt = borrow.borrowedAt || borrow.timestamp;
-      if (returnPhotoURL) returnData.returnPhotoURL = returnPhotoURL;
-      if (conditionOnReturn) returnData.conditionOnReturn = conditionOnReturn;
-      if (borrow.borrowPhotoURL) returnData.borrowPhotoURL = borrow.borrowPhotoURL;
-      if (borrow.conditionOnBorrow) returnData.conditionOnBorrow = borrow.conditionOnBorrow;
-
-      t.set(catalogRef, {
-        availableQuantity: nextAvailable,
+    const { error: updateCatalogError } = await supabase
+      .from("catalog").update({
+        available_quantity: nextAvailable,
         available: nextAvailable > 0,
         status: nextAvailable < totalQty ? "Borrowed" : "Available",
-        updatedAt: new Date(),
-      }, { merge: true });
-      t.set(borrowRef, {
-        returnedQuantity: returned,
-        quantityRemaining: remainingQty,
+        updated_at: new Date().toISOString(),
+      }).eq("id", itemId);
+    if (updateCatalogError) throw new Error(updateCatalogError.message);
+
+    const { error: updateBorrowError } = await supabase
+      .from("transactions").update({
+        returned_quantity: returned,
+        quantity_remaining: remainingQty,
         status: fullReturn ? "returned" : "partially_returned",
-        lastReturnedAt: new Date(),
-        ...(fullReturn ? { returnedAt: new Date() } : {}),
-      }, { merge: true });
-      t.set(returnRef, returnData);
+        last_returned_at: new Date().toISOString(),
+        ...(fullReturn ? { returned_at: new Date().toISOString() } : {}),
+      }).eq("id", borrowId);
+    if (updateBorrowError) throw new Error(updateBorrowError.message);
 
-      t.set(db.collection(USERS).doc(uid).collection("borrowed").doc(borrowId), {
-        returnedQuantity: returned,
-        quantityRemaining: remainingQty,
-        status: fullReturn ? "returned" : "borrowed",
-        lastReturnedAt: new Date(),
-      }, { merge: true });
-      t.set(db.collection(USERS).doc(uid).collection("returned").doc(returnRef.id), {
-        transactionId: returnRef.id,
-        originalTransactionId: borrowId,
-        catalogId: itemId,
-        itemName: borrow.itemName,
-        quantity: Number(quantity),
-        status: "returned",
-        timestamp: new Date(),
-      });
-    });
+    const returnData = {
+      id: randomUUID(),
+      created_at: new Date().toISOString(),
+      action: "returned",
+      status: "returned",
+      original_transaction_id: borrowId,
+      catalog_id: itemId,
+      item_name: borrow.item_name,
+      quantity: Number(quantity),
+      school_id: borrow.school_id,
+      first_name: borrow.first_name || "",
+      last_name: borrow.last_name || "",
+      course: borrow.course || "",
+      year: borrow.year || "",
+      user_id: uid,
+      timestamp: new Date().toISOString(),
+      returned_at: new Date().toISOString(),
+      equipment_course: borrow.equipment_course || "",
+      assigned_admin_id: borrow.assigned_admin_id || "",
+      returned_to: uid,
+    };
+    if (borrow.email) returnData.email = borrow.email;
+    if (borrow.due_date) returnData.due_date = borrow.due_date;
+    if (borrow.borrowed_at) returnData.borrowed_at = borrow.borrowed_at;
+    if (borrow.timestamp) returnData.borrowed_at = borrow.borrowed_at || borrow.timestamp;
+    if (returnPhotoURL) returnData.return_photo_url = returnPhotoURL;
+    if (conditionOnReturn) returnData.condition_on_return = conditionOnReturn;
+    if (borrow.borrow_photo_url) returnData.borrow_photo_url = borrow.borrow_photo_url;
+    if (borrow.condition_on_borrow) returnData.condition_on_borrow = borrow.condition_on_borrow;
 
-    if (capturedBorrow) {
-      createFineForLateReturn(capturedBorrow, borrowId);
-    }
+    const { error: insertReturnError } = await supabase.from("transactions").insert(returnData);
+    if (insertReturnError) throw new Error(insertReturnError.message);
+
+    createFineForLateReturn(borrow, borrowId);
 
     res.status(201).json({ message: "Return recorded" });
   } catch (err) {

@@ -1,60 +1,62 @@
-const { db } = require("../config/firebase");
+const { randomUUID } = require("crypto");
+const { supabase } = require("../config/supabase");
 const { sendOverdueEmail } = require("./emailService");
 const { createFineForOverdue } = require("../controllers/finesController");
 
-const TRANS = "transactions";
-const NOTIF = "notifications";
-
 const checkOverdueTransactions = async () => {
   try {
-    const snap = await db.collection(TRANS)
-      .where("action", "==", "borrowed")
-      .get();
+    const { data: transactions, error } = await supabase
+      .from("transactions")
+      .select("*")
+      .eq("action", "borrowed");
+
+    if (error) throw error;
+
     const now = new Date();
     const REMINDER_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
-    for (const doc of snap.docs) {
-      const d = doc.data();
-      if (d.status === "returned") continue;
+    for (const tx of transactions || []) {
+      if (tx.status === "returned") continue;
 
-      const ts = d.timestamp?.toDate?.() || (d.timestamp?.seconds ? new Date(d.timestamp.seconds * 1000) : null);
+      const ts = tx.timestamp ? new Date(tx.timestamp) : null;
       if (!ts) continue;
 
-      const dueTime = d.dueDate?.toDate?.() || (d.dueDate?.seconds ? new Date(d.dueDate.seconds * 1000) : new Date(ts.getTime() + 24 * 60 * 60 * 1000));
+      const dueTime = tx.due_date ? new Date(tx.due_date) : new Date(ts.getTime() + 24 * 60 * 60 * 1000);
 
       if (now > dueTime) {
-        const lastReminder = d.reminderSentAt?.toDate?.() || (d.reminderSentAt?.seconds ? new Date(d.reminderSentAt.seconds * 1000) : null);
+        const lastReminder = tx.reminder_sent_at ? new Date(tx.reminder_sent_at) : null;
 
-        if (d.reminderSent && lastReminder && (now.getTime() - lastReminder.getTime()) < REMINDER_INTERVAL_MS) {
+        if (tx.reminder_sent && lastReminder && (now.getTime() - lastReminder.getTime()) < REMINDER_INTERVAL_MS) {
           continue;
         }
 
-        const email = d.email || "";
-        const name = `${d.firstName || ""} ${d.lastName || ""}`.trim();
+        const email = tx.email || "";
+        const name = `${tx.first_name || ""} ${tx.last_name || ""}`.trim();
         if (!email) continue;
 
         try {
-          await sendOverdueEmail(name, email, d.itemName || "Unknown Item", dueTime.toLocaleString());
+          await sendOverdueEmail(name, email, tx.item_name || "Unknown Item", dueTime.toLocaleString());
 
-          if (d.userId) {
-            await db.collection(NOTIF).add({
-              targetUserId: d.userId,
+          if (tx.user_id) {
+            await supabase.from("notifications").insert({
+              id: randomUUID(),
+              target_user_id: tx.user_id,
               type: "overdue",
               title: "Overdue Return",
-              message: `Your borrowed "${d.itemName || "Unknown Item"}" is past its due date. Please return it as soon as possible.`,
+              message: `Your borrowed "${tx.item_name || "Unknown Item"}" is past its due date. Please return it as soon as possible.`,
               read: false,
-              dismissedBy: [],
+              dismissed_by: [],
               link: "/fines",
-              createdAt: new Date(),
+              created_at: new Date().toISOString(),
             });
           }
 
-          await db.collection(TRANS).doc(doc.id).set(
-            { reminderSent: true, reminderSentAt: new Date() },
-            { merge: true }
-          );
+          await supabase
+            .from("transactions")
+            .update({ reminder_sent: true, reminder_sent_at: new Date().toISOString() })
+            .eq("id", tx.id);
 
-          await createFineForOverdue(doc.id);
+          await createFineForOverdue(tx.id);
 
           console.log(`Overdue reminder sent to ${email}`);
         } catch (e) {

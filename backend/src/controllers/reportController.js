@@ -1,27 +1,16 @@
-const { db } = require("../config/firebase");
+const { supabase } = require("../config/supabase");
 const ExcelJS = require("exceljs");
-
-const TRANS = "transactions";
-const CATALOG = "catalog";
 
 function formatDate(value) {
   if (!value) return "";
-  let date;
-  if (typeof value?.toDate === "function") date = value.toDate();
-  else if (value?.seconds) date = new Date(value.seconds * 1000);
-  else if (value instanceof Date) date = value;
-  else date = new Date(value);
+  const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
 
 function formatDateTime(value) {
   if (!value) return "";
-  let date;
-  if (typeof value?.toDate === "function") date = value.toDate();
-  else if (value?.seconds) date = new Date(value.seconds * 1000);
-  else if (value instanceof Date) date = value;
-  else date = new Date(value);
+  const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
@@ -78,7 +67,13 @@ function addTitle(sheet, title, colCount) {
 
 const borrowedReport = async (req, res) => {
   try {
-    const snap = await db.collection(TRANS).where("action", "==", "borrowed").get();
+    const { data: transactions, error } = await supabase
+      .from("transactions")
+      .select("*")
+      .eq("action", "borrowed");
+
+    if (error) throw error;
+
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Borrowed Transactions");
 
@@ -86,11 +81,10 @@ const borrowedReport = async (req, res) => {
     const colWidths = [25, 15, 12, 30, 10, 18, 18, 14];
     sheet.columns = headers.map((h, i) => ({ header: h, width: colWidths[i] }));
 
-    snap.forEach((doc) => {
-      const d = doc.data();
-      const name = `${d.firstName || ""} ${d.lastName || ""}`.trim() || "-";
+    (transactions || []).forEach((d) => {
+      const name = `${d.first_name || ""} ${d.last_name || ""}`.trim() || "-";
       const status = d.status === "returned" ? "Returned" : "Borrowed";
-      sheet.addRow([name, d.schoolID || "-", d.course || "-", d.itemName || "-", d.quantity || 0, formatDateTime(d.timestamp), formatDate(d.dueDate), status]);
+      sheet.addRow([name, d.school_id || "-", d.course || "-", d.item_name || "-", d.quantity || 0, formatDateTime(d.timestamp), formatDate(d.due_date), status]);
     });
 
     addTitle(sheet, "Borrowed Transactions Report", headers.length);
@@ -108,7 +102,13 @@ const borrowedReport = async (req, res) => {
 
 const returnedReport = async (req, res) => {
   try {
-    const snap = await db.collection(TRANS).where("action", "==", "returned").get();
+    const { data: transactions, error } = await supabase
+      .from("transactions")
+      .select("*")
+      .eq("action", "returned");
+
+    if (error) throw error;
+
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Returned Transactions");
 
@@ -116,10 +116,9 @@ const returnedReport = async (req, res) => {
     const colWidths = [25, 15, 12, 30, 10, 18, 18];
     sheet.columns = headers.map((h, i) => ({ header: h, width: colWidths[i] }));
 
-    snap.forEach((doc) => {
-      const d = doc.data();
-      const name = `${d.firstName || ""} ${d.lastName || ""}`.trim() || "-";
-      sheet.addRow([name, d.schoolID || "-", d.course || "-", d.itemName || "-", d.quantity || 0, formatDateTime(d.timestamp), formatDateTime(d.returnedAt)]);
+    (transactions || []).forEach((d) => {
+      const name = `${d.first_name || ""} ${d.last_name || ""}`.trim() || "-";
+      sheet.addRow([name, d.school_id || "-", d.course || "-", d.item_name || "-", d.quantity || 0, formatDateTime(d.timestamp), formatDateTime(d.returned_at)]);
     });
 
     addTitle(sheet, "Returned Transactions Report", headers.length);
@@ -137,7 +136,12 @@ const returnedReport = async (req, res) => {
 
 const catalogReport = async (req, res) => {
   try {
-    const snap = await db.collection(CATALOG).get();
+    const { data: catalog, error } = await supabase
+      .from("catalog")
+      .select("*");
+
+    if (error) throw error;
+
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Catalog Inventory");
 
@@ -145,9 +149,8 @@ const catalogReport = async (req, res) => {
     const colWidths = [30, 14, 12, 12, 14, 14, 12];
     sheet.columns = headers.map((h, i) => ({ header: h, width: colWidths[i] }));
 
-    snap.forEach((doc) => {
-      const d = doc.data();
-      sheet.addRow([d.itemName || "-", d.category || "-", d.course || "-", d.quantity || 0, d.availableQuantity || 0, d.condition || "-", d.status || "-"]);
+    (catalog || []).forEach((d) => {
+      sheet.addRow([d.item_name || "-", d.category || "-", d.course || "-", d.quantity || 0, d.available_quantity || 0, d.condition || "-", d.status || "-"]);
     });
 
     addTitle(sheet, "Catalog Inventory Report", headers.length);

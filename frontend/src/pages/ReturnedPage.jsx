@@ -55,7 +55,7 @@ export default function ReturnedPage() {
         onRetry={load}
         renderRow={(item) => (
           <tr key={item.id}>
-            <td>{item.schoolID || "-"}</td>
+            <td>{item.schoolId || "-"}</td>
             <td>{item.firstName || "-"}</td>
             <td>{item.lastName || "-"}</td>
             <td>{item.course || "-"}</td>

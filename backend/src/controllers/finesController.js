@@ -1,35 +1,26 @@
+const { supabase } = require("../config/supabase");
 const { db } = require("../config/firebase");
 const { parsePagination, paginatedResponse } = require("../middleware/pagination");
-
-const FINES = "fines";
-const TRANS = "transactions";
-const USERS = "users";
-const NOTIF = "notifications";
-
-function toDate(value) {
-  if (!value) return null;
-  if (typeof value.toDate === "function") return value.toDate();
-  if (value instanceof Date) return value;
-  if (typeof value.seconds === "number") return new Date(value.seconds * 1000);
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
+const { randomUUID } = require("crypto");
+const { transformKeys } = require("../utils/transformKeys");
 
 function formatDate(date) {
   if (!date) return null;
-  const d = toDate(date);
-  return d ? d.toISOString() : null;
+  const parsed = new Date(date);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
 async function enrichFines(fines) {
   if (fines.length === 0) return [];
 
-  const userIds = [...new Set(fines.map((f) => f.userId).filter(Boolean))];
-  const txIds = [...new Set(fines.map((f) => f.transactionId).filter(Boolean))];
+  const userIds = [...new Set(fines.map((f) => f.user_id).filter(Boolean))];
+  const txIds = [...new Set(fines.map((f) => f.transaction_id).filter(Boolean))];
 
-  const [userSnaps, txSnaps] = await Promise.all([
-    Promise.all(userIds.map((id) => db.collection(USERS).doc(id).get())),
-    Promise.all(txIds.map((id) => db.collection(TRANS).doc(id).get())),
+  const [userSnaps, txResult] = await Promise.all([
+    Promise.all(userIds.map((id) => db.collection("users").doc(id).get())),
+    txIds.length > 0
+      ? supabase.from("transactions").select("*").in("id", txIds)
+      : { data: [], error: null },
   ]);
 
   const userMap = {};
@@ -46,28 +37,25 @@ async function enrichFines(fines) {
   });
 
   const txMap = {};
-  txSnaps.forEach((snap) => {
-    if (snap.exists) {
-      const d = snap.data();
-      txMap[snap.id] = {
-        dueDate: d.dueDate || null,
-        borrowedAt: d.borrowedAt || d.timestamp || null,
-        returnedAt: d.returnedAt || null,
-        transactionStatus: d.status || "",
-        itemId: d.itemId || "",
-        course: d.course || "",
-        schoolId: d.schoolID || d.schoolId || "",
-        borrowerName: `${d.firstName || ""} ${d.lastName || ""}`.trim() || "",
-      };
-    }
+  (txResult.data || []).forEach((tx) => {
+    txMap[tx.id] = {
+      dueDate: tx.due_date || null,
+      borrowedAt: tx.borrowed_at || tx.timestamp || null,
+      returnedAt: tx.returned_at || null,
+      transactionStatus: tx.status || "",
+      itemId: tx.catalog_id || "",
+      course: tx.course || "",
+      schoolId: tx.school_id || "",
+      borrowerName: `${tx.first_name || ""} ${tx.last_name || ""}`.trim() || "",
+    };
   });
 
   return fines.map((f) => {
-    const user = userMap[f.userId] || {};
-    const tx = txMap[f.transactionId] || {};
+    const user = userMap[f.user_id] || {};
+    const tx = txMap[f.transaction_id] || {};
     return {
       ...f,
-      userName: user.userName || tx.borrowerName || f.userId || "Unknown",
+      userName: user.userName || tx.borrowerName || f.user_id || "Unknown",
       schoolId: user.schoolId || tx.schoolId || "",
       course: user.course || tx.course || "",
       userRole: user.userRole || "",
@@ -82,36 +70,40 @@ async function enrichFines(fines) {
 
 const getAllFines = async (req, res) => {
   try {
-    const snap = await db.collection(FINES).orderBy("createdAt", "desc").get();
-    let fines = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const { data: fines, error } = await supabase
+      .from("fines")
+      .select("*")
+      .order("created_at", { ascending: false });
 
-    fines = await enrichFines(fines);
+    if (error) throw error;
+
+    let enriched = await enrichFines(fines || []);
 
     if (req.query.search) {
       const q = req.query.search.toLowerCase();
-      fines = fines.filter(
+      enriched = enriched.filter(
         (f) =>
           (f.userName && f.userName.toLowerCase().includes(q)) ||
-          (f.itemName && f.itemName.toLowerCase().includes(q)) ||
+          (f.item_name && f.item_name.toLowerCase().includes(q)) ||
           (f.schoolId && f.schoolId.toLowerCase().includes(q)) ||
-          (f.transactionId && f.transactionId.toLowerCase().includes(q))
+          (f.transaction_id && f.transaction_id.toLowerCase().includes(q))
       );
     }
 
     if (req.query.status && req.query.status !== "All") {
-      fines = fines.filter((f) => f.status === req.query.status);
+      enriched = enriched.filter((f) => f.status === req.query.status);
     }
 
     if (req.query.course && req.query.course !== "All") {
-      fines = fines.filter((f) => f.course === req.query.course);
+      enriched = enriched.filter((f) => f.course === req.query.course);
     }
 
     const { paginate, page, limit } = parsePagination(req);
     if (paginate) {
-      return res.json(paginatedResponse(fines, page, limit));
+      return res.json(paginatedResponse(transformKeys(enriched), enriched.length, page, limit));
     }
 
-    res.json(fines);
+    res.json(transformKeys(enriched));
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -120,38 +112,36 @@ const getAllFines = async (req, res) => {
 const getMyFines = async (req, res) => {
   try {
     const uid = req.user.uid;
-    const snap = await db.collection(FINES)
-      .where("userId", "==", uid)
-      .get();
-    let fines = snap.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }))
-      .sort((a, b) => {
-        const da = a.createdAt?.toDate?.() || (a.createdAt?.seconds ? new Date(a.createdAt.seconds * 1000) : new Date(0));
-        const db2 = b.createdAt?.toDate?.() || (b.createdAt?.seconds ? new Date(b.createdAt.seconds * 1000) : new Date(0));
-        return db2 - da;
-      });
 
-    fines = await enrichFines(fines);
+    const { data: fines, error } = await supabase
+      .from("fines")
+      .select("*")
+      .eq("user_id", uid)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    let enriched = await enrichFines(fines || []);
 
     if (req.query.search) {
       const q = req.query.search.toLowerCase();
-      fines = fines.filter(
+      enriched = enriched.filter(
         (f) =>
-          (f.itemName && f.itemName.toLowerCase().includes(q)) ||
-          (f.transactionId && f.transactionId.toLowerCase().includes(q))
+          (f.item_name && f.item_name.toLowerCase().includes(q)) ||
+          (f.transaction_id && f.transaction_id.toLowerCase().includes(q))
       );
     }
 
     if (req.query.status && req.query.status !== "All") {
-      fines = fines.filter((f) => f.status === req.query.status);
+      enriched = enriched.filter((f) => f.status === req.query.status);
     }
 
     const { paginate, page, limit } = parsePagination(req);
     if (paginate) {
-      return res.json(paginatedResponse(fines, page, limit));
+      return res.json(paginatedResponse(transformKeys(enriched), enriched.length, page, limit));
     }
 
-    res.json(fines);
+    res.json(transformKeys(enriched));
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -160,26 +150,34 @@ const getMyFines = async (req, res) => {
 const checkRestriction = async (req, res) => {
   try {
     const { userId } = req.params;
-    const snap = await db.collection(FINES)
-      .where("userId", "==", userId)
-      .where("status", "==", "pending")
-      .get();
+
+    const { data: pendingFines, error: finesError } = await supabase
+      .from("fines")
+      .select("total_fine")
+      .eq("user_id", userId)
+      .eq("status", "pending");
+
+    if (finesError) throw finesError;
 
     let totalPending = 0;
-    snap.docs.forEach((doc) => {
-      const fine = doc.data();
-      totalPending += Number(fine.totalFine) || 0;
+    (pendingFines || []).forEach((fine) => {
+      totalPending += Number(fine.total_fine) || 0;
     });
 
-    const settingsDoc = await db.collection("settings").doc("appSettings").get();
-    const settings = settingsDoc.exists ? settingsDoc.data() : {};
-    const threshold = Number(settings.fineRestrictionThreshold) || 50;
+    const { data: settings, error: settingsError } = await supabase
+      .from("settings")
+      .select("fine_restriction_threshold")
+      .eq("id", "appSettings")
+      .single();
+
+    if (settingsError && settingsError.code !== "PGRST116") throw settingsError;
+    const threshold = Number(settings?.fine_restriction_threshold) || 50;
 
     res.json({
       isRestricted: totalPending >= threshold,
       totalPending,
       threshold,
-      pendingCount: snap.size,
+      pendingCount: (pendingFines || []).length,
     });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
@@ -188,19 +186,21 @@ const checkRestriction = async (req, res) => {
 
 const getOverdueCount = async (req, res) => {
   try {
-    const snap = await db.collection(TRANS)
-      .where("action", "==", "borrowed")
-      .get();
+    const { data: borrowedTx, error } = await supabase
+      .from("transactions")
+      .select("*")
+      .eq("action", "borrowed");
+
+    if (error) throw error;
 
     const now = new Date();
     const overdueUserIds = new Set();
 
-    snap.docs.forEach((doc) => {
-      const tx = doc.data();
+    (borrowedTx || []).forEach((tx) => {
       if (tx.status === "returned") return;
-      const dueDate = toDate(tx.dueDate);
-      if (dueDate && now > dueDate && tx.userId) {
-        overdueUserIds.add(tx.userId);
+      const dueDate = tx.due_date ? new Date(tx.due_date) : null;
+      if (dueDate && now > dueDate && tx.user_id) {
+        overdueUserIds.add(tx.user_id);
       }
     });
 
@@ -213,29 +213,38 @@ const getOverdueCount = async (req, res) => {
 const payFine = async (req, res) => {
   try {
     const { id } = req.params;
-    const fineRef = db.collection(FINES).doc(id);
-    const fineSnap = await fineRef.get();
-    if (!fineSnap.exists) return res.status(404).json({ error: "Fine not found" });
 
-    const fine = fineSnap.data();
+    const { data: fine, error: fetchError } = await supabase
+      .from("fines")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (fetchError || !fine) return res.status(404).json({ error: "Fine not found" });
     if (fine.status === "paid") return res.status(400).json({ error: "Fine already paid" });
 
-    await fineRef.set({
-      status: "paid",
-      paidAt: new Date(),
-      paidBy: req.user.uid,
-    }, { merge: true });
+    const { error } = await supabase
+      .from("fines")
+      .update({
+        status: "paid",
+        paid_at: new Date().toISOString(),
+        paid_by: req.user.uid,
+      })
+      .eq("id", id);
 
-    if (fine.userId) {
-      await db.collection(NOTIF).add({
-        targetUserId: fine.userId,
+    if (error) throw error;
+
+    if (fine.user_id) {
+      await supabase.from("notifications").insert({
+        id: randomUUID(),
+        target_user_id: fine.user_id,
         type: "success",
         title: "Fine Settled",
-        message: `Your ₱${fine.totalFine} fine for "${fine.itemName}" has been marked as paid.`,
+        message: `Your \u20b1${fine.total_fine} fine for "${fine.item_name}" has been marked as paid.`,
         read: false,
-        dismissedBy: [],
+        dismissed_by: [],
         link: "/fines",
-        createdAt: new Date(),
+        created_at: new Date().toISOString(),
       });
     }
 
@@ -252,29 +261,38 @@ const waiveFine = async (req, res) => {
     if (!reason || !reason.trim()) {
       return res.status(400).json({ error: "Waiver reason is required" });
     }
-    const fineRef = db.collection(FINES).doc(id);
-    const fineSnap = await fineRef.get();
-    if (!fineSnap.exists) return res.status(404).json({ error: "Fine not found" });
 
-    const fine = fineSnap.data();
+    const { data: fine, error: fetchError } = await supabase
+      .from("fines")
+      .select("*")
+      .eq("id", id)
+      .single();
 
-    await fineRef.set({
-      status: "waived",
-      waivedBy: req.user.uid,
-      waiveReason: reason.trim(),
-      waivedAt: new Date(),
-    }, { merge: true });
+    if (fetchError || !fine) return res.status(404).json({ error: "Fine not found" });
 
-    if (fine.userId) {
-      await db.collection(NOTIF).add({
-        targetUserId: fine.userId,
+    const { error } = await supabase
+      .from("fines")
+      .update({
+        status: "waived",
+        waived_by: req.user.uid,
+        waive_reason: reason.trim(),
+        waived_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+
+    if (error) throw error;
+
+    if (fine.user_id) {
+      await supabase.from("notifications").insert({
+        id: randomUUID(),
+        target_user_id: fine.user_id,
         type: "info",
         title: "Fine Waived",
-        message: `Your fine for "${fine.itemName}" (₱${fine.totalFine}) has been waived by the laboratory administrator.`,
+        message: `Your fine for "${fine.item_name}" (\u20b1${fine.total_fine}) has been waived by the laboratory administrator.`,
         read: false,
-        dismissedBy: [],
+        dismissed_by: [],
         link: "/fines",
-        createdAt: new Date(),
+        created_at: new Date().toISOString(),
       });
     }
 
@@ -286,20 +304,25 @@ const waiveFine = async (req, res) => {
 
 const createFineForOverdue = async (transactionId) => {
   try {
-    const txSnap = await db.collection(TRANS).doc(transactionId).get();
-    if (!txSnap.exists) return;
+    const { data: tx, error: txError } = await supabase
+      .from("transactions")
+      .select("*")
+      .eq("id", transactionId)
+      .single();
 
-    const tx = txSnap.data();
+    if (txError || !tx) return;
     if (tx.action !== "borrowed") return;
     if (tx.status === "returned") return;
 
-    const existing = await db.collection(FINES)
-      .where("transactionId", "==", transactionId)
-      .where("status", "==", "pending")
-      .get();
-    if (!existing.empty) return;
+    const { data: existing } = await supabase
+      .from("fines")
+      .select("id")
+      .eq("transaction_id", transactionId)
+      .eq("status", "pending");
 
-    const dueDate = toDate(tx.dueDate);
+    if (existing && existing.length > 0) return;
+
+    const dueDate = tx.due_date ? new Date(tx.due_date) : null;
     if (!dueDate) return;
 
     const now = new Date();
@@ -308,37 +331,41 @@ const createFineForOverdue = async (transactionId) => {
     const daysOverdue = Math.ceil((now - dueDate) / (1000 * 60 * 60 * 24));
     if (daysOverdue < 1) return;
 
-    const settingsDoc = await db.collection("settings").doc("appSettings").get();
-    const settings = settingsDoc.exists ? settingsDoc.data() : {};
-    const finePerDay = Number(settings.finePerDay) || 5;
+    const { data: settings } = await supabase
+      .from("settings")
+      .select("fine_per_day")
+      .single();
 
+    const finePerDay = Number(settings?.fine_per_day) || 5;
     const totalFine = daysOverdue * finePerDay;
 
-    await db.collection(FINES).add({
-      userId: tx.userId || "",
-      transactionId,
-      itemName: tx.itemName || "Unknown Item",
-      daysOverdue,
-      finePerDay,
-      totalFine,
+    await supabase.from("fines").insert({
+      id: randomUUID(),
+      user_id: tx.user_id || "",
+      transaction_id: transactionId,
+      item_name: tx.item_name || "Unknown Item",
+      days_overdue: daysOverdue,
+      fine_per_day: finePerDay,
+      total_fine: totalFine,
       status: "pending",
-      createdAt: new Date(),
+      created_at: new Date().toISOString(),
     });
 
-    if (tx.userId) {
-      await db.collection(NOTIF).add({
-        targetUserId: tx.userId,
+    if (tx.user_id) {
+      await supabase.from("notifications").insert({
+        id: randomUUID(),
+        target_user_id: tx.user_id,
         type: "warning",
         title: "Fine Issued",
-        message: `A fine of ₱${totalFine} has been issued for "${tx.itemName}" (${daysOverdue} days overdue). Please return the item and settle the fine.`,
+        message: `A fine of \u20b1${totalFine} has been issued for "${tx.item_name}" (${daysOverdue} days overdue). Please return the item and settle the fine.`,
         read: false,
-        dismissedBy: [],
+        dismissed_by: [],
         link: "/fines",
-        createdAt: new Date(),
+        created_at: new Date().toISOString(),
       });
     }
 
-    console.log(`Fine created for transaction ${transactionId}: ₱${totalFine} (${daysOverdue} days overdue)`);
+    console.log(`Fine created for transaction ${transactionId}: \u20b1${totalFine} (${daysOverdue} days overdue)`);
   } catch (err) {
     console.error(`Failed to create fine for transaction ${transactionId}:`, err.message);
   }

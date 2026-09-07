@@ -1,19 +1,11 @@
+const { supabase } = require("../config/supabase");
 const { db } = require("../config/firebase");
 const ExcelJS = require("exceljs");
 const QRCode = require("qrcode");
+const { randomUUID } = require("crypto");
+const { transformKeys } = require("../utils/transformKeys");
 
-const ATTENDANCE = "labAttendance";
 const USERS = "users";
-const ROOMS = "labRooms";
-
-function toDate(value) {
-  if (!value) return null;
-  if (typeof value.toDate === "function") return value.toDate();
-  if (value instanceof Date) return value;
-  if (typeof value.seconds === "number") return new Date(value.seconds * 1000);
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
 
 function getTodayString() {
   const now = new Date();
@@ -23,15 +15,17 @@ function getTodayString() {
   return `${y}-${m}-${d}`;
 }
 
-function formatTime(timestamp) {
-  const d = toDate(timestamp);
-  if (!d) return "";
+function formatTime(isoString) {
+  if (!isoString) return "";
+  const d = new Date(isoString);
+  if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
 }
 
-function formatDate(timestamp) {
-  const d = toDate(timestamp);
-  if (!d) return "";
+function formatDate(isoString) {
+  if (!isoString) return "";
+  const d = new Date(isoString);
+  if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
 
@@ -79,7 +73,6 @@ const timeIn = async (req, res) => {
       return res.status(400).json({ error: "All fields are required" });
     }
 
-    // Look up student
     const userSnap = await db.collection(USERS).where("schoolId", "==", schoolId.trim()).limit(1).get();
     if (userSnap.empty) {
       return res.status(404).json({ error: "Student not found" });
@@ -89,61 +82,64 @@ const timeIn = async (req, res) => {
 
     const today = getTodayString();
 
-    // Check for existing active session today - fetch by studentSchoolId only, filter in memory
-    const studentSnap = await db.collection(ATTENDANCE)
-      .where("studentSchoolId", "==", schoolId.trim())
-      .get();
+    const { data: studentRecords, error: fetchError } = await supabase
+      .from("lab_attendance")
+      .select("*")
+      .eq("student_school_id", schoolId.trim());
+    if (fetchError) throw fetchError;
 
-    const studentRecords = studentSnap.docs.map((d) => ({ id: d.id, ref: d.ref, data: d.data() }));
-
-    // Check for active session today
-    const activeSession = studentRecords.find((r) => r.data.status === "active" && r.data.date === today);
+    const activeSession = (studentRecords || []).find((r) => r.status === "active" && r.date === today);
     if (activeSession) {
       return res.status(400).json({ error: "Already timed in. Please time out first." });
     }
 
-    // Dedup check: if same student scanned within 30 seconds today
-    const todayRecords = studentRecords.filter((r) => r.data.date === today);
+    const todayRecords = (studentRecords || []).filter((r) => r.date === today);
     if (todayRecords.length > 0) {
       const lastRecord = todayRecords.sort((a, b) => {
-        const tA = toDate(a.data.createdAt)?.getTime() || 0;
-        const tB = toDate(b.data.createdAt)?.getTime() || 0;
+        const tA = new Date(a.created_at || 0).getTime();
+        const tB = new Date(b.created_at || 0).getTime();
         return tB - tA;
       })[0];
-      const lastTime = toDate(lastRecord.data.createdAt);
-      if (lastTime && (Date.now() - lastTime.getTime()) < 30000) {
+      const lastTime = new Date(lastRecord.created_at);
+      if (!Number.isNaN(lastTime.getTime()) && (Date.now() - lastTime.getTime()) < 30000) {
         return res.status(400).json({ error: "Duplicate scan. Please wait a moment and try again." });
       }
     }
 
-    const now = new Date();
+    const now = new Date().toISOString();
     const record = {
-      studentSchoolId: schoolId.trim(),
-      userId: userDoc.id,
-      firstName: userData.firstName || "",
-      lastName: userData.lastName || "",
-      schoolId: userData.schoolId || schoolId.trim(),
+      id: randomUUID(),
+      student_school_id: schoolId.trim(),
+      user_id: userDoc.id,
+      first_name: userData.firstName || "",
+      last_name: userData.lastName || "",
+      school_id: userData.schoolId || schoolId.trim(),
       course: userData.course || "",
       year: userData.year || "",
       subject,
       professor,
-      labRoom,
-      roomCode: roomCode || "",
+      lab_room: labRoom,
+      room_code: roomCode || "",
       date: today,
-      timeIn: now,
-      timeOut: null,
-      totalDuration: null,
+      time_in: now,
+      time_out: null,
+      total_duration: null,
       status: "active",
-      createdAt: now,
-      updatedAt: now,
+      created_at: now,
+      updated_at: now,
     };
 
-    const docRef = await db.collection(ATTENDANCE).add(record);
+    const { data: created, error: insertError } = await supabase
+      .from("lab_attendance")
+      .insert(record)
+      .select()
+      .single();
+    if (insertError) throw insertError;
 
     res.json({
       success: true,
       type: "time_in",
-      record: { id: docRef.id, ...record },
+      record: created,
     });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
@@ -157,43 +153,44 @@ const timeOut = async (req, res) => {
 
     const today = getTodayString();
 
-    // Find active session - fetch by studentSchoolId only, filter in memory
-    const studentSnap = await db.collection(ATTENDANCE)
-      .where("studentSchoolId", "==", schoolId.trim())
-      .get();
+    const { data: studentRecords, error: fetchError } = await supabase
+      .from("lab_attendance")
+      .select("*")
+      .eq("student_school_id", schoolId.trim());
+    if (fetchError) throw fetchError;
 
-    const activeDoc = studentSnap.docs.find((d) => {
-      const data = d.data();
-      return data.status === "active" && data.date === today;
-    });
+    const activeDoc = (studentRecords || []).find((r) => r.status === "active" && r.date === today);
 
     if (!activeDoc) {
       return res.status(400).json({ error: "No active session found. Please time in first." });
     }
 
-    const data = activeDoc.data();
-    const timeInDate = toDate(data.timeIn);
-    const now = new Date();
-    if (!timeInDate) {
+    const timeInDate = new Date(activeDoc.time_in);
+    if (Number.isNaN(timeInDate.getTime())) {
       return res.status(500).json({ error: "Invalid time-in record. Cannot calculate duration." });
     }
+    const now = new Date();
     const durationMinutes = Math.round((now.getTime() - timeInDate.getTime()) / 60000);
 
-    await activeDoc.ref.update({
-      timeOut: now,
-      totalDuration: durationMinutes,
-      status: "timed_out",
-      updatedAt: now,
-    });
+    const nowIso = now.toISOString();
+    const { error: updateError } = await supabase
+      .from("lab_attendance")
+      .update({
+        time_out: nowIso,
+        total_duration: durationMinutes,
+        status: "timed_out",
+        updated_at: nowIso,
+      })
+      .eq("id", activeDoc.id);
+    if (updateError) throw updateError;
 
     res.json({
       success: true,
       type: "time_out",
       record: {
-        id: activeDoc.id,
-        ...data,
-        timeOut: now,
-        totalDuration: durationMinutes,
+        ...activeDoc,
+        time_out: nowIso,
+        total_duration: durationMinutes,
         status: "timed_out",
       },
     });
@@ -209,37 +206,38 @@ const getActiveStudents = async (req, res) => {
     const today = getTodayString();
     const { room } = req.query;
 
-    const snap = await db.collection(ATTENDANCE)
-      .where("date", "==", today)
-      .where("status", "==", "active")
-      .get();
-    let records = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const { data: records, error } = await supabase
+      .from("lab_attendance")
+      .select("*")
+      .eq("date", today)
+      .eq("status", "active");
+    if (error) throw error;
+
+    let result = records || [];
 
     if (req.adminAssignment?.assignedCourse) {
-      records = records.filter((r) => r.course === req.adminAssignment.assignedCourse);
+      result = result.filter((r) => r.course === req.adminAssignment.assignedCourse);
     }
 
-    // Filter by room if specified
     if (room) {
       const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-      records = records.filter((r) => norm(r.roomCode) === norm(room));
+      result = result.filter((r) => norm(r.room_code) === norm(room));
     }
 
-    records.sort((a, b) => {
-      const tA = toDate(a.timeIn)?.getTime() || 0;
-      const tB = toDate(b.timeIn)?.getTime() || 0;
+    result.sort((a, b) => {
+      const tA = new Date(a.time_in || 0).getTime();
+      const tB = new Date(b.time_in || 0).getTime();
       return tB - tA;
     });
 
-    // Calculate current duration for each
-    const now = Date.now();
-    records = records.map((r) => {
-      const timeInDate = toDate(r.timeIn);
-      const currentDuration = timeInDate ? Math.round((now - timeInDate.getTime()) / 60000) : 0;
+    const nowMs = Date.now();
+    result = result.map((r) => {
+      const timeInDate = new Date(r.time_in);
+      const currentDuration = !Number.isNaN(timeInDate.getTime()) ? Math.round((nowMs - timeInDate.getTime()) / 60000) : 0;
       return { ...r, currentDuration };
     });
 
-    res.json(records);
+    res.json(transformKeys(result));
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -248,23 +246,26 @@ const getActiveStudents = async (req, res) => {
 const getTodayAttendance = async (req, res) => {
   try {
     const today = getTodayString();
-    const snap = await db.collection(ATTENDANCE)
-      .where("date", "==", today)
-      .get();
 
-    let records = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const { data: records, error } = await supabase
+      .from("lab_attendance")
+      .select("*")
+      .eq("date", today);
+    if (error) throw error;
+
+    let result = records || [];
 
     if (req.adminAssignment?.assignedCourse) {
-      records = records.filter((r) => r.course === req.adminAssignment.assignedCourse);
+      result = result.filter((r) => r.course === req.adminAssignment.assignedCourse);
     }
 
-    records.sort((a, b) => {
-      const tA = toDate(a.timeIn)?.getTime() || 0;
-      const tB = toDate(b.timeIn)?.getTime() || 0;
+    result.sort((a, b) => {
+      const tA = new Date(a.time_in || 0).getTime();
+      const tB = new Date(b.time_in || 0).getTime();
       return tB - tA;
     });
 
-    res.json(records);
+    res.json(transformKeys(result));
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -275,23 +276,25 @@ const getDailyLog = async (req, res) => {
     const { date } = req.params;
     if (!date) return res.status(400).json({ error: "Date is required (YYYY-MM-DD)" });
 
-    const snap = await db.collection(ATTENDANCE)
-      .where("date", "==", date)
-      .get();
+    const { data: records, error } = await supabase
+      .from("lab_attendance")
+      .select("*")
+      .eq("date", date);
+    if (error) throw error;
 
-    let records = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    let result = records || [];
 
     if (req.adminAssignment?.assignedCourse) {
-      records = records.filter((r) => r.course === req.adminAssignment.assignedCourse);
+      result = result.filter((r) => r.course === req.adminAssignment.assignedCourse);
     }
 
-    records.sort((a, b) => {
-      const tA = toDate(a.timeIn)?.getTime() || 0;
-      const tB = toDate(b.timeIn)?.getTime() || 0;
+    result.sort((a, b) => {
+      const tA = new Date(a.time_in || 0).getTime();
+      const tB = new Date(b.time_in || 0).getTime();
       return tA - tB;
     });
 
-    res.json(records);
+    res.json(transformKeys(result));
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -301,50 +304,49 @@ const getAttendanceHistory = async (req, res) => {
   try {
     const { from, to, course, year, subject, professor, labRoom, student, page = 1, limit = 50 } = req.query;
 
-    let query = db.collection(ATTENDANCE);
-    if (from) query = query.where("date", ">=", from);
-    if (to) query = query.where("date", "<=", to);
-    const snap = await query.get();
-    let records = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    let query = supabase.from("lab_attendance").select("*");
+    if (from) query = query.gte("date", from);
+    if (to) query = query.lte("date", to);
 
-    // Apply all filters in memory
-    if (from) records = records.filter((r) => r.date >= from);
-    if (to) records = records.filter((r) => r.date <= to);
-    if (course) records = records.filter((r) => r.course === course);
-    if (year) records = records.filter((r) => r.year === year);
-    if (subject) records = records.filter((r) => r.subject === subject);
-    if (professor) records = records.filter((r) => r.professor === professor);
-    if (labRoom) records = records.filter((r) => r.labRoom === labRoom);
+    const { data: records, error: fetchError } = await query;
+    if (fetchError) throw fetchError;
+
+    let result = records || [];
+
+    if (course) result = result.filter((r) => r.course === course);
+    if (year) result = result.filter((r) => r.year === year);
+    if (subject) result = result.filter((r) => r.subject === subject);
+    if (professor) result = result.filter((r) => r.professor === professor);
+    if (labRoom) result = result.filter((r) => r.lab_room === labRoom);
     if (student) {
       const s = student.toLowerCase();
-      records = records.filter((r) =>
-        (r.firstName || "").toLowerCase().includes(s) ||
-        (r.lastName || "").toLowerCase().includes(s) ||
-        (r.studentSchoolId || "").toLowerCase().includes(s)
+      result = result.filter((r) =>
+        (r.first_name || "").toLowerCase().includes(s) ||
+        (r.last_name || "").toLowerCase().includes(s) ||
+        (r.student_school_id || "").toLowerCase().includes(s)
       );
     }
 
     if (req.adminAssignment?.assignedCourse) {
-      records = records.filter((r) => r.course === req.adminAssignment.assignedCourse);
+      result = result.filter((r) => r.course === req.adminAssignment.assignedCourse);
     }
 
-    // Sort by date desc, then time desc
-    records.sort((a, b) => {
+    result.sort((a, b) => {
       const dA = a.date || "";
       const dB = b.date || "";
       if (dA !== dB) return dB.localeCompare(dA);
-      const tA = toDate(a.timeIn)?.getTime() || 0;
-      const tB = toDate(b.timeIn)?.getTime() || 0;
+      const tA = new Date(a.time_in || 0).getTime();
+      const tB = new Date(b.time_in || 0).getTime();
       return tB - tA;
     });
 
-    const total = records.length;
+    const total = result.length;
     const pageNum = parseInt(page, 10) || 1;
     const limitNum = parseInt(limit, 10) || 50;
     const start = (pageNum - 1) * limitNum;
-    const paged = records.slice(start, start + limitNum);
+    const paged = result.slice(start, start + limitNum);
 
-    res.json({ records: paged, total, page: pageNum, totalPages: Math.ceil(total / limitNum) });
+    res.json({ records: transformKeys(paged), total, page: pageNum, totalPages: Math.ceil(total / limitNum) });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -356,25 +358,26 @@ const getRoomAttendanceHistory = async (req, res) => {
     const { roomId } = req.params;
     const { from, to, student, year, course, page = 1, limit = 50 } = req.query;
 
-    // Look up the room to get its roomCode
-    const roomDoc = await db.collection(ROOMS).doc(roomId).get();
-    if (!roomDoc.exists) return res.status(404).json({ error: "Room not found" });
-    const roomData = roomDoc.data();
-    const roomCode = roomData.roomCode;
-    const roomName = roomData.roomName;
+    const { data: roomData, error: roomError } = await supabase
+      .from("lab_rooms")
+      .select("*")
+      .eq("id", roomId)
+      .single();
+    if (roomError || !roomData) return res.status(404).json({ error: "Room not found" });
+    const roomCode = roomData.room_code;
+    const roomName = roomData.room_name;
 
-    const snap = await db.collection(ATTENDANCE).get();
-    let records = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const { data: allRecords, error: fetchError } = await supabase
+      .from("lab_attendance")
+      .select("*");
+    if (fetchError) throw fetchError;
 
-    // Filter by roomCode (normalize both sides to handle raw vs normalized mismatch)
     const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-    let roomRecords = records.filter((r) => norm(r.roomCode) === norm(roomCode));
+    let roomRecords = (allRecords || []).filter((r) => norm(r.room_code) === norm(roomCode));
 
-    // Collect unique years and courses for filter dropdowns (before applying filters)
     const uniqueYears = [...new Set(roomRecords.map((r) => r.year).filter(Boolean))].sort();
     const uniqueCourses = [...new Set(roomRecords.map((r) => r.course).filter(Boolean))].sort();
 
-    // Additional filters
     if (from) roomRecords = roomRecords.filter((r) => r.date >= from);
     if (to) roomRecords = roomRecords.filter((r) => r.date <= to);
     if (year) roomRecords = roomRecords.filter((r) => (r.year || "").toLowerCase() === year.toLowerCase());
@@ -382,19 +385,18 @@ const getRoomAttendanceHistory = async (req, res) => {
     if (student) {
       const s = student.toLowerCase();
       roomRecords = roomRecords.filter((r) =>
-        (r.firstName || "").toLowerCase().includes(s) ||
-        (r.lastName || "").toLowerCase().includes(s) ||
-        (r.studentSchoolId || "").toLowerCase().includes(s)
+        (r.first_name || "").toLowerCase().includes(s) ||
+        (r.last_name || "").toLowerCase().includes(s) ||
+        (r.student_school_id || "").toLowerCase().includes(s)
       );
     }
 
-    // Sort by date desc, then time desc
     roomRecords.sort((a, b) => {
       const dA = a.date || "";
       const dB = b.date || "";
       if (dA !== dB) return dB.localeCompare(dA);
-      const tA = toDate(a.timeIn)?.getTime() || 0;
-      const tB = toDate(b.timeIn)?.getTime() || 0;
+      const tA = new Date(a.time_in || 0).getTime();
+      const tB = new Date(b.time_in || 0).getTime();
       return tB - tA;
     });
 
@@ -404,7 +406,7 @@ const getRoomAttendanceHistory = async (req, res) => {
     const start = (pageNum - 1) * limitNum;
     const paged = roomRecords.slice(start, start + limitNum);
 
-    res.json({ records: paged, total, page: pageNum, totalPages: Math.ceil(total / limitNum), roomName, years: uniqueYears, courses: uniqueCourses });
+    res.json({ records: transformKeys(paged), total, page: pageNum, totalPages: Math.ceil(total / limitNum), roomName, years: uniqueYears, courses: uniqueCourses });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -415,28 +417,29 @@ const getStudentAttendance = async (req, res) => {
     const { schoolId } = req.params;
     if (!schoolId) return res.status(400).json({ error: "Student ID is required" });
 
-    const snap = await db.collection(ATTENDANCE)
-      .where("studentSchoolId", "==", schoolId)
-      .get();
+    const { data: records, error } = await supabase
+      .from("lab_attendance")
+      .select("*")
+      .eq("student_school_id", schoolId);
+    if (error) throw error;
 
-    let records = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    let result = records || [];
 
-    records.sort((a, b) => {
+    result.sort((a, b) => {
       const dA = a.date || "";
       const dB = b.date || "";
       if (dA !== dB) return dB.localeCompare(dA);
-      const tA = toDate(a.timeIn)?.getTime() || 0;
-      const tB = toDate(b.timeIn)?.getTime() || 0;
+      const tA = new Date(a.time_in || 0).getTime();
+      const tB = new Date(b.time_in || 0).getTime();
       return tB - tA;
     });
 
-    // Calculate summary stats
-    const totalSessions = records.length;
-    const totalTimeIn = records.filter((r) => r.status === "active").length;
-    const totalMinutes = records.reduce((sum, r) => sum + (r.totalDuration || 0), 0);
+    const totalSessions = result.length;
+    const totalTimeIn = result.filter((r) => r.status === "active").length;
+    const totalMinutes = result.reduce((sum, r) => sum + (r.total_duration || 0), 0);
 
     res.json({
-      records,
+      records: transformKeys(result),
       summary: {
         totalSessions,
         totalTimeIn,
@@ -455,7 +458,6 @@ const getMyAttendance = async (req, res) => {
     const { schoolId } = req.params;
     if (!schoolId) return res.status(400).json({ error: "Student ID is required" });
 
-    // Verify the authenticated user owns this schoolId
     if (req.user?.uid) {
       const userDoc = await db.collection("users").doc(req.user.uid).get();
       if (!userDoc.exists) {
@@ -467,27 +469,29 @@ const getMyAttendance = async (req, res) => {
       }
     }
 
-    const snap = await db.collection(ATTENDANCE)
-      .where("studentSchoolId", "==", schoolId)
-      .get();
+    const { data: records, error } = await supabase
+      .from("lab_attendance")
+      .select("*")
+      .eq("student_school_id", schoolId);
+    if (error) throw error;
 
-    let records = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    let result = records || [];
 
-    records.sort((a, b) => {
+    result.sort((a, b) => {
       const dA = a.date || "";
       const dB = b.date || "";
       if (dA !== dB) return dB.localeCompare(dA);
-      const tA = toDate(a.timeIn)?.getTime() || 0;
-      const tB = toDate(b.timeIn)?.getTime() || 0;
+      const tA = new Date(a.time_in || 0).getTime();
+      const tB = new Date(b.time_in || 0).getTime();
       return tB - tA;
     });
 
-    const totalSessions = records.length;
-    const totalTimeIn = records.filter((r) => r.status === "active").length;
-    const totalMinutes = records.reduce((sum, r) => sum + (r.totalDuration || 0), 0);
+    const totalSessions = result.length;
+    const totalTimeIn = result.filter((r) => r.status === "active").length;
+    const totalMinutes = result.reduce((sum, r) => sum + (r.total_duration || 0), 0);
 
     res.json({
-      records,
+      records: transformKeys(result),
       summary: {
         totalSessions,
         totalTimeIn,
@@ -508,27 +512,31 @@ const getStats = async (req, res) => {
     weekStart.setDate(weekStart.getDate() - weekStart.getDay());
     const weekStartStr = weekStart.toISOString().slice(0, 10);
 
-    const [todaySnap, activeSnap, weekSnap] = await Promise.all([
-      db.collection(ATTENDANCE).where("date", "==", today).get(),
-      db.collection(ATTENDANCE).where("date", "==", today).where("status", "==", "active").get(),
-      db.collection(ATTENDANCE).where("date", ">=", weekStartStr).where("date", "<=", today).get(),
+    const [todayResult, activeResult, weekResult] = await Promise.all([
+      supabase.from("lab_attendance").select("*").eq("date", today),
+      supabase.from("lab_attendance").select("*").eq("date", today).eq("status", "active"),
+      supabase.from("lab_attendance").select("*").gte("date", weekStartStr).lte("date", today),
     ]);
 
-    let todayRecords = todaySnap.docs.map((d) => d.data());
+    if (todayResult.error) throw todayResult.error;
+    if (activeResult.error) throw activeResult.error;
+    if (weekResult.error) throw weekResult.error;
+
+    let todayRecords = todayResult.data || [];
     if (req.adminAssignment?.assignedCourse) {
       todayRecords = todayRecords.filter((r) => r.course === req.adminAssignment.assignedCourse);
     }
 
-    let weekRecords = weekSnap.docs.map((d) => d.data());
+    let weekRecords = weekResult.data || [];
     if (req.adminAssignment?.assignedCourse) {
       weekRecords = weekRecords.filter((r) => r.course === req.adminAssignment.assignedCourse);
     }
 
     const totalToday = todayRecords.length;
-    const currentlyInside = activeSnap.size;
+    const currentlyInside = (activeResult.data || []).length;
     const completedToday = todayRecords.filter((r) => r.status === "timed_out").length;
-    const totalMinutesToday = todayRecords.reduce((sum, r) => sum + (r.totalDuration || 0), 0);
-    const uniqueStudents = new Set(weekRecords.map((d) => d.studentSchoolId)).size;
+    const totalMinutesToday = todayRecords.reduce((sum, r) => sum + (r.total_duration || 0), 0);
+    const uniqueStudents = new Set(weekRecords.map((d) => d.student_school_id)).size;
 
     res.json({
       currentlyInside,
@@ -547,30 +555,52 @@ const updateRecord = async (req, res) => {
     const { id } = req.params;
     const updates = req.body;
 
-    const doc = await db.collection(ATTENDANCE).doc(id).get();
-    if (!doc.exists) return res.status(404).json({ error: "Record not found" });
+    const { data: existing, error: fetchError } = await supabase
+      .from("lab_attendance")
+      .select("*")
+      .eq("id", id)
+      .single();
+    if (fetchError || !existing) return res.status(404).json({ error: "Record not found" });
 
-    // Only allow certain fields to be updated
-    const allowed = ["subject", "professor", "labRoom", "roomCode", "timeIn", "timeOut", "totalDuration", "status"];
+    const allowed = ["subject", "professor", "lab_room", "room_code", "time_in", "time_out", "total_duration", "status"];
     const sanitized = {};
+    const fieldMap = {
+      subject: "subject",
+      professor: "professor",
+      labRoom: "lab_room",
+      roomCode: "room_code",
+      timeIn: "time_in",
+      timeOut: "time_out",
+      totalDuration: "total_duration",
+      status: "status",
+    };
     for (const key of allowed) {
-      if (updates[key] !== undefined) sanitized[key] = updates[key];
+      const bodyKey = Object.keys(fieldMap).find((k) => fieldMap[k] === key) || key;
+      if (updates[bodyKey] !== undefined) sanitized[key] = updates[bodyKey];
+      else if (updates[key] !== undefined) sanitized[key] = updates[key];
     }
-    sanitized.updatedAt = new Date();
+    sanitized.updated_at = new Date().toISOString();
 
-    // If timeIn or timeOut changed, recalculate duration
-    if (sanitized.timeIn || sanitized.timeOut) {
-      const data = doc.data();
-      const tIn = toDate(sanitized.timeIn || data.timeIn);
-      const tOut = toDate(sanitized.timeOut || data.timeOut);
-      if (tIn && tOut) {
-        sanitized.totalDuration = Math.round((tOut.getTime() - tIn.getTime()) / 60000);
+    if (sanitized.time_in || sanitized.time_out) {
+      const tIn = new Date(sanitized.time_in || existing.time_in);
+      const tOut = new Date(sanitized.time_out || existing.time_out);
+      if (!Number.isNaN(tIn.getTime()) && !Number.isNaN(tOut.getTime())) {
+        sanitized.total_duration = Math.round((tOut.getTime() - tIn.getTime()) / 60000);
       }
     }
 
-    await doc.ref.update(sanitized);
-    const updated = await doc.ref.get();
-    res.json({ id: updated.id, ...updated.data() });
+    const { error: updateError } = await supabase
+      .from("lab_attendance")
+      .update(sanitized)
+      .eq("id", id);
+    if (updateError) throw updateError;
+
+    const { data: updated } = await supabase
+      .from("lab_attendance")
+      .select("*")
+      .eq("id", id)
+      .single();
+    res.json(transformKeys(updated));
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -579,9 +609,16 @@ const updateRecord = async (req, res) => {
 const deleteRecord = async (req, res) => {
   try {
     const { id } = req.params;
-    const doc = await db.collection(ATTENDANCE).doc(id).get();
-    if (!doc.exists) return res.status(404).json({ error: "Record not found" });
-    await doc.ref.delete();
+    const { data: existing, error: fetchError } = await supabase
+      .from("lab_attendance")
+      .select("id")
+      .eq("id", id)
+      .single();
+    if (fetchError || !existing) return res.status(404).json({ error: "Record not found" });
+
+    const { error: deleteError } = await supabase.from("lab_attendance").delete().eq("id", id);
+    if (deleteError) throw deleteError;
+
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
@@ -597,38 +634,39 @@ const exportToExcel = async (req, res) => {
     const fromDate = date || from;
     const toDateVal = date || to;
 
-    let query = db.collection(ATTENDANCE);
-    if (fromDate) query = query.where("date", ">=", fromDate);
-    if (toDateVal) query = query.where("date", "<=", toDateVal);
-    const snap = await query.get();
-    let records = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    let query = supabase.from("lab_attendance").select("*");
+    if (fromDate) query = query.gte("date", fromDate);
+    if (toDateVal) query = query.lte("date", toDateVal);
 
-    // Apply remaining filters in memory
-    if (course) records = records.filter((r) => r.course === course);
-    if (year) records = records.filter((r) => r.year === year);
-    if (subject) records = records.filter((r) => r.subject === subject);
-    if (professor) records = records.filter((r) => r.professor === professor);
-    if (labRoom) records = records.filter((r) => r.labRoom === labRoom);
+    const { data: records, error: fetchError } = await query;
+    if (fetchError) throw fetchError;
+
+    let result = records || [];
+
+    if (course) result = result.filter((r) => r.course === course);
+    if (year) result = result.filter((r) => r.year === year);
+    if (subject) result = result.filter((r) => r.subject === subject);
+    if (professor) result = result.filter((r) => r.professor === professor);
+    if (labRoom) result = result.filter((r) => r.lab_room === labRoom);
     if (student) {
       const s = student.toLowerCase();
-      records = records.filter((r) =>
-        (r.firstName || "").toLowerCase().includes(s) ||
-        (r.lastName || "").toLowerCase().includes(s) ||
-        (r.studentSchoolId || "").toLowerCase().includes(s)
+      result = result.filter((r) =>
+        (r.first_name || "").toLowerCase().includes(s) ||
+        (r.last_name || "").toLowerCase().includes(s) ||
+        (r.student_school_id || "").toLowerCase().includes(s)
       );
     }
 
     if (req.adminAssignment?.assignedCourse) {
-      records = records.filter((r) => r.course === req.adminAssignment.assignedCourse);
+      result = result.filter((r) => r.course === req.adminAssignment.assignedCourse);
     }
 
-    // Sort
-    records.sort((a, b) => {
+    result.sort((a, b) => {
       const dA = a.date || "";
       const dB = b.date || "";
       if (dA !== dB) return dA.localeCompare(dB);
-      const tA = toDate(a.timeIn)?.getTime() || 0;
-      const tB = toDate(b.timeIn)?.getTime() || 0;
+      const tA = new Date(a.time_in || 0).getTime();
+      const tB = new Date(b.time_in || 0).getTime();
       return tA - tB;
     });
 
@@ -672,21 +710,21 @@ const exportToExcel = async (req, res) => {
     }
 
     // Data rows
-    records.forEach((r) => {
-      const name = `${r.firstName || ""} ${r.lastName || ""}`.trim() || "-";
+    result.forEach((r) => {
+      const name = `${r.first_name || ""} ${r.last_name || ""}`.trim() || "-";
       const status = r.status === "active" ? "Currently Inside" : "Timed Out";
-      const duration = r.totalDuration != null ? formatDuration(r.totalDuration) : "-";
+      const duration = r.total_duration != null ? formatDuration(r.total_duration) : "-";
       sheet.addRow([
         r.date || "-",
         name,
-        r.studentSchoolId || "-",
+        r.student_school_id || "-",
         r.course || "-",
         r.year || "-",
         r.subject || "-",
         r.professor || "-",
-        r.labRoom || "-",
-        formatTime(r.timeIn),
-        formatTime(r.timeOut),
+        r.lab_room || "-",
+        formatTime(r.time_in),
+        formatTime(r.time_out),
         duration,
         status,
       ]);
@@ -711,7 +749,7 @@ const exportToExcel = async (req, res) => {
 
     // Summary row
     sheet.addRow([]);
-    const summaryRow = sheet.addRow(["", `Total Records: ${records.length}`, "", "", "", "", "", "", "", "", ""]);
+    const summaryRow = sheet.addRow(["", `Total Records: ${result.length}`, "", "", "", "", "", "", "", "", ""]);
     summaryRow.font = { bold: true, size: 10 };
 
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -727,10 +765,11 @@ const exportToExcel = async (req, res) => {
 
 const getRooms = async (req, res) => {
   try {
-    const snap = await db.collection(ROOMS).get();
-    const rooms = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    rooms.sort((a, b) => (a.roomName || "").localeCompare(b.roomName || ""));
-    res.json(rooms);
+    const { data: rooms, error } = await supabase.from("lab_rooms").select("*");
+    if (error) throw error;
+
+    const sorted = (rooms || []).sort((a, b) => (a.room_name || "").localeCompare(b.room_name || ""));
+    res.json(transformKeys(sorted));
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -741,28 +780,37 @@ const createRoom = async (req, res) => {
     const { roomName, location } = req.body;
     if (!roomName) return res.status(400).json({ error: "Room name is required" });
 
-    // Generate room code from name
     const roomCode = roomName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     const qrData = `LABROOM:${roomName}`;
 
-    // Check duplicate - fetch all rooms, filter in memory
-    const existingSnap = await db.collection(ROOMS).where("roomCode", "==", roomCode).limit(1).get();
-    if (!existingSnap.empty) {
+    const { data: existing } = await supabase
+      .from("lab_rooms")
+      .select("id")
+      .eq("room_code", roomCode)
+      .limit(1);
+    if (existing && existing.length > 0) {
       return res.status(400).json({ error: "A room with this name already exists" });
     }
 
-    const now = new Date();
+    const now = new Date().toISOString();
     const record = {
-      roomName: roomName.trim(),
-      roomCode,
-      qrData,
+      id: randomUUID(),
+      room_name: roomName.trim(),
+      room_code: roomCode,
+      qr_data: qrData,
       location: (location || "").trim(),
       status: "active",
-      createdAt: now,
+      created_at: now,
     };
 
-    const docRef = await db.collection(ROOMS).add(record);
-    res.json({ id: docRef.id, ...record });
+    const { data: created, error: insertError } = await supabase
+      .from("lab_rooms")
+      .insert(record)
+      .select()
+      .single();
+    if (insertError) throw insertError;
+
+    res.json(transformKeys(created));
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -773,8 +821,12 @@ const updateRoom = async (req, res) => {
     const { id } = req.params;
     const updates = req.body;
 
-    const doc = await db.collection(ROOMS).doc(id).get();
-    if (!doc.exists) return res.status(404).json({ error: "Room not found" });
+    const { data: existing, error: fetchError } = await supabase
+      .from("lab_rooms")
+      .select("*")
+      .eq("id", id)
+      .single();
+    if (fetchError || !existing) return res.status(404).json({ error: "Room not found" });
 
     const allowed = ["roomName", "location", "status"];
     const sanitized = {};
@@ -782,14 +834,27 @@ const updateRoom = async (req, res) => {
       if (updates[key] !== undefined) sanitized[key] = updates[key];
     }
 
-    if (sanitized.roomName) {
-      sanitized.roomCode = sanitized.roomName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-      sanitized.qrData = `LABROOM:${sanitized.roomName}`;
+    const updatePayload = {};
+    if (sanitized.roomName !== undefined) {
+      updatePayload.room_name = sanitized.roomName;
+      updatePayload.room_code = sanitized.roomName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      updatePayload.qr_data = `LABROOM:${sanitized.roomName}`;
     }
+    if (sanitized.location !== undefined) updatePayload.location = sanitized.location;
+    if (sanitized.status !== undefined) updatePayload.status = sanitized.status;
 
-    await doc.ref.update(sanitized);
-    const updated = await doc.ref.get();
-    res.json({ id: updated.id, ...updated.data() });
+    const { error: updateError } = await supabase
+      .from("lab_rooms")
+      .update(updatePayload)
+      .eq("id", id);
+    if (updateError) throw updateError;
+
+    const { data: updated } = await supabase
+      .from("lab_rooms")
+      .select("*")
+      .eq("id", id)
+      .single();
+    res.json(transformKeys(updated));
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -798,9 +863,16 @@ const updateRoom = async (req, res) => {
 const deleteRoom = async (req, res) => {
   try {
     const { id } = req.params;
-    const doc = await db.collection(ROOMS).doc(id).get();
-    if (!doc.exists) return res.status(404).json({ error: "Room not found" });
-    await doc.ref.delete();
+    const { data: existing, error: fetchError } = await supabase
+      .from("lab_rooms")
+      .select("id")
+      .eq("id", id)
+      .single();
+    if (fetchError || !existing) return res.status(404).json({ error: "Room not found" });
+
+    const { error: deleteError } = await supabase.from("lab_rooms").delete().eq("id", id);
+    if (deleteError) throw deleteError;
+
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
@@ -810,17 +882,20 @@ const deleteRoom = async (req, res) => {
 const getRoomQR = async (req, res) => {
   try {
     const { id } = req.params;
-    const doc = await db.collection(ROOMS).doc(id).get();
-    if (!doc.exists) return res.status(404).json({ error: "Room not found" });
+    const { data: room, error: fetchError } = await supabase
+      .from("lab_rooms")
+      .select("*")
+      .eq("id", id)
+      .single();
+    if (fetchError || !room) return res.status(404).json({ error: "Room not found" });
 
-    const data = doc.data();
-    const dataUrl = await QRCode.toDataURL(data.qrData, {
+    const dataUrl = await QRCode.toDataURL(room.qr_data, {
       width: 300,
       margin: 2,
       color: { dark: "#002f17", light: "#ffffff" },
     });
 
-    res.json({ dataUrl, roomName: data.roomName, qrData: data.qrData });
+    res.json({ dataUrl, roomName: room.room_name, qrData: room.qr_data });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -831,7 +906,6 @@ const getStudentQR = async (req, res) => {
     const { schoolId } = req.params;
     if (!schoolId) return res.status(400).json({ error: "Student ID is required" });
 
-    // Verify student exists
     const userSnap = await db.collection(USERS).where("schoolId", "==", schoolId).limit(1).get();
     if (userSnap.empty) {
       return res.status(404).json({ error: "Student not found" });
@@ -857,12 +931,10 @@ const getStudentQR = async (req, res) => {
 };
 
 // Auto-scan: detects time-in or time-out based on active session
-// No schoolId → returns need_form; schoolId provided → detects time-in/time-out
 const autoScan = async (req, res) => {
   try {
     const { schoolId, roomCode, labRoom, firstName, lastName, course, year, section, subject, professor } = req.body;
 
-    // Step 1: Student just scanned room QR, no schoolId yet → return need_form
     if (!schoolId) {
       return res.json({
         type: "need_form",
@@ -873,55 +945,56 @@ const autoScan = async (req, res) => {
 
     const today = getTodayString();
 
-    // Fetch student records for today (single-field query, no composite index needed)
-    const studentSnap = await db.collection(ATTENDANCE)
-      .where("studentSchoolId", "==", schoolId.trim())
-      .get();
-    const allRecords = studentSnap.docs.map((d) => ({ id: d.id, ref: d.ref, data: d.data() }));
-    const studentRecords = allRecords.filter((r) => r.data.date === today);
+    const { data: allRecords, error: fetchError } = await supabase
+      .from("lab_attendance")
+      .select("*")
+      .eq("student_school_id", schoolId.trim());
+    if (fetchError) throw fetchError;
 
-    // Check for active session today
-    const activeSession = studentRecords.find((r) => r.data.status === "active");
+    const studentRecords = (allRecords || []).filter((r) => r.date === today);
+    const activeSession = studentRecords.find((r) => r.status === "active");
 
     if (activeSession) {
-      // TIME OUT
-      const data = activeSession.data();
-      const timeInDate = toDate(data.timeIn);
-      const now = new Date();
-      if (!timeInDate) {
+      const timeInDate = new Date(activeSession.time_in);
+      if (Number.isNaN(timeInDate.getTime())) {
         return res.status(500).json({ error: "Invalid time-in record. Cannot calculate duration." });
       }
+      const now = new Date();
       const durationMinutes = Math.round((now.getTime() - timeInDate.getTime()) / 60000);
 
-      await activeSession.ref.update({
-        timeOut: now,
-        totalDuration: durationMinutes,
-        status: "timed_out",
-        updatedAt: now,
-      });
+      const nowIso = now.toISOString();
+      const { error: updateError } = await supabase
+        .from("lab_attendance")
+        .update({
+          time_out: nowIso,
+          total_duration: durationMinutes,
+          status: "timed_out",
+          updated_at: nowIso,
+        })
+        .eq("id", activeSession.id);
+      if (updateError) throw updateError;
 
       return res.json({
         success: true,
         type: "time_out",
         record: {
-          id: activeSession.id,
-          ...data,
-          timeOut: now,
-          totalDuration: durationMinutes,
+          ...activeSession,
+          time_out: nowIso,
+          total_duration: durationMinutes,
           status: "timed_out",
         },
       });
     }
 
-    // Dedup check: if same student scanned within 30 seconds today
+    // Dedup check
     if (studentRecords.length > 0) {
       const lastRecord = studentRecords.sort((a, b) => {
-        const tA = toDate(a.data.createdAt)?.getTime() || 0;
-        const tB = toDate(b.data.createdAt)?.getTime() || 0;
+        const tA = new Date(a.created_at || 0).getTime();
+        const tB = new Date(b.created_at || 0).getTime();
         return tB - tA;
       })[0];
-      const lastTime = toDate(lastRecord.data.createdAt);
-      if (lastTime && (Date.now() - lastTime.getTime()) < 30000) {
+      const lastTime = new Date(lastRecord.created_at);
+      if (!Number.isNaN(lastTime.getTime()) && (Date.now() - lastTime.getTime()) < 30000) {
         return res.status(400).json({ error: "Duplicate scan. Please wait a moment and try again." });
       }
     }
@@ -931,7 +1004,6 @@ const autoScan = async (req, res) => {
       return res.status(400).json({ error: "All form fields are required for time-in." });
     }
 
-    // Look up student profile from Firestore to verify data
     let verifiedUserId = "";
     let verifiedFirstName = firstName.trim();
     let verifiedLastName = lastName.trim();
@@ -953,35 +1025,41 @@ const autoScan = async (req, res) => {
       // Profile lookup failed, use form data
     }
 
-    const now = new Date();
+    const now = new Date().toISOString();
     const record = {
-      studentSchoolId: schoolId.trim(),
-      userId: verifiedUserId,
-      firstName: verifiedFirstName,
-      lastName: verifiedLastName,
-      schoolId: schoolId.trim(),
+      id: randomUUID(),
+      student_school_id: schoolId.trim(),
+      user_id: verifiedUserId,
+      first_name: verifiedFirstName,
+      last_name: verifiedLastName,
+      school_id: schoolId.trim(),
       course: verifiedCourse,
       year: year.trim(),
       section: (section || "").trim(),
       subject,
       professor: professor.trim(),
-      labRoom: labRoom || "Laboratory",
-      roomCode: roomCode || "",
+      lab_room: labRoom || "Laboratory",
+      room_code: roomCode || "",
       date: today,
-      timeIn: now,
-      timeOut: null,
-      totalDuration: null,
+      time_in: now,
+      time_out: null,
+      total_duration: null,
       status: "active",
-      createdAt: now,
-      updatedAt: now,
+      created_at: now,
+      updated_at: now,
     };
 
-    const docRef = await db.collection(ATTENDANCE).add(record);
+    const { data: created, error: insertError } = await supabase
+      .from("lab_attendance")
+      .insert(record)
+      .select()
+      .single();
+    if (insertError) throw insertError;
 
     res.json({
       success: true,
       type: "time_in",
-      record: { id: docRef.id, ...record },
+      record: created,
     });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
