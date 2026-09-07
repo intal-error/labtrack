@@ -4,6 +4,13 @@ import { getIdToken } from "firebase/auth";
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 const TIMEOUT_MS = 30000;
 
+function toQuery(params) {
+  if (!params) return "";
+  if (typeof params === "string") return params;
+  const qs = new URLSearchParams(params).toString();
+  return qs ? `?${qs}` : "";
+}
+
 async function request(path, options = {}) {
   let headers = { "Content-Type": "application/json", ...options.headers };
 
@@ -41,16 +48,16 @@ async function request(path, options = {}) {
 export const api = {
   getDashboardCounts: () => request("/transactions/counts"),
   getChartData: () => request("/transactions/chart"),
-  getBorrowed: (params = "") => request(`/transactions/borrowed${params ? "?" + params : ""}`),
-  getReturned: (params = "") => request(`/transactions/returned${params ? "?" + params : ""}`),
+  getBorrowed: (params) => request(`/transactions/borrowed${toQuery(params)}`),
+  getReturned: (params) => request(`/transactions/returned${toQuery(params)}`),
   getRecentActivity: () => request("/transactions/recent-activity"),
-  getMyBorrowed: (params = "") => request(`/transactions/my-borrowed${params ? "?" + params : ""}`),
-  getMyReturned: (params = "") => request(`/transactions/my-returned${params ? "?" + params : ""}`),
+  getMyBorrowed: (params) => request(`/transactions/my-borrowed${toQuery(params)}`),
+  getMyReturned: (params) => request(`/transactions/my-returned${toQuery(params)}`),
   recordBorrow: (data) => request("/transactions/borrow", { method: "POST", body: JSON.stringify(data) }),
   recordReturn: (data) => request("/transactions/return", { method: "POST", body: JSON.stringify(data) }),
   recordMyReturn: (data) => request("/transactions/my-return", { method: "POST", body: JSON.stringify(data) }),
 
-  getCatalog: (params = "") => request(`/catalog${params ? "?" + params : ""}`),
+  getCatalog: (params) => request(`/catalog${toQuery(params)}`),
   createCatalogItem: (data) => request("/catalog", { method: "POST", body: JSON.stringify(data) }),
   updateCatalogItem: (id, data) => request(`/catalog/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteCatalogItem: (id) => request(`/catalog/${id}`, { method: "DELETE" }),
@@ -148,8 +155,8 @@ export const api = {
   changePassword: (data) => request("/auth/password", { method: "PUT", body: JSON.stringify(data) }),
 
   // Notifications
-  getNotifications: (params = "") => request(`/notifications${params ? "?" + params : ""}`),
-  getMyNotifications: (params = "") => request(`/notifications/user${params ? "?" + params : ""}`),
+  getNotifications: (params) => request(`/notifications${toQuery(params)}`),
+  getMyNotifications: (params) => request(`/notifications/user${toQuery(params)}`),
   createNotification: (data) => request("/notifications", { method: "POST", body: JSON.stringify(data) }),
   markNotificationRead: (id) => request(`/notifications/${id}/read`, { method: "PUT" }),
   markAllNotificationsRead: () => request("/notifications/read-all", { method: "PUT" }),
@@ -164,14 +171,14 @@ export const api = {
   saveSettings: (data) => request("/settings", { method: "PUT", body: JSON.stringify(data) }),
 
   // Maintenance
-  getMaintenance: (params = "") => request(`/maintenance${params ? "?" + params : ""}`),
+  getMaintenance: (params) => request(`/maintenance${toQuery(params)}`),
   createMaintenance: (data) => request("/maintenance", { method: "POST", body: JSON.stringify(data) }),
   updateMaintenance: (id, data) => request(`/maintenance/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteMaintenance: (id) => request(`/maintenance/${id}`, { method: "DELETE" }),
 
   // Incidents
-  getIncidents: (params = "") => request(`/incidents${params ? "?" + params : ""}`),
-  getMyIncidents: (params = "") => request(`/incidents/mine${params ? "?" + params : ""}`),
+  getIncidents: (params) => request(`/incidents${toQuery(params)}`),
+  getMyIncidents: (params) => request(`/incidents/mine${toQuery(params)}`),
   createIncident: (data) => request("/incidents", { method: "POST", body: JSON.stringify(data) }),
   updateIncident: (id, data) => request(`/incidents/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteIncident: (id) => request(`/incidents/${id}`, { method: "DELETE" }),
@@ -184,16 +191,16 @@ export const api = {
   deleteManual: (id) => request(`/manuals/${id}`, { method: "DELETE" }),
 
   // Fines
-  getFines: (params = "") => request(`/fines${params ? "?" + params : ""}`),
-  getMyFines: (params = "") => request(`/fines/my${params ? "?" + params : ""}`),
+  getFines: (params) => request(`/fines${toQuery(params)}`),
+  getMyFines: (params) => request(`/fines/my${toQuery(params)}`),
   getOverdueCount: () => request("/fines/overdue-count"),
   checkRestriction: (userId) => request(`/fines/check-restriction/${userId}`),
   payFine: (id) => request(`/fines/${id}/pay`, { method: "PUT" }),
   waiveFine: (id, reason) => request(`/fines/${id}/waive`, { method: "PUT", body: JSON.stringify({ reason }) }),
 
   // Borrow Requests
-  getBorrowRequests: (params = "") => request(`/borrow-requests${params ? "?" + params : ""}`),
-  getMyBorrowRequests: (params = "") => request(`/borrow-requests/my${params ? "?" + params : ""}`),
+  getBorrowRequests: (params) => request(`/borrow-requests${toQuery(params)}`),
+  getMyBorrowRequests: (params) => request(`/borrow-requests/my${toQuery(params)}`),
   createBorrowRequest: (data) => request("/borrow-requests", { method: "POST", body: JSON.stringify(data) }),
   approveBorrowRequest: (id, reviewNotes) => request(`/borrow-requests/${id}/approve`, { method: "PUT", body: JSON.stringify({ reviewNotes }) }),
   rejectBorrowRequest: (id, reviewNotes) => request(`/borrow-requests/${id}/reject`, { method: "PUT", body: JSON.stringify({ reviewNotes }) }),
@@ -269,7 +276,7 @@ export const api = {
   timeIn: (data) => request("/attendance/time-in", { method: "POST", body: JSON.stringify(data) }),
   timeOut: (data) => request("/attendance/time-out", { method: "POST", body: JSON.stringify(data) }),
   autoScan: (data) => request("/attendance/auto-scan", { method: "POST", body: JSON.stringify(data) }),
-  getActiveStudents: (params = "") => request(`/attendance/active${params ? "?" + params : ""}`),
+  getActiveStudents: (params) => request(`/attendance/active${toQuery(params)}`),
   getTodayAttendance: () => request("/attendance/today"),
   getDailyLog: (date) => request(`/attendance/daily-log/${date}`),
   getAttendanceHistory: (params) => request(`/attendance/history?${params}`),

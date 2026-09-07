@@ -30,6 +30,13 @@ const checkOverdueTransactions = async () => {
           continue;
         }
 
+        // Create fine independently — email failure should not block fine creation
+        try {
+          await createFineForOverdue(tx.id);
+        } catch (e) {
+          console.error(`Failed to create fine for ${tx.id}:`, e.message);
+        }
+
         const email = tx.email || "";
         const name = `${tx.first_name || ""} ${tx.last_name || ""}`.trim();
         if (!email) continue;
@@ -55,8 +62,6 @@ const checkOverdueTransactions = async () => {
             .from("transactions")
             .update({ reminder_sent: true, reminder_sent_at: new Date().toISOString() })
             .eq("id", tx.id);
-
-          await createFineForOverdue(tx.id);
 
           console.log(`Overdue reminder sent to ${email}`);
         } catch (e) {

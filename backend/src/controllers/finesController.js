@@ -334,6 +334,7 @@ const createFineForOverdue = async (transactionId) => {
     const { data: settings } = await supabase
       .from("settings")
       .select("fine_per_day")
+      .eq("id", "appSettings")
       .single();
 
     const finePerDay = Number(settings?.fine_per_day) || 5;
