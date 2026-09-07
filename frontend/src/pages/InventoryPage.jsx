@@ -50,7 +50,7 @@ export default function InventoryPage() {
     if (search) result = filterBySearch(result, search, ["itemName"]);
     if (sort === "name") result.sort((a, b) => (a.itemName || "").localeCompare(b.itemName || ""));
     else if (sort === "number") result.sort((a, b) => (parseFloat(a.itemName) || 0) - (parseFloat(b.itemName) || 0));
-    else if (sort === "date") result.sort((a, b) => new Date(b.createdAt?.seconds * 1000 || 0) - new Date(a.createdAt?.seconds * 1000 || 0));
+    else if (sort === "date") result.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
     return result;
   }, [allItems, filter, filterCourse, search, sort]);
 
@@ -76,7 +76,7 @@ export default function InventoryPage() {
 
   return (
     <section className="catalog-page">
-      <PageHero icon={MdInventory} title="Catalog" />
+      <PageHero icon={MdInventory} title="Inventory" />
 
       <div className="catalog-stats">
         <div className="stat-card stat-total">
@@ -200,8 +200,10 @@ export default function InventoryPage() {
           </div>
           {paginationData && (
             <Pagination
-              page={paginationData.page}
+              currentPage={paginationData.page}
               totalPages={paginationData.totalPages}
+              totalItems={paginationData.total}
+              pageSize={paginationData.limit}
               onPageChange={setPage}
             />
           )}
@@ -249,8 +251,10 @@ export default function InventoryPage() {
           </div>
           {paginationData && (
             <Pagination
-              page={paginationData.page}
+              currentPage={paginationData.page}
               totalPages={paginationData.totalPages}
+              totalItems={paginationData.total}
+              pageSize={paginationData.limit}
               onPageChange={setPage}
             />
           )}

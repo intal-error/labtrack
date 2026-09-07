@@ -230,7 +230,7 @@ export default function TransactionsPage() {
     if (!confirm(`Return ${remaining} of "${item.itemName}" from ${item.firstName}?`)) return;
     setReturningId(item.id);
     try {
-      await api.recordReturn({ transactionId: item.id, quantity: remaining });
+      await api.recordReturn({ borrowId: item.id, quantity: remaining });
       toast.success("Item returned successfully");
       load();
     } catch (err) {
@@ -387,7 +387,7 @@ export default function TransactionsPage() {
                       <h4 className="transaction-name">{fullName || "-"}</h4>
                       <p className="transaction-school-id">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
-                        {item.schoolID || "-"}
+                        {item.schoolId || "-"}
                       </p>
                     </div>
                     <div className="transaction-card-badges">
@@ -482,7 +482,7 @@ export default function TransactionsPage() {
                         <span>{fullName || "-"}</span>
                       </div>
                     </td>
-                    <td>{item.schoolID || "-"}</td>
+                    <td>{item.schoolId || "-"}</td>
                     <td>{item.itemName || "-"}</td>
                     <td>{isBorrowed ? `${remaining} / ${item.quantity || 0}` : (item.quantity || 0)}</td>
                     <td>
@@ -553,7 +553,7 @@ export default function TransactionsPage() {
                   </div>
                   <div className="txn-detail-borrower-info">
                     <h4>{fullName || "-"}</h4>
-                    <p>{item.schoolID || "-"}</p>
+                    <p>{item.schoolId || "-"}</p>
                     {item.course && <span className="txn-detail-course">{item.course}{item.year ? ` - ${item.year}` : ""}</span>}
                     {item.email && <span className="txn-detail-email">{item.email}</span>}
                     {item.role && <span className={`txn-detail-role ${item.role}`}>{item.role}</span>}

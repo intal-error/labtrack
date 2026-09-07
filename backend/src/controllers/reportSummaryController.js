@@ -1,27 +1,10 @@
+const { supabase } = require("../config/supabase");
 const { db } = require("../config/firebase");
-
-const TRANS = "transactions";
-const CATALOG = "catalog";
-const USERS = "users";
-const INCIDENTS = "incidents";
-const MAINTENANCE = "maintenance";
-const FINES = "fines";
-const REQUESTS = "borrowRequests";
-const ATTENDANCE = "labAttendance";
-
-function toDate(value) {
-  if (!value) return null;
-  if (typeof value?.toDate === "function") return value.toDate();
-  if (value instanceof Date) return value;
-  if (typeof value?.seconds === "number") return new Date(value.seconds * 1000);
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
 
 function isOpenBorrow(t) {
   if (t?.action !== "borrowed") return false;
   if ((t?.status || "").toLowerCase() === "returned") return false;
-  const remaining = Math.max(0, (Number(t?.quantity) || 1) - (Number(t?.returnedQuantity) || 0));
+  const remaining = Math.max(0, (Number(t?.quantity) || 1) - (Number(t?.returned_quantity) || 0));
   return remaining > 0;
 }
 
@@ -32,40 +15,47 @@ const getSummary = async (req, res) => {
     const [
       usersSnap,
       studentsSnap,
-      catalogSnap,
-      borrowedSnap,
-      returnedSnap,
-      incidentsSnap,
-      maintenanceSnap,
-      finesSnap,
-      requestsSnap,
-      attendanceSnap,
+      { data: catalog, error: catalogErr },
+      { data: borrowed, error: borrowedErr },
+      { data: returned, error: returnedErr },
+      { data: incidents, error: incidentsErr },
+      { data: maintenance, error: maintenanceErr },
+      { data: fines, error: finesErr },
+      { data: requests, error: requestsErr },
+      { data: attendance, error: attendanceErr },
     ] = await Promise.all([
-      db.collection(USERS).get(),
-      db.collection(USERS).where("role", "==", "student").get(),
-      db.collection(CATALOG).get(),
-      db.collection(TRANS).where("action", "==", "borrowed").get(),
-      db.collection(TRANS).where("action", "==", "returned").get(),
-      db.collection(INCIDENTS).get(),
-      db.collection(MAINTENANCE).get(),
-      db.collection(FINES).orderBy("createdAt", "desc").get(),
-      db.collection(REQUESTS).orderBy("createdAt", "desc").get(),
-      db.collection(ATTENDANCE).where("date", "==", today).get(),
+      db.collection("users").get(),
+      db.collection("users").where("role", "==", "student").get(),
+      supabase.from("catalog").select("*"),
+      supabase.from("transactions").select("*").eq("action", "borrowed"),
+      supabase.from("transactions").select("*").eq("action", "returned"),
+      supabase.from("incidents").select("*"),
+      supabase.from("maintenance").select("*"),
+      supabase.from("fines").select("*").order("created_at", { ascending: false }),
+      supabase.from("borrow_requests").select("*").order("created_at", { ascending: false }),
+      supabase.from("lab_attendance").select("*").eq("date", today),
     ]);
 
-    const activeBorrowed = borrowedSnap.docs.filter((doc) => isOpenBorrow(doc.data())).length;
+    if (catalogErr) throw catalogErr;
+    if (borrowedErr) throw borrowedErr;
+    if (returnedErr) throw returnedErr;
+    if (incidentsErr) throw incidentsErr;
+    if (maintenanceErr) throw maintenanceErr;
+    if (finesErr) throw finesErr;
+    if (requestsErr) throw requestsErr;
+    if (attendanceErr) throw attendanceErr;
 
-    const allCatalog = catalogSnap.docs.map((doc) => {
-      const d = doc.data();
-      return { category: d.category || "Uncategorized", condition: d.condition || "Unknown", status: d.status || "Available" };
-    });
+    const activeBorrowed = (borrowed || []).filter(isOpenBorrow).length;
 
-    const allBorrowed = borrowedSnap.docs.map((doc) => doc.data());
-    const allReturned = returnedSnap.docs.map((doc) => doc.data());
+    const allCatalog = (catalog || []).map((d) => ({
+      category: d.category || "Uncategorized",
+      condition: d.condition || "Unknown",
+      status: d.status || "Available",
+    }));
 
     const topItems = {};
-    [...allReturned, ...allBorrowed].forEach((t) => {
-      const name = t.itemName || "Unknown";
+    [...(returned || []), ...(borrowed || [])].forEach((t) => {
+      const name = t.item_name || "Unknown";
       topItems[name] = (topItems[name] || 0) + (Number(t.quantity) || 1);
     });
     const topBorrowedData = Object.entries(topItems)
@@ -73,19 +63,23 @@ const getSummary = async (req, res) => {
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
 
-    const incidents = incidentsSnap.docs.map((doc) => ({ status: doc.data().status || "unknown" }));
     const incidentData = {};
-    incidents.forEach((i) => { incidentData[i.status] = (incidentData[i.status] || 0) + 1; });
-
-    const borrowRequests = requestsSnap.docs.map((doc) => ({ status: doc.data().status || "unknown" }));
-    const requestStatusData = {};
-    borrowRequests.forEach((r) => { requestStatusData[r.status] = (requestStatusData[r.status] || 0) + 1; });
-
-    const fines = finesSnap.docs.map((doc) => {
-      const d = doc.data();
-      return { status: d.status || "unknown", totalFine: Number(d.totalFine) || 0 };
+    (incidents || []).forEach((i) => {
+      const s = i.status || "unknown";
+      incidentData[s] = (incidentData[s] || 0) + 1;
     });
-    const pendingFines = fines.filter((f) => f.status === "pending");
+
+    const requestStatusData = {};
+    (requests || []).forEach((r) => {
+      const s = r.status || "unknown";
+      requestStatusData[s] = (requestStatusData[s] || 0) + 1;
+    });
+
+    const finesData = (fines || []).map((d) => ({
+      status: d.status || "unknown",
+      totalFine: Number(d.total_fine) || 0,
+    }));
+    const pendingFines = finesData.filter((f) => f.status === "pending");
     const totalPendingFineAmount = pendingFines.reduce((sum, f) => sum + f.totalFine, 0);
 
     const categoryData = {};
@@ -95,31 +89,37 @@ const getSummary = async (req, res) => {
       conditionData[c.condition] = (conditionData[c.condition] || 0) + 1;
     });
 
-    const maintenance = maintenanceSnap.docs.map((doc) => ({ status: doc.data().status || "unknown" }));
-    const scheduledMaintenance = maintenance.filter((m) => m.status === "scheduled").length;
+    const maintenanceData = (maintenance || []).map((d) => ({ status: d.status || "unknown" }));
+    const scheduledMaintenance = maintenanceData.filter((m) => m.status === "scheduled").length;
 
     res.json({
       counts: {
         users: usersSnap.size,
         students: studentsSnap.size,
-        catalog: catalogSnap.size,
+        catalog: (catalog || []).length,
         borrowed: activeBorrowed,
-        returned: returnedSnap.size,
+        returned: (returned || []).length,
       },
       charts: {
         categoryData: Object.entries(categoryData).map(([name, value]) => ({ name, value })),
         conditionData: Object.entries(conditionData).map(([name, value]) => ({ name, value })),
         topBorrowedData,
-        incidentData: Object.entries(incidentData).map(([name, value]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), value })),
-        requestStatusData: Object.entries(requestStatusData).map(([name, value]) => ({ name: name.charAt(0).toUpperCase() + name.slice(1), value })),
+        incidentData: Object.entries(incidentData).map(([name, value]) => ({
+          name: name.charAt(0).toUpperCase() + name.slice(1),
+          value,
+        })),
+        requestStatusData: Object.entries(requestStatusData).map(([name, value]) => ({
+          name: name.charAt(0).toUpperCase() + name.slice(1),
+          value,
+        })),
       },
       stats: {
-        openIncidents: incidents.filter((i) => i.status === "open").length,
+        openIncidents: (incidents || []).filter((i) => i.status === "open").length,
         scheduledMaintenance,
-        pendingRequests: borrowRequests.filter((r) => r.status === "pending").length,
+        pendingRequests: (requests || []).filter((r) => r.status === "pending").length,
         pendingFines: pendingFines.length,
         totalPendingFineAmount,
-        todaySessions: attendanceSnap.size,
+        todaySessions: (attendance || []).length,
       },
     });
   } catch (err) {

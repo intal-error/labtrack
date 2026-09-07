@@ -12,12 +12,18 @@ services:
         value: production
       - key: CLIENT_URL
         sync: false
+        description: "Set to your frontend URL (e.g. https://your-app.vercel.app)"
       - key: FIREBASE_PROJECT_ID
         sync: false
       - key: FIREBASE_CLIENT_EMAIL
         sync: false
       - key: FIREBASE_PRIVATE_KEY
         sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+        description: "Supabase service role key"
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
       - key: CLOUDINARY_UPLOAD_PRESET

@@ -1,0 +1,247 @@
+/* =============================================
+   Incident Detail Modal — System Green Theme
+   ============================================= */
+
+/* Modal card sizing */
+.incident-detail-modal {
+  max-width: 560px;
+  width: 100%;
+  padding: 0;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Green accent bar — matches system theme */
+.incident-detail-modal .lab-slide-accent {
+  height: 4px;
+  width: 100%;
+  background: linear-gradient(90deg, var(--green), var(--green-light), var(--green));
+  flex-shrink: 0;
+}
+
+/* Scrollable body */
+.incident-detail-modal .lab-slide-body {
+  overflow-y: auto;
+  max-height: calc(90vh - 70px);
+  scrollbar-width: none;
+  flex: 1;
+}
+.incident-detail-modal .lab-slide-body::-webkit-scrollbar { width: 0 }
+
+/* Header */
+.incident-detail-modal .lab-slide-header {
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.incident-detail-modal .lab-slide-header h2 {
+  color: var(--dark-green);
+  font-size: 18px;
+}
+
+.incident-detail-modal .lab-slide-close {
+  border-color: var(--border);
+}
+
+.incident-detail-modal .lab-slide-close:hover {
+  background: var(--border);
+  color: var(--dark-green);
+}
+
+/* Section headers */
+.incident-detail-modal .lab-form-section-header {
+  border-bottom-color: var(--border);
+}
+
+.incident-detail-modal .lab-form-section-title {
+  color: var(--dark-green);
+}
+
+/* Section icon overrides — system green variants */
+.incident-detail-modal .lab-form-section-icon.inc-details {
+  background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+  color: var(--green);
+}
+
+.incident-detail-modal .lab-form-section-icon.inc-classification {
+  background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+  color: var(--green-dark);
+}
+
+.incident-detail-modal .lab-form-section-icon.inc-description {
+  background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+  color: var(--green);
+}
+
+.incident-detail-modal .lab-form-section-icon.inc-evidence {
+  background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+  color: var(--green-dark);
+}
+
+.incident-detail-modal .lab-form-section-icon.inc-resolved {
+  background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+  color: var(--green);
+}
+
+.incident-detail-modal .lab-form-section-icon.inc-actions {
+  background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+  color: var(--green-dark);
+}
+
+/* Info rows — light green hover */
+.incident-detail-modal .incident-info-row {
+  border-bottom-color: var(--border);
+}
+
+.incident-detail-modal .incident-info-row:hover {
+  background: rgba(46, 125, 50, .04);
+}
+
+/* Detail badges */
+.incident-detail-modal .incident-detail-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+/* Action buttons — system green variant */
+.incident-detail-modal .incident-action-btn.btn-outline {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.incident-detail-modal .incident-action-btn.btn-outline:hover {
+  background: rgba(46, 125, 50, .08);
+  border-color: var(--green-dark);
+  color: var(--green-dark);
+}
+
+.incident-detail-modal .incident-action-btn.btn-primary {
+  background: linear-gradient(135deg, var(--green), var(--green-light));
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(46, 125, 50, .3);
+}
+
+.incident-detail-modal .incident-action-btn.btn-primary:hover {
+  background: linear-gradient(135deg, var(--green-dark), var(--green));
+  box-shadow: 0 8px 24px rgba(46, 125, 50, .4);
+}
+
+/* Resolution textarea focus */
+.incident-detail-modal .incident-resolution-textarea:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(46, 125, 50, .1);
+}
+
+/* Bottom action row */
+.incident-detail-modal .lab-form-actions {
+  border-top-color: var(--border);
+}
+
+.incident-detail-modal .lab-form-cancel-btn {
+  border-color: var(--border);
+}
+
+.incident-detail-modal .lab-form-cancel-btn:hover {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+/* Detail actions row */
+.incident-detail-modal .incident-detail-actions-row {
+  display: flex;
+  gap: 10px;
+}
+
+.incident-detail-modal .incident-detail-actions-row .btn {
+  flex: 1;
+}
+
+/* Photos grid */
+.incident-detail-modal .incident-photos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.incident-detail-modal .incident-photos-grid img {
+  width: 100%;
+  height: 100px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 2px solid var(--border);
+  cursor: pointer;
+  transition: border-color .2s, transform .2s;
+}
+
+.incident-detail-modal .incident-photos-grid img:hover {
+  border-color: var(--green);
+  transform: scale(1.03);
+}
+
+/* Dark mode overrides */
+body.dark .incident-detail-modal .lab-slide-header {
+  border-bottom-color: rgba(46, 125, 50, .2);
+}
+
+body.dark .incident-detail-modal .lab-slide-header h2 {
+  color: var(--green-light);
+}
+
+body.dark .incident-detail-modal .lab-slide-close {
+  border-color: rgba(46, 125, 50, .2);
+}
+
+body.dark .incident-detail-modal .lab-slide-close:hover {
+  background: rgba(46, 125, 50, .15);
+  color: var(--green-light);
+}
+
+body.dark .incident-detail-modal .lab-form-section-title {
+  color: var(--green-light);
+}
+
+body.dark .incident-detail-modal .lab-form-section-header {
+  border-bottom-color: rgba(46, 125, 50, .15);
+}
+
+body.dark .incident-detail-modal .incident-info-row {
+  border-bottom-color: rgba(46, 125, 50, .1);
+}
+
+body.dark .incident-detail-modal .incident-info-row:hover {
+  background: rgba(46, 125, 50, .05);
+}
+
+body.dark .incident-detail-modal .incident-action-btn.btn-outline {
+  border-color: var(--green-light);
+  color: var(--green-light);
+}
+
+body.dark .incident-detail-modal .incident-action-btn.btn-outline:hover {
+  background: rgba(46, 125, 50, .15);
+  color: var(--green-light);
+}
+
+body.dark .incident-detail-modal .lab-form-actions {
+  border-top-color: rgba(46, 125, 50, .15);
+}
+
+body.dark .incident-detail-modal .lab-form-cancel-btn {
+  border-color: rgba(46, 125, 50, .2);
+}
+
+body.dark .incident-detail-modal .lab-form-cancel-btn:hover {
+  border-color: var(--green-light);
+  color: var(--green-light);
+}
+
+body.dark .incident-detail-modal .incident-photos-grid img {
+  border-color: rgba(46, 125, 50, .2);
+}
+
+body.dark .incident-detail-modal .incident-photos-grid img:hover {
+  border-color: var(--green-light);
+}

@@ -1,32 +1,36 @@
-import { db } from "../../services/firebase";
-import { doc, getDoc, query, where, limit, getDocs, collection } from "firebase/firestore";
-import { normalize, readScanPayload, canUseAsDocId } from "../../utils/helpers";
+import { auth } from "../../services/firebase";
+import { getIdToken } from "firebase/auth";
 import { sanitizeSearchInput } from "../../utils/search";
+import { readScanPayload } from "../../utils/helpers";
+
+const API_URL = import.meta.env.VITE_API_URL || "/api";
+
+async function apiLookup(code) {
+  try {
+    const headers = {};
+    if (auth.currentUser) {
+      try {
+        const token = await getIdToken(auth.currentUser);
+        headers["Authorization"] = `Bearer ${token}`;
+      } catch {}
+    }
+    const res = await fetch(`${API_URL}/catalog/lookup/barcode/${encodeURIComponent(code)}`, { headers });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return { id: data.id, data, scanCode: code };
+  } catch {
+    return null;
+  }
+}
 
 export async function resolveItem(rawCode) {
   const { raw, payload } = readScanPayload(rawCode, "TOOL|ITEM");
-  const ids = [...new Set([payload, raw].filter(canUseAsDocId))];
-  for (const id of ids) {
-    const snap = await getDoc(doc(db, "catalog", id));
-    if (snap.exists()) return { id: snap.id, data: snap.data(), scanCode: raw };
-  }
   const candidates = [sanitizeSearchInput(raw), sanitizeSearchInput(payload)].filter(Boolean);
-  if (candidates.length === 0) return null;
 
-  const fields = ["barcode", "assetTag", "itemCode", "qrCode", "scanCode"];
-  for (const field of fields) {
-    for (const candidate of candidates) {
-      try {
-        const q = query(collection(db, "catalog"), where(field, "==", candidate), limit(1));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          const d = snap.docs[0];
-          return { id: d.id, data: d.data(), scanCode: raw };
-        }
-      } catch {
-        // Field may not have an index, skip
-      }
-    }
+  for (const candidate of candidates) {
+    const result = await apiLookup(candidate);
+    if (result) return result;
   }
+
   return null;
 }

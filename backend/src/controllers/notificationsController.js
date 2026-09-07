@@ -1,60 +1,33 @@
-const { db, admin } = require("../config/firebase");
+const { supabase } = require("../config/supabase");
 const { parsePagination, paginatedResponse } = require("../middleware/pagination");
-
-const COLLECTION = "notifications";
+const { randomUUID } = require("crypto");
+const { transformKeys } = require("../utils/transformKeys");
 
 const getAll = async (req, res) => {
   try {
     const userId = req.user.uid;
-    const userDoc = await db.collection("users").doc(userId).get();
-    const isAdmin = userDoc.exists && userDoc.data().role === "admin";
 
-    let notifications = [];
-    if (isAdmin) {
-      // Admins see notifications targeted to them (sorted in memory to avoid composite index)
-      const snap = await db.collection(COLLECTION)
-        .where("targetUserId", "==", userId)
-        .get();
-      snap.forEach((doc) => {
-        const data = doc.data();
-        const dismissedBy = data.dismissedBy || [];
-        if (!dismissedBy.includes(userId)) {
-          notifications.push({ id: doc.id, ...data });
-        }
-      });
-      notifications.sort((a, b) => {
-        const da = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
-        const db2 = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
-        return (db2?.getTime?.() || 0) - (da?.getTime?.() || 0);
-      });
-    } else {
-      // Non-admins see only their own notifications
-      const snap = await db.collection(COLLECTION)
-        .where("targetUserId", "==", userId)
-        .get();
-      snap.forEach((doc) => {
-        const data = doc.data();
-        const dismissedBy = data.dismissedBy || [];
-        if (!dismissedBy.includes(userId)) {
-          notifications.push({ id: doc.id, ...data });
-        }
-      });
-      notifications.sort((a, b) => {
-        const da = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
-        const db = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
-        return (db?.getTime?.() || 0) - (da?.getTime?.() || 0);
-      });
-    }
+    const { data: notifications, error } = await supabase
+      .from("notifications")
+      .select("*")
+      .eq("target_user_id", userId)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    let filtered = (notifications || []).filter(
+      (n) => !(n.dismissed_by || []).includes(userId)
+    );
 
     if (req.query.unreadOnly === "true") {
-      notifications = notifications.filter((n) => !n.read);
+      filtered = filtered.filter((n) => !n.read);
     }
 
-    const { paginate, page, pageSize } = parsePagination(req);
+    const { paginate, page, limit } = parsePagination(req);
     if (paginate) {
-      return res.json(paginatedResponse(notifications, page, pageSize));
+      return res.json(paginatedResponse(transformKeys(filtered), filtered.length, page, limit));
     }
-    res.json(notifications);
+    res.json(transformKeys(filtered));
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -63,32 +36,28 @@ const getAll = async (req, res) => {
 const getByUser = async (req, res) => {
   try {
     const userId = req.user.uid;
-    const snap = await db.collection(COLLECTION)
-      .where("targetUserId", "==", userId)
-      .get();
-    let notifications = [];
-    snap.forEach((doc) => {
-      const data = doc.data();
-      const dismissedBy = data.dismissedBy || [];
-      if (!dismissedBy.includes(userId)) {
-        notifications.push({ id: doc.id, ...data });
-      }
-    });
-    notifications.sort((a, b) => {
-      const da = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
-      const db = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
-      return (db?.getTime?.() || 0) - (da?.getTime?.() || 0);
-    });
+
+    const { data: notifications, error } = await supabase
+      .from("notifications")
+      .select("*")
+      .eq("target_user_id", userId)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    let filtered = (notifications || []).filter(
+      (n) => !(n.dismissed_by || []).includes(userId)
+    );
 
     if (req.query.unreadOnly === "true") {
-      notifications = notifications.filter((n) => !n.read);
+      filtered = filtered.filter((n) => !n.read);
     }
 
-    const { paginate, page, pageSize } = parsePagination(req);
+    const { paginate, page, limit } = parsePagination(req);
     if (paginate) {
-      return res.json(paginatedResponse(notifications, page, pageSize));
+      return res.json(paginatedResponse(transformKeys(filtered), filtered.length, page, limit));
     }
-    res.json(notifications);
+    res.json(transformKeys(filtered));
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -105,18 +74,24 @@ const create = async (req, res) => {
       return res.status(400).json({ error: "targetUserId, type, title, and message are required" });
     }
 
-    const data = {
-      targetUserId,
-      type,
-      title,
-      message,
-      link: link || "",
-      read: false,
-      dismissedBy: [],
-      createdAt: new Date(),
-    };
-    const ref = await db.collection(COLLECTION).add(data);
-    res.status(201).json({ id: ref.id, message: "Notification created" });
+    const { data, error } = await supabase
+      .from("notifications")
+      .insert({
+        id: randomUUID(),
+        target_user_id: targetUserId,
+        type,
+        title,
+        message,
+        link: link || "",
+        read: false,
+        dismissed_by: [],
+        created_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.status(201).json({ id: data.id, message: "Notification created" });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -126,17 +101,26 @@ const markRead = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.uid;
-    const doc = await db.collection(COLLECTION).doc(id).get();
-    if (!doc.exists) {
+
+    const { data: doc, error: fetchError } = await supabase
+      .from("notifications")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (fetchError || !doc) {
       return res.status(404).json({ error: "Notification not found" });
     }
-    if (doc.data().targetUserId !== userId) {
+    if (doc.target_user_id !== userId) {
       return res.status(403).json({ error: "Not authorized to mark this notification" });
     }
-    await db.collection(COLLECTION).doc(id).set(
-      { read: true, readAt: new Date() },
-      { merge: true }
-    );
+
+    const { error } = await supabase
+      .from("notifications")
+      .update({ read: true, read_at: new Date().toISOString() })
+      .eq("id", id);
+
+    if (error) throw error;
     res.json({ message: "Notification marked as read" });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
@@ -146,22 +130,14 @@ const markRead = async (req, res) => {
 const markAllRead = async (req, res) => {
   try {
     const userId = req.user.uid;
-    const snap = await db.collection(COLLECTION)
-      .where("targetUserId", "==", userId)
-      .get();
 
-    const BATCH_SIZE = 500;
-    const docs = snap.docs.filter((doc) => doc.data().read !== true);
+    const { error } = await supabase
+      .from("notifications")
+      .update({ read: true, read_at: new Date().toISOString() })
+      .eq("target_user_id", userId)
+      .eq("read", false);
 
-    for (let i = 0; i < docs.length; i += BATCH_SIZE) {
-      const batch = db.batch();
-      const chunk = docs.slice(i, i + BATCH_SIZE);
-      chunk.forEach((doc) => {
-        batch.set(doc.ref, { read: true, readAt: new Date() }, { merge: true });
-      });
-      await batch.commit();
-    }
-
+    if (error) throw error;
     res.json({ message: "All notifications marked as read" });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
@@ -172,10 +148,27 @@ const dismiss = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.uid;
-    await db.collection(COLLECTION).doc(id).set(
-      { dismissedBy: admin.firestore.FieldValue.arrayUnion(userId) },
-      { merge: true }
-    );
+
+    const { data: doc, error: fetchError } = await supabase
+      .from("notifications")
+      .select("dismissed_by")
+      .eq("id", id)
+      .single();
+
+    if (fetchError || !doc) {
+      return res.status(404).json({ error: "Notification not found" });
+    }
+
+    const current = doc.dismissed_by || [];
+    if (!current.includes(userId)) {
+      const { error } = await supabase
+        .from("notifications")
+        .update({ dismissed_by: [...current, userId] })
+        .eq("id", id);
+
+      if (error) throw error;
+    }
+
     res.json({ message: "Notification dismissed" });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });

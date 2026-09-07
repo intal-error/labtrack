@@ -1,4 +1,5 @@
 const { db } = require("../config/firebase");
+const { supabase } = require("../config/supabase");
 
 const USERS = "users";
 
@@ -10,7 +11,6 @@ const search = async (req, res) => {
     const queryFirst = firstName.trim();
     const queryLast = lastName.trim();
 
-    // Use Firestore where clause to narrow results (prefix match only)
     const snap = await db.collection(USERS)
       .where("firstName", ">=", queryFirst)
       .where("firstName", "<=", queryFirst + "\uf8ff")
@@ -27,13 +27,13 @@ const search = async (req, res) => {
     const userDoc = matched[0];
     const u = userDoc.data();
 
-    const [borrowedSnap, returnedSnap] = await Promise.all([
-      db.collection(USERS).doc(userDoc.id).collection("borrowed").get(),
-      db.collection(USERS).doc(userDoc.id).collection("returned").get(),
+    const [borrowedResult, returnedResult] = await Promise.all([
+      supabase.from("transactions").select("*").eq("user_id", userDoc.id).eq("action", "borrowed"),
+      supabase.from("transactions").select("*").eq("user_id", userDoc.id).eq("action", "returned"),
     ]);
 
-    const borrowed = borrowedSnap.docs.map((d) => d.data()).filter((d) => d.status === "borrowed");
-    const returned = returnedSnap.docs.map((d) => d.data()).filter((d) => d.status === "returned");
+    const borrowed = (borrowedResult.data || []).filter((d) => d.status === "borrowed");
+    const returned = (returnedResult.data || []).filter((d) => d.status === "returned");
 
     res.json({
       user: { id: userDoc.id, ...u },

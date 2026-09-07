@@ -168,8 +168,9 @@ app.use("/api/attendance", attendanceLimiter, (req, res, next) => {
 app.get("/api/health", async (req, res) => {
   const health = { status: "ok", timestamp: new Date().toISOString() };
   try {
-    const { db } = require("./src/config/firebase");
-    await db.collection("_health").doc("check").get();
+    const { supabase } = require("./src/config/supabase");
+    const { error } = await supabase.from("settings").select("id").limit(1);
+    if (error) throw error;
     health.database = "connected";
   } catch {
     health.status = "degraded";
