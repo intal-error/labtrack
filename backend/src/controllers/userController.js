@@ -11,15 +11,13 @@ const search = async (req, res) => {
     const queryFirst = firstName.trim();
     const queryLast = lastName.trim();
 
-    const snap = await db.collection(USERS)
-      .where("firstName", ">=", queryFirst)
-      .where("firstName", "<=", queryFirst + "\uf8ff")
-      .get();
-
+    const snap = await db.collection(USERS).get();
+    const qFirst = queryFirst.toLowerCase();
+    const qLast = queryLast.toLowerCase();
     const matched = snap.docs.filter((doc) => {
       const u = doc.data();
-      const l = String(u.lastName || "").trim().toLowerCase();
-      return l.includes(queryLast.toLowerCase());
+      return String(u.firstName || "").toLowerCase().includes(qFirst) &&
+             String(u.lastName || "").toLowerCase().includes(qLast);
     });
 
     if (matched.length === 0) return res.status(404).json({ error: "No person found" });

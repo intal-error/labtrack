@@ -164,7 +164,7 @@ export default function MaintenanceTab() {
       }
       setShowForm(false);
       load();
-    } catch { toast.error("Failed to save maintenance"); }
+    } catch (err) { toast.error(err.message || "Failed to save maintenance"); }
   }
 
   async function handleDelete(id) {

@@ -19,4 +19,17 @@ function transformKeys(obj) {
   return obj;
 }
 
-module.exports = { transformKeys };
+function toSnakeKeys(obj) {
+  if (Array.isArray(obj)) return obj.map(toSnakeKeys);
+  if (obj && typeof obj === "object" && !(obj instanceof Date)) {
+    return Object.fromEntries(
+      Object.entries(obj).map(([k, v]) => [
+        k.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`),
+        toSnakeKeys(v),
+      ])
+    );
+  }
+  return obj;
+}
+
+module.exports = { transformKeys, toSnakeKeys };

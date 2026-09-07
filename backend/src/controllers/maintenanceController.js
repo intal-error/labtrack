@@ -1,7 +1,7 @@
 const { supabase } = require("../config/supabase");
 const { parsePagination, paginatedResponse } = require("../middleware/pagination");
 const { randomUUID } = require("crypto");
-const { transformKeys } = require("../utils/transformKeys");
+const { transformKeys, toSnakeKeys } = require("../utils/transformKeys");
 
 const TABLE = "maintenance";
 
@@ -54,11 +54,13 @@ const getAll = async (req, res) => {
 
 const create = async (req, res) => {
   try {
+    const body = toSnakeKeys(req.body);
     const allowed = ["title", "description", "scheduled_date", "type", "status", "priority", "assigned_to", "catalog_id", "item_name", "photo_url", "college_building", "location", "findings", "recommendation", "materials_needed", "estimated_days", "date_started", "date_finished", "remarks", "inspected_by", "noted_by", "inspected_date", "assigned_personnel"];
     const sanitized = {};
     for (const key of allowed) {
-      if (req.body[key] !== undefined) sanitized[key] = req.body[key];
+      if (body[key] !== undefined) sanitized[key] = body[key];
     }
+    if (!sanitized.title) sanitized.title = sanitized.item_name || "Maintenance Record";
     sanitized.created_by = req.user.uid;
     sanitized.id = randomUUID();
     sanitized.created_at = new Date().toISOString();
@@ -77,11 +79,13 @@ const create = async (req, res) => {
 const update = async (req, res) => {
   try {
     const { id } = req.params;
+    const body = toSnakeKeys(req.body);
     const allowed = ["title", "description", "scheduled_date", "type", "status", "priority", "assigned_to", "catalog_id", "item_name", "photo_url", "college_building", "location", "findings", "recommendation", "materials_needed", "estimated_days", "date_started", "date_finished", "remarks", "inspected_by", "noted_by", "inspected_date", "assigned_personnel"];
     const sanitized = {};
     for (const key of allowed) {
-      if (req.body[key] !== undefined) sanitized[key] = req.body[key];
+      if (body[key] !== undefined) sanitized[key] = body[key];
     }
+    if (!sanitized.title && sanitized.item_name) sanitized.title = sanitized.item_name;
     sanitized.updated_at = new Date().toISOString();
     const { error } = await supabase
       .from(TABLE)

@@ -6,7 +6,9 @@ const TIMEOUT_MS = 30000;
 
 function toQuery(params) {
   if (!params) return "";
-  if (typeof params === "string") return params;
+  if (typeof params === "string") {
+    return params.startsWith("?") ? params : `?${params}`;
+  }
   const qs = new URLSearchParams(params).toString();
   return qs ? `?${qs}` : "";
 }

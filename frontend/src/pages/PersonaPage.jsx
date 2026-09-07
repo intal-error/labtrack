@@ -77,7 +77,7 @@ export default function PersonaPage() {
               <div className="persona-detail-icon"><MdSchool size={18} /></div>
               <div>
                 <span className="persona-detail-label">School ID</span>
-                <span className="persona-detail-value">{user.schoolID || "-"}</span>
+                <span className="persona-detail-value">{user.schoolId || user.schoolID || "-"}</span>
               </div>
             </div>
             <div className="persona-detail-item">
@@ -91,7 +91,7 @@ export default function PersonaPage() {
               <div className="persona-detail-icon"><MdPhone size={18} /></div>
               <div>
                 <span className="persona-detail-label">Contact</span>
-                <span className="persona-detail-value">{user.contactNumber || user.contact || "-"}</span>
+                <span className="persona-detail-value">{user.contact || user.contactNumber || "-"}</span>
               </div>
             </div>
             <div className="persona-detail-item">
