@@ -1,59 +1,23 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../services/api";
+import { useStudentAttendance } from "../hooks/useQueries";
 import { useAuth } from "../context/AuthContext";
 import { formatDuration, formatTime, getTodayString } from "../utils/attendanceHelpers";
 import { MdSearch, MdFileDownload, MdQrCodeScanner, MdMenuBook, MdEventAvailable } from "react-icons/md";
 import PageHero from "../components/ui/PageHero";
 import "../styles/pages/attendance.css";
 
-function toDate(value) {
-  if (!value) return null;
-  if (typeof value?.toDate === "function") return value.toDate();
-  if (value instanceof Date) return value;
-  if (typeof value?.seconds === "number") return new Date(value.seconds * 1000);
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function timeAgo(date) {
-  const d = toDate(date);
-  if (!d) return "";
-  const now = new Date();
-  const diff = Math.floor((now.getTime() - d.getTime()) / 1000);
-  if (diff < 60) return "just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
-}
-
 export default function MyAttendancePage() {
   const { userProfile } = useAuth();
   const navigate = useNavigate();
-  const [records, setRecords] = useState([]);
-  const [loading, setLoading] = useState(true);
 
   const [filterSubject, setFilterSubject] = useState("");
   const [filterDate, setFilterDate] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
 
   const schoolId = userProfile?.schoolId || userProfile?.schoolID;
-
-  useEffect(() => {
-    if (!schoolId) { setLoading(false); return; }
-    loadAttendance();
-  }, [schoolId]);
-
-  async function loadAttendance() {
-    setLoading(true);
-    try {
-      const data = await api.getStudentAttendance(schoolId);
-      setRecords(data.records || []);
-    } catch {
-    } finally {
-      setLoading(false);
-    }
-  }
+  const { data, isLoading } = useStudentAttendance(schoolId);
+  const records = useMemo(() => data?.records || [], [data]);
 
   const subjects = useMemo(() => {
     const set = new Set(records.map((r) => r.subject).filter(Boolean));
@@ -155,7 +119,7 @@ export default function MyAttendancePage() {
         </div>
 
         {/* Logbook Table */}
-        {loading ? (
+        {isLoading ? (
           <div className="attendance-loading"><div className="spinner-lg" /></div>
         ) : records.length === 0 ? (
           <div className="attendance-empty">

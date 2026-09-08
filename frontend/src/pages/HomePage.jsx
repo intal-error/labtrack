@@ -1,9 +1,8 @@
-import { useState, useEffect } from "react";
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { api } from "../services/api";
+import { useMyBorrowed, useMyReturned, useDashboardCounts, useChartData, useRecentActivity, useMyNotifications } from "../hooks/useQueries";
 import { timeAgo, toDate } from "../utils/helpers";
-import toast from "react-hot-toast";
 import {
   MdQrCodeScanner, MdInventory, MdHistory, MdMenuBook,
   MdSwapHoriz, MdAssignment, MdWarning, MdNotificationsNone,
@@ -36,68 +35,44 @@ export default function HomePage() {
   const { user, userProfile, role } = useAuth();
   const isStudent = role === "student";
 
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState([]);
-  const [activity, setActivity] = useState([]);
-  const [notifs, setNotifs] = useState([]);
+  const { data: notifData } = useMyNotifications();
+  const { data: borrowedData, isLoading: borrowedLoading } = useMyBorrowed();
+  const { data: returnedData } = useMyReturned();
+  const { data: countsData, isLoading: countsLoading } = useDashboardCounts();
+  const { data: chartDataRes, isLoading: chartLoading } = useChartData();
+  const { data: activityData } = useRecentActivity();
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const notifData = await api.getMyNotifications().catch(() => []);
-        if (cancelled) return;
-        setNotifs(notifData || []);
+  const notifs = useMemo(() => notifData || [], [notifData]);
+  const mine = useMemo(() => borrowedData || [], [borrowedData]);
+  const myReturnedItems = useMemo(() => returnedData || [], [returnedData]);
+  const chartData = useMemo(() => chartDataRes || {}, [chartDataRes]);
 
-        if (isStudent) {
-          const [b, r, reqs] = await Promise.all([
-            api.getMyBorrowed(),
-            api.getMyReturned(),
-            api.getMyBorrowRequests().catch(() => []),
-          ]);
-          if (cancelled) return;
-          const mine = b || [];
-          const myReturned = r || [];
-          const overdue = mine.filter((t) => {
-            const d = toDate(t.dueDate);
-            return d && d < new Date();
-          }).length;
-          const pending = (reqs || []).filter((rq) => (rq.status || "").toLowerCase() === "pending").length;
-
-          setStats([
-            { key: "borrowed", label: "Borrowed", value: mine.length, icon: MdHistory, tone: "orange" },
-            { key: "overdue", label: "Overdue", value: overdue, icon: MdEventBusy, tone: "red" },
-            { key: "returned", label: "Returned", value: myReturned.length, icon: MdCheckCircle, tone: "green" },
-            { key: "pending", label: "Pending Requests", value: pending, icon: MdAssignment, tone: "blue" },
-          ]);
-          setActivity(mine.slice(0, 5));
-        } else {
-          const [countsData, chartDataRes, activityData, borrowRequests] = await Promise.all([
-            api.getDashboardCounts(),
-            api.getChartData(),
-            api.getRecentActivity(),
-            api.getBorrowRequests().catch(() => []),
-          ]);
-          if (cancelled) return;
-          const pendingRequests = (borrowRequests || []).filter((r) => r.status === "pending").length;
-          setStats([
-            { key: "inventory", label: "Total Items", value: chartDataRes.inventory ?? 0, icon: MdInventory2, tone: "purple" },
-            { key: "available", label: "Available", value: chartDataRes.available ?? 0, icon: MdCheckCircle, tone: "green" },
-            { key: "borrowed", label: "Borrowed", value: countsData.borrowed ?? 0, icon: MdHistory, tone: "orange" },
-            { key: "pending-requests", label: "Pending Requests", value: pendingRequests, icon: MdAssignment, tone: "blue" },
-          ]);
-          setActivity((activityData || []).slice(0, 6));
-        }
-      } catch {
-        toast.error("Failed to load dashboard");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+  const stats = useMemo(() => {
+    if (isStudent) {
+      const overdue = mine.filter((t) => {
+        const d = toDate(t.dueDate);
+        return d && d < new Date();
+      }).length;
+      return [
+        { key: "borrowed", label: "Borrowed", value: mine.length, icon: MdHistory, tone: "orange" },
+        { key: "overdue", label: "Overdue", value: overdue, icon: MdEventBusy, tone: "red" },
+        { key: "returned", label: "Returned", value: myReturnedItems.length, icon: MdCheckCircle, tone: "green" },
+      ];
+    } else {
+      return [
+        { key: "inventory", label: "Total Items", value: chartData.inventory ?? 0, icon: MdInventory2, tone: "purple" },
+        { key: "available", label: "Available", value: chartData.available ?? 0, icon: MdCheckCircle, tone: "green" },
+        { key: "borrowed", label: "Borrowed", value: countsData?.borrowed ?? 0, icon: MdHistory, tone: "orange" },
+      ];
     }
-    load();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [role]);
+  }, [isStudent, mine, myReturnedItems, countsData, chartData]);
+
+  const activity = useMemo(() => {
+    if (isStudent) return mine.slice(0, 5);
+    return (activityData || []).slice(0, 6);
+  }, [isStudent, mine, activityData]);
+
+  const loading = isStudent ? borrowedLoading : (countsLoading || chartLoading);
 
   const firstName = userProfile?.firstName || user?.displayName?.split(" ")[0] || "there";
   const unreadNotifs = notifs.filter((n) => !n.read);

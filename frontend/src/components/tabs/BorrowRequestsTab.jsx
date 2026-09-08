@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
+import { useBorrowRequests, useCatalog, useActiveAdmins } from "../../hooks/useQueries";
 import Modal from "../ui/Modal";
 import Pagination from "../ui/Pagination";
 import toast from "react-hot-toast";
@@ -67,10 +69,7 @@ function toDate(value) {
 
 export default function BorrowRequestsTab() {
   const { role, userProfile } = useAuth();
-  const [requests, setRequests] = useState([]);
-  const [catalog, setCatalog] = useState([]);
-  const [admins, setAdmins] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState("pending");
   const [search, setSearch] = useState("");
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -79,7 +78,6 @@ export default function BorrowRequestsTab() {
   const [viewMode, setViewMode] = useState("list");
   const [sortBy, setSortBy] = useState("newest");
   const [page, setPage] = useState(1);
-  const [paginationData, setPaginationData] = useState(null);
   // Reassignment state
   const [reassignTarget, setReassignTarget] = useState(null);
   const [reassignAdminId, setReassignAdminId] = useState("");
@@ -95,41 +93,35 @@ export default function BorrowRequestsTab() {
   }, [search]);
 
   useEffect(() => { setPage(1); }, [debouncedSearch, filter]);
-  useEffect(() => { load(); }, [page, filter, debouncedSearch]);
 
-  async function load() {
-    try {
-      const params = new URLSearchParams();
-      params.set("page", page);
-      params.set("limit", PAGE_SIZE);
-      if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
-      if (filter !== "all") params.set("status", filter);
+  const params = useMemo(() => {
+    const p = new URLSearchParams();
+    p.set("page", page);
+    p.set("limit", PAGE_SIZE);
+    if (debouncedSearch.trim()) p.set("search", debouncedSearch.trim());
+    if (filter !== "all") p.set("status", filter);
+    return p.toString();
+  }, [page, filter, debouncedSearch]);
 
-      const [reqsResult, cat, adminList] = await Promise.all([
-        api.getBorrowRequests(params.toString()),
-        api.getCatalog(),
-        api.getActiveAdmins().catch(() => []),
-      ]);
+  const { data: requestsData, isLoading } = useBorrowRequests(params);
+  const { data: catalogData } = useCatalog();
+  const { data: adminsData } = useActiveAdmins();
 
-      if (Array.isArray(reqsResult)) {
-        setRequests(reqsResult);
-        setPaginationData(null);
-      } else if (reqsResult && reqsResult.data) {
-        setRequests(reqsResult.data);
-        setPaginationData(reqsResult.pagination || null);
-      } else {
-        setRequests([]);
-        setPaginationData(null);
-      }
+  const requests = useMemo(() => {
+    if (!requestsData) return [];
+    if (Array.isArray(requestsData)) return requestsData;
+    return requestsData.data || [];
+  }, [requestsData]);
 
-      setCatalog(Array.isArray(cat) ? cat : []);
-      setAdmins(Array.isArray(adminList) ? adminList : []);
-    } catch {
-      toast.error("Failed to load requests");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const paginationData = useMemo(() => {
+    if (!requestsData || Array.isArray(requestsData)) return null;
+    return requestsData.pagination || null;
+  }, [requestsData]);
+
+  const catalog = useMemo(() => catalogData || [], [catalogData]);
+  const admins = useMemo(() => adminsData || [], [adminsData]);
+
+  const invalidateBorrowRequests = () => queryClient.invalidateQueries({ queryKey: ["borrowRequests"] });
 
   const catalogImageMap = useMemo(() => {
     const map = {};
@@ -154,7 +146,7 @@ export default function BorrowRequestsTab() {
       toast.success("Request approved");
       setSelectedRequest(null);
       setReviewNotes("");
-      load();
+      invalidateBorrowRequests();
     } catch (err) {
       toast.error(err.message || "Failed to approve");
     } finally {
@@ -173,7 +165,7 @@ export default function BorrowRequestsTab() {
       toast.success("Request rejected");
       setSelectedRequest(null);
       setReviewNotes("");
-      load();
+      invalidateBorrowRequests();
     } catch (err) {
       toast.error(err.message || "Failed to reject");
     } finally {
@@ -193,7 +185,7 @@ export default function BorrowRequestsTab() {
       setReassignTarget(null);
       setReassignAdminId("");
       setReassignReason("");
-      load();
+      invalidateBorrowRequests();
     } catch (err) {
       toast.error(err.message || "Failed to reassign");
     } finally {
@@ -230,7 +222,7 @@ export default function BorrowRequestsTab() {
   const totalPages = paginationData ? paginationData.totalPages : 1;
   const totalItems = paginationData ? paginationData.total : requests.length;
 
-  if (loading) return <div className="page-loading"><div className="spinner-lg" /></div>;
+  if (isLoading) return <div className="page-loading"><div className="spinner-lg" /></div>;
 
   return (
     <div className="tab-content">

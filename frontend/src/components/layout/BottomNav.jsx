@@ -1,5 +1,6 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { prefetchRoute } from "../../App";
 import {
   MdHome,
   MdQrCodeScanner,
@@ -50,6 +51,7 @@ export default function BottomNav() {
           className={({ isActive }) =>
             `bottom-nav-item ${isActive ? "active" : ""}`
           }
+          onMouseEnter={() => prefetchRoute(item.path)}
         >
           <item.icon size={22} />
           <span>{item.label}</span>

@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.102.8",
     "firebase": "^10.12.2",
     "html5-qrcode": "^2.3.8",
     "react": "^18.3.1",

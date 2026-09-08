@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../services/api";
+import { useFines, useMyFines, useOverdueCount } from "../../hooks/useQueries";
 import { useAuth } from "../../context/AuthContext";
 import Modal from "../ui/Modal";
 import toast from "react-hot-toast";
@@ -39,54 +41,50 @@ function fmtDateTime(date) {
 export default function FinesTab() {
   const { role, userProfile } = useAuth();
   const isAdmin = role === "admin";
+  const queryClient = useQueryClient();
 
-  const [fines, setFines] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("oldest");
   const [page, setPage] = useState(1);
-  const [paginationData, setPaginationData] = useState(null);
   const [selectedFine, setSelectedFine] = useState(null);
   const [waiveReason, setWaiveReason] = useState("");
   const [processing, setProcessing] = useState(null);
   const [openKebab, setOpenKebab] = useState(null);
-  const [overdueCount, setOverdueCount] = useState(0);
 
-  useEffect(() => { if (role) load(); }, [role]);
   useEffect(() => { setPage(1); }, [search, filter]);
-  useEffect(() => { if (role) load(); }, [page]);
   useEffect(() => {
     const handler = (e) => { if (!e.target.closest(".fines-kebab-wrap")) setOpenKebab(null); };
     document.addEventListener("click", handler);
     return () => document.removeEventListener("click", handler);
   }, []);
 
-  useEffect(() => {
-    if (isAdmin) {
-      api.getOverdueCount().then((d) => setOverdueCount(d?.overdueBorrowers || 0)).catch(() => {});
-    }
-  }, [isAdmin]);
+  const params = useMemo(() => {
+    const p = { page, limit: 25 };
+    if (search.trim()) p.search = search.trim();
+    if (filter !== "all" && filter !== "overdue") p.status = filter;
+    return p;
+  }, [page, search, filter]);
 
-  async function load() {
-    setLoading(true);
-    setError("");
-    try {
-      const params = { page, limit: 25 };
-      if (search.trim()) params.search = search.trim();
-      if (filter !== "all" && filter !== "overdue") params.status = filter;
-      const data = isAdmin ? await api.getFines(params) : await api.getMyFines(params);
-      if (Array.isArray(data)) { setFines(data); setPaginationData(null); }
-      else if (data?.data) { setFines(data.data); setPaginationData(data.pagination || null); }
-      else { setFines([]); setPaginationData(null); }
-    } catch (err) {
-      setError(err.message || "Failed to load fines");
-      toast.error("Failed to load fines");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const finesResult = useFines(params);
+  const myFinesResult = useMyFines(params);
+  const { data: finesData, isLoading, error: queryError } = isAdmin ? finesResult : myFinesResult;
+
+  const { data: overdueData } = useOverdueCount();
+  const overdueCount = isAdmin ? (overdueData?.overdueBorrowers ?? 0) : 0;
+
+  const fines = useMemo(() => {
+    if (!finesData) return [];
+    if (Array.isArray(finesData)) return finesData;
+    return finesData.data || [];
+  }, [finesData]);
+
+  const paginationData = useMemo(() => {
+    if (!finesData || Array.isArray(finesData)) return null;
+    return finesData.pagination || null;
+  }, [finesData]);
+
+  const invalidateFines = () => queryClient.invalidateQueries({ queryKey: isAdmin ? ["fines"] : ["myFines"] });
 
   async function handlePay(id) {
     if (!confirm("Are you sure you want to mark this fine as Paid?")) return;
@@ -95,7 +93,7 @@ export default function FinesTab() {
       await api.payFine(id);
       toast.success("Fine marked as paid");
       setSelectedFine(null);
-      load();
+      invalidateFines();
     } catch (err) {
       toast.error(err.message || "Failed to update fine");
     } finally {
@@ -111,7 +109,7 @@ export default function FinesTab() {
       toast.success("Fine waived");
       setSelectedFine(null);
       setWaiveReason("");
-      load();
+      invalidateFines();
     } catch (err) {
       toast.error(err.message || "Failed to waive fine");
     } finally {
@@ -163,16 +161,16 @@ export default function FinesTab() {
 
   const pendingCount = useMemo(() => fines.filter((f) => f.status === "pending").length, [fines]);
 
-  if (loading) return <div className="page-loading"><div className="spinner-lg" /></div>;
+  if (isLoading) return <div className="page-loading"><div className="spinner-lg" /></div>;
 
-  if (error) return (
+  if (queryError) return (
     <div className="tab-content">
       <PageHero icon={PesoIcon} title={isAdmin ? "Fines & Penalties" : "My Fines"} />
       <div className="maintenance-empty">
         <MdWarning size={48} />
         <h3>Failed to Load Fines</h3>
-        <p>{error}</p>
-        <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={load}>Retry</button>
+        <p>{queryError.message || "Something went wrong"}</p>
+        <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => invalidateFines()}>Retry</button>
       </div>
     </div>
   );

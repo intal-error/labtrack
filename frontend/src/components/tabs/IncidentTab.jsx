@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
+import { useCatalog } from "../../hooks/useQueries";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
 import "../../styles/pages/shared-form-panel.css";
@@ -40,9 +42,7 @@ const EMPTY_FORM = { catalogId: "", title: "", description: "", type: "irregular
 
 export default function IncidentTab() {
   const { role, userProfile, user } = useAuth();
-  const [incidents, setIncidents] = useState([]);
-  const [catalog, setCatalog] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [search, setSearch] = useState("");
@@ -58,44 +58,50 @@ export default function IncidentTab() {
   const [imageOverlay, setImageOverlay] = useState(null);
   const [showDetail, setShowDetail] = useState(false);
   const [page, setPage] = useState(1);
-  const [paginationData, setPaginationData] = useState(null);
 
   const PAGE_LIMIT = 12;
   const canCreate = true;
 
   useEffect(() => { setPage(1); }, [search, filterStatus, filterSeverity, filterMy, dateFrom, dateTo]);
-  useEffect(() => { load(); }, [page, search, filterStatus, filterSeverity, filterMy, dateFrom, dateTo]);
 
-  async function load() {
-    try {
-      const params = new URLSearchParams();
-      params.set("page", page);
-      params.set("limit", PAGE_LIMIT);
-      if (search) params.set("search", search);
-      if (filterStatus !== "All") params.set("status", filterStatus.toLowerCase());
-      if (filterSeverity !== "All") params.set("severity", filterSeverity.toLowerCase());
-      if (filterMy) params.set("mine", "true");
-      if (dateFrom) params.set("dateFrom", dateFrom);
-      if (dateTo) params.set("dateTo", dateTo);
-      const qs = params.toString();
-      const [i, c] = await Promise.all([
-        filterMy ? api.getMyIncidents(qs) : api.getIncidents(qs),
-        api.getCatalog(),
-      ]);
-      if (Array.isArray(i)) {
-        setIncidents(i);
-        setPaginationData(null);
-      } else {
-        setIncidents(Array.isArray(i.data) ? i.data : []);
-        setPaginationData(i.pagination || null);
-      }
-      setCatalog(Array.isArray(c) ? c : []);
-    } catch {
-      toast.error("Failed to load incidents");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const incidentParams = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set("page", page);
+    params.set("limit", PAGE_LIMIT);
+    if (search) params.set("search", search);
+    if (filterStatus !== "All") params.set("status", filterStatus.toLowerCase());
+    if (filterSeverity !== "All") params.set("severity", filterSeverity.toLowerCase());
+    if (filterMy) params.set("mine", "true");
+    if (dateFrom) params.set("dateFrom", dateFrom);
+    if (dateTo) params.set("dateTo", dateTo);
+    return params.toString();
+  }, [page, search, filterStatus, filterSeverity, filterMy, dateFrom, dateTo]);
+
+  const { data: incidentsData, isLoading } = useQuery({
+    queryKey: filterMy ? ["myIncidents", incidentParams] : ["incidents", incidentParams],
+    queryFn: () => filterMy ? api.getMyIncidents(incidentParams) : api.getIncidents(incidentParams),
+    staleTime: 60 * 1000,
+  });
+
+  const { data: catalogData } = useCatalog();
+
+  const incidents = useMemo(() => {
+    if (!incidentsData) return [];
+    if (Array.isArray(incidentsData)) return incidentsData;
+    return Array.isArray(incidentsData.data) ? incidentsData.data : [];
+  }, [incidentsData]);
+
+  const paginationData = useMemo(() => {
+    if (!incidentsData || Array.isArray(incidentsData)) return null;
+    return incidentsData.pagination || null;
+  }, [incidentsData]);
+
+  const catalog = useMemo(() => {
+    if (!catalogData) return [];
+    return Array.isArray(catalogData) ? catalogData : [];
+  }, [catalogData]);
+
+  const invalidateIncidents = () => queryClient.invalidateQueries({ queryKey: filterMy ? ["myIncidents"] : ["incidents"] });
 
   const stats = useMemo(() => ({
     total: incidents.length,
@@ -161,7 +167,7 @@ export default function IncidentTab() {
       setShowForm(false);
       setEditing(null);
       setForm(EMPTY_FORM);
-      load();
+      invalidateIncidents();
     } catch {
       toast.error(editing ? "Failed to update incident" : "Failed to report incident");
     }
@@ -171,7 +177,7 @@ export default function IncidentTab() {
     try {
       await api.updateIncident(id, { status });
       toast.success("Status updated");
-      load();
+      invalidateIncidents();
     } catch {
       toast.error("Failed to update");
     }
@@ -182,7 +188,7 @@ export default function IncidentTab() {
     try {
       await api.deleteIncident(id);
       toast.success("Deleted");
-      load();
+      invalidateIncidents();
     } catch {
       toast.error("Failed to delete");
     }
@@ -214,13 +220,13 @@ export default function IncidentTab() {
       toast.success("Incident resolved");
       setSelectedIncident(null);
       setResolutionNote("");
-      load();
+      invalidateIncidents();
     } catch {
       toast.error("Failed to resolve");
     }
   }
 
-  if (loading) return <div className="page-loading"><div className="spinner-lg" /></div>;
+  if (isLoading) return <div className="page-loading"><div className="spinner-lg" /></div>;
 
   return (
     <div className="tab-content">

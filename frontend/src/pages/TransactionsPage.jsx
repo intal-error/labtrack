@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../services/api";
+import { useBorrowed, useMyBorrowed, useReturned, useMyReturned } from "../hooks/useQueries";
 import { COURSES } from "../constants/courses";
 import { toDate, formatDate, getRemainingQuantity } from "../utils/helpers";
 import { useAuth } from "../context/AuthContext";
@@ -125,10 +127,8 @@ function sortItems(items, sortBy) {
 
 export default function TransactionsPage() {
   const { role } = useAuth();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("borrowed");
-  const [borrowed, setBorrowed] = useState([]);
-  const [returned, setReturned] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterCourse, setFilterCourse] = useState("All");
   const [sortBy, setSortBy] = useState("date-desc");
@@ -137,54 +137,56 @@ export default function TransactionsPage() {
   const [returningId, setReturningId] = useState(null);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [page, setPage] = useState(1);
-  const [paginationData, setPaginationData] = useState(null);
 
   const isStudent = role === "student";
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const dateParams = getDateParams(dateRange);
-      const paramsObj = {
-        page: String(page),
-        limit: String(PAGE_LIMIT),
-        search: search || "",
-        course: filterCourse !== "All" ? filterCourse : "",
-        ...dateParams,
-      };
-      const params = "?" + Object.entries(paramsObj)
-        .filter(([, v]) => v !== "")
-        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
-        .join("&");
+  useEffect(() => { setPage(1); }, [activeTab, search, filterCourse, dateRange]);
 
-      const borrowedFn = isStudent ? api.getMyBorrowed : api.getBorrowed;
-      const returnedFn = isStudent ? api.getMyReturned : api.getReturned;
-      const [borrowedRes, returnedRes] = await Promise.all([
-        borrowedFn(params),
-        returnedFn(params),
-      ]);
+  const params = useMemo(() => {
+    const dateParams = getDateParams(dateRange);
+    const p = {
+      page: String(page),
+      limit: String(PAGE_LIMIT),
+      search: search || "",
+      course: filterCourse !== "All" ? filterCourse : "",
+      ...dateParams,
+    };
+    return "?" + Object.entries(p)
+      .filter(([, v]) => v !== "")
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+      .join("&");
+  }, [page, search, filterCourse, dateRange]);
 
-      if (Array.isArray(borrowedRes)) {
-        setBorrowed(borrowedRes);
-        setReturned(returnedRes || []);
-        setPaginationData(null);
-      } else {
-        setBorrowed(borrowedRes.data || []);
-        setPaginationData(borrowedRes.pagination || null);
-        setReturned(returnedRes?.data || []);
-      }
-    } catch (err) {
-      toast.error(err.message || "Failed to load transactions");
-    } finally {
-      setLoading(false);
-    }
-  }, [isStudent, page, search, filterCourse, dateRange]);
+  const borrowedResult = useBorrowed(params);
+  const myBorrowedResult = useMyBorrowed(params);
+  const returnedResult = useReturned(params);
+  const myReturnedResult = useMyReturned(params);
 
-  useEffect(() => { load(); }, [load]);
+  const { data: borrowedData, isLoading: borrowedLoading, refetch: refetchBorrowed } = isStudent ? myBorrowedResult : borrowedResult;
+  const { data: returnedData, isLoading: returnedLoading, refetch: refetchReturned } = isStudent ? myReturnedResult : returnedResult;
 
-  useEffect(() => {
-    setPage(1);
-  }, [activeTab, search, filterCourse, dateRange]);
+  const borrowed = useMemo(() => {
+    if (!borrowedData) return [];
+    return Array.isArray(borrowedData) ? borrowedData : (borrowedData.data || []);
+  }, [borrowedData]);
+
+  const returned = useMemo(() => {
+    if (!returnedData) return [];
+    return Array.isArray(returnedData) ? returnedData : (returnedData.data || []);
+  }, [returnedData]);
+
+  const paginationData = useMemo(() => {
+    const src = activeTab === "borrowed" ? borrowedData : returnedData;
+    if (!src || Array.isArray(src)) return null;
+    return src.pagination || null;
+  }, [activeTab, borrowedData, returnedData]);
+
+  const loading = borrowedLoading || returnedLoading;
+
+  const load = useCallback(() => {
+    refetchBorrowed();
+    refetchReturned();
+  }, [refetchBorrowed, refetchReturned]);
 
   const stats = useMemo(() => {
     const dueSoon = borrowed.filter((b) => {

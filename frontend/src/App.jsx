@@ -1,10 +1,17 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { Component, Suspense, lazy, useState } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import SplashScreen from "./components/ui/SplashScreen";
 import InstallPrompt from "./components/ui/InstallPrompt";
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { refetchOnWindowFocus: false, retry: 1, staleTime: 2 * 60 * 1000 },
+  },
+});
 
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage"));
@@ -34,6 +41,41 @@ const RoomAttendancePage = lazy(() => import("./pages/RoomAttendancePage"));
 const MyAttendancePage = lazy(() => import("./pages/MyAttendancePage"));
 const AttendanceScannerPage = lazy(() => import("./pages/AttendanceScannerPage"));
 const InventoryPage = lazy(() => import("./pages/InventoryPage"));
+
+const routePrefetchers = {
+  "/home": () => import("./pages/HomePage"),
+  "/scanner": () => import("./pages/ScannerPage"),
+  "/transactions": () => import("./pages/TransactionsPage"),
+  "/catalog": () => import("./pages/CatalogPage"),
+  "/inventory": () => import("./pages/InventoryPage"),
+  "/persona": () => import("./pages/PersonaPage"),
+  "/admin": () => import("./pages/AdminPage"),
+  "/about": () => import("./pages/AboutPage"),
+  "/maintenance": () => import("./components/tabs/MaintenanceTab"),
+  "/incidents": () => import("./components/tabs/IncidentTab"),
+  "/manuals": () => import("./components/tabs/ManualsTab"),
+  "/usage-logs": () => import("./components/tabs/UsageLogsTab"),
+  "/reports": () => import("./components/tabs/ReportsTab"),
+  "/fines": () => import("./components/tabs/FinesTab"),
+  "/borrow-requests": () => import("./components/tabs/BorrowRequestsTab"),
+  "/notifications": () => import("./components/tabs/NotificationsTab"),
+  "/settings": () => import("./components/tabs/SettingsTab"),
+  "/documents": () => import("./components/tabs/DocumentsTab"),
+  "/attendance": () => import("./pages/AttendanceLogsPage"),
+  "/my-attendance": () => import("./pages/MyAttendancePage"),
+  "/attendance-scan": () => import("./pages/AttendanceScannerPage"),
+  "/my-requests": () => import("./pages/MyRequestsPage"),
+  "/profile": () => import("./pages/ProfilePage"),
+};
+
+const prefetched = {};
+export function prefetchRoute(path) {
+  const matcher = Object.keys(routePrefetchers).find((key) => path.startsWith(key));
+  if (matcher && !prefetched[matcher]) {
+    prefetched[matcher] = true;
+    routePrefetchers[matcher]();
+  }
+}
 
 
 function ProtectedRoute({ children }) {
@@ -91,6 +133,7 @@ function App() {
 
   return (
     <BrowserRouter>
+      <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <ThemeProvider>
           <ErrorBoundary>
@@ -140,6 +183,7 @@ function App() {
           </ErrorBoundary>
         </ThemeProvider>
       </AuthProvider>
+      </QueryClientProvider>
     </BrowserRouter>
   );
 }

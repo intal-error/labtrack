@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
+import { useMaintenance, useCatalog } from "../../hooks/useQueries";
 import Modal from "../ui/Modal";
 import toast from "react-hot-toast";
 import { filterBySearch } from "../../utils/search";
@@ -79,9 +81,7 @@ const EMPTY_FORM = {
 
 export default function MaintenanceTab() {
   const { role } = useAuth();
-  const [items, setItems] = useState([]);
-  const [catalog, setCatalog] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [filter, setFilter] = useState("all");
@@ -90,26 +90,37 @@ export default function MaintenanceTab() {
   const [viewMode, setViewMode] = useState("list");
   const [uploading, setUploading] = useState(false);
   const [page, setPage] = useState(1);
-  const [paginationData, setPaginationData] = useState(null);
   const [form, setForm] = useState({ ...EMPTY_FORM });
 
-  useEffect(() => { load(); }, []);
   useEffect(() => { setPage(1); }, [search, filter]);
-  useEffect(() => { load(); }, [page]);
 
-  async function load() {
-    try {
-      const params = { page, limit: 10 };
-      if (search.trim()) params.search = search.trim();
-      if (filter !== "all") params.status = filter;
-      const [m, c] = await Promise.all([api.getMaintenance(params), api.getCatalog()]);
-      if (Array.isArray(m)) { setItems(m); setPaginationData(null); }
-      else if (m?.data) { setItems(m.data); setPaginationData(m.pagination || null); }
-      else { setItems([]); setPaginationData(null); }
-      setCatalog(Array.isArray(c) ? c : []);
-    } catch { toast.error("Failed to load maintenance data"); }
-    finally { setLoading(false); }
-  }
+  const params = useMemo(() => {
+    const p = { page, limit: 10 };
+    if (search.trim()) p.search = search.trim();
+    if (filter !== "all") p.status = filter;
+    return p;
+  }, [page, search, filter]);
+
+  const { data: maintenanceData, isLoading } = useMaintenance(params);
+  const { data: catalogData } = useCatalog();
+
+  const items = useMemo(() => {
+    if (!maintenanceData) return [];
+    if (Array.isArray(maintenanceData)) return maintenanceData;
+    return maintenanceData.data || [];
+  }, [maintenanceData]);
+
+  const paginationData = useMemo(() => {
+    if (!maintenanceData || Array.isArray(maintenanceData)) return null;
+    return maintenanceData.pagination || null;
+  }, [maintenanceData]);
+
+  const catalog = useMemo(() => {
+    if (!catalogData) return [];
+    return Array.isArray(catalogData) ? catalogData : [];
+  }, [catalogData]);
+
+  const invalidateMaintenance = () => queryClient.invalidateQueries({ queryKey: ["maintenance"] });
 
   function openCreate() {
     setForm({ ...EMPTY_FORM });
@@ -163,13 +174,13 @@ export default function MaintenanceTab() {
         toast.success("Maintenance scheduled");
       }
       setShowForm(false);
-      load();
+      invalidateMaintenance();
     } catch (err) { toast.error(err.message || "Failed to save maintenance"); }
   }
 
   async function handleDelete(id) {
     if (!confirm("Delete this maintenance record?")) return;
-    try { await api.deleteMaintenance(id); toast.success("Deleted"); load(); }
+    try { await api.deleteMaintenance(id); toast.success("Deleted"); invalidateMaintenance(); }
     catch { toast.error("Failed to delete"); }
   }
 
@@ -183,7 +194,7 @@ export default function MaintenanceTab() {
   }
 
   async function updateStatus(id, status) {
-    try { await api.updateMaintenance(id, { status }); toast.success("Status updated"); setSelectedItem(null); load(); }
+    try { await api.updateMaintenance(id, { status }); toast.success("Status updated"); setSelectedItem(null); invalidateMaintenance(); }
     catch { toast.error("Failed to update"); }
   }
 
@@ -216,7 +227,7 @@ export default function MaintenanceTab() {
     return result;
   }, [items, filter, search]);
 
-  if (loading) return <div className="page-loading"><div className="spinner-lg" /></div>;
+  if (isLoading) return <div className="page-loading"><div className="spinner-lg" /></div>;
 
   return (
     <div className="tab-content">

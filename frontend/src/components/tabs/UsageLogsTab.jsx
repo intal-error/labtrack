@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
+import { useMyBorrowed, useMyReturned, useStudentAttendance } from "../../hooks/useQueries";
 import { filterBySearch } from "../../utils/search";
 import { formatDuration, formatTime, getTodayString } from "../../utils/attendanceHelpers";
-import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
 import "../../styles/pages/attendance.css";
 import {
@@ -60,32 +60,21 @@ function getDueProgress(borrowedAt, dueDate) {
 
 export default function UsageLogsTab() {
   const { userProfile } = useAuth();
-  const [borrowed, setBorrowed] = useState([]);
-  const [returned, setReturned] = useState([]);
-  const [attendance, setAttendance] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("borrowed");
   const [search, setSearch] = useState("");
 
   const schoolId = userProfile?.schoolId || userProfile?.schoolID;
   const todayStr = getTodayString();
 
-  useEffect(() => { load(); }, []);
+  const { data: borrowedData, isLoading: borrowedLoading } = useMyBorrowed();
+  const { data: returnedData, isLoading: returnedLoading } = useMyReturned();
+  const { data: attendanceData, isLoading: attendanceLoading } = useStudentAttendance(schoolId);
 
-  async function load() {
-    try {
-      const promises = [api.getMyBorrowed(), api.getMyReturned()];
-      if (schoolId) promises.push(api.getStudentAttendance(schoolId));
-      const results = await Promise.all(promises);
-      setBorrowed(results[0] || []);
-      setReturned(results[1] || []);
-      setAttendance((results[2]?.records) || []);
-    } catch {
-      toast.error("Failed to load activity");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const borrowed = useMemo(() => borrowedData || [], [borrowedData]);
+  const returned = useMemo(() => returnedData || [], [returnedData]);
+  const attendance = useMemo(() => attendanceData?.records || [], [attendanceData]);
+
+  const loading = borrowedLoading || returnedLoading || attendanceLoading;
 
   const stats = useMemo(() => {
     const now = new Date();

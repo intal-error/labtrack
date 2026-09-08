@@ -1,6 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../services/api";
+import { useMyNotifications } from "../../hooks/useQueries";
 import Modal from "../ui/Modal";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
@@ -24,38 +26,30 @@ function formatFullDate(date) {
 
 export default function NotificationsTab() {
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState("all");
   const [selectedNotif, setSelectedNotif] = useState(null);
   const [page, setPage] = useState(1);
-  const [paginationData, setPaginationData] = useState(null);
 
-  useEffect(() => { loadNotifications(); }, [page, filter]);
+  const params = `page=${page}&limit=25&unreadOnly=${filter === "unread"}`;
+  const { data: response, isLoading } = useMyNotifications(params);
 
-  async function loadNotifications() {
-    try {
-      const params = `page=${page}&limit=25&unreadOnly=${filter === "unread"}`;
-      const res = await api.getMyNotifications(params);
-      if (Array.isArray(res)) {
-        setNotifications(res);
-        setPaginationData(null);
-      } else {
-        setNotifications(res.data || []);
-        setPaginationData(res.pagination || null);
-      }
-    } catch {
-      setNotifications([]);
-      setPaginationData(null);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const notifications = useMemo(() => {
+    if (!response) return [];
+    return Array.isArray(response) ? response : (response.data || []);
+  }, [response]);
+
+  const paginationData = useMemo(() => {
+    if (!response || Array.isArray(response)) return null;
+    return response.pagination || null;
+  }, [response]);
+
+  const invalidateNotifs = () => queryClient.invalidateQueries({ queryKey: ["myNotifications"] });
 
   async function dismissNotification(id) {
     try {
       await api.dismissNotification(id);
-      setNotifications((prev) => prev.filter((n) => n.id !== id));
+      invalidateNotifs();
       setSelectedNotif((prev) => (prev?.id === id ? null : prev));
       toast.success("Notification dismissed");
     } catch {
@@ -66,15 +60,14 @@ export default function NotificationsTab() {
   async function markRead(id) {
     try {
       await api.markNotificationRead(id);
-      setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
-      setSelectedNotif((prev) => (prev?.id === id ? { ...prev, read: true } : prev));
+      invalidateNotifs();
     } catch { /* ignore */ }
   }
 
   async function markAllRead() {
     try {
       await api.markAllNotificationsRead();
-      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      invalidateNotifs();
       toast.success("All marked as read");
     } catch { /* ignore */ }
   }
@@ -95,7 +88,7 @@ export default function NotificationsTab() {
 
   const unread = notifications.filter((n) => !n.read).length;
 
-  if (loading) return <div className="page-loading"><div className="spinner-lg" /></div>;
+  if (isLoading) return <div className="page-loading"><div className="spinner-lg" /></div>;
 
   return (
     <div className="tab-content">

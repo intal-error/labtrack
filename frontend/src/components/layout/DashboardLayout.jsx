@@ -3,6 +3,7 @@ import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { api } from "../../services/api";
+import { prefetchRoute } from "../../App";
 import { FiMenu, FiX } from "react-icons/fi";
 import {
   MdQrCodeScanner, MdInventory, MdPerson, MdAdminPanelSettings, MdInfo,
@@ -179,6 +180,7 @@ export default function DashboardLayout() {
                             to={path}
                             className={({ isActive }) => isActive ? "active" : ""}
                             onClick={() => setSidebarOpen(false)}
+                            onMouseEnter={() => prefetchRoute(path)}
                             data-label={label}
                           >
                             <span className="nav-icon"><Icon size={18} /></span>

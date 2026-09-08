@@ -1,5 +1,7 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../services/api";
+import { useCatalog } from "../hooks/useQueries";
 import { COURSES } from "../constants/courses";
 import { numOr, getAvailableQuantity } from "../utils/helpers";
 import { filterBySearch } from "../utils/search";
@@ -16,14 +18,12 @@ import ViewToggle from "../components/ui/ViewToggle";
 import { useAuth } from "../context/AuthContext";
 
 export default function CatalogPage() {
-  const [allItems, setAllItems] = useState([]);
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState("All");
   const [filterCourse, setFilterCourse] = useState("All");
   const [sort, setSort] = useState("name");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [paginationData, setPaginationData] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [showQr, setShowQr] = useState(null);
   const [showUpdate, setShowUpdate] = useState(null);
@@ -49,23 +49,20 @@ export default function CatalogPage() {
     }
   }, [role, userProfile]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = `?page=${page}&limit=25&search=${search}&status=${filter !== "All" ? filter : ""}&course=${filterCourse !== "All" ? filterCourse : ""}&sort=${sort}`;
-      const response = await api.getCatalog(params);
-      if (Array.isArray(response)) {
-        setAllItems(response);
-        setPaginationData(null);
-      } else {
-        setAllItems(response.data);
-        setPaginationData(response.pagination);
-      }
-    } catch (err) { toast.error(err.message || "Failed to load catalog"); }
-    finally { setLoading(false); }
-  }, [page, search, filter, filterCourse, sort]);
+  const params = `?page=${page}&limit=25&search=${search}&status=${filter !== "All" ? filter : ""}&course=${filterCourse !== "All" ? filterCourse : ""}&sort=${sort}`;
+  const { data: response, isLoading } = useCatalog(params);
 
-  useEffect(() => { load(); }, [load]);
+  const allItems = useMemo(() => {
+    if (!response) return [];
+    return Array.isArray(response) ? response : (response.data || []);
+  }, [response]);
+
+  const paginationData = useMemo(() => {
+    if (!response || Array.isArray(response)) return null;
+    return response.pagination || null;
+  }, [response]);
+
+  const invalidateCatalog = () => queryClient.invalidateQueries({ queryKey: ["catalog"] });
 
   const filteredItems = useMemo(() => {
     let result = [...allItems];
@@ -105,7 +102,7 @@ export default function CatalogPage() {
       toast.success("Item created!");
       setShowCreate(false);
       setForm({ itemName: "", category: "", course: "", quantity: "", condition: "", status: "Available", imageUrl: "", barcode: "", assetTag: "" });
-      load();
+      invalidateCatalog();
     } catch (err) { toast.error(err.message); }
   };
 
@@ -115,13 +112,13 @@ export default function CatalogPage() {
       await api.updateCatalogItem(showUpdate.id, { ...showUpdate, quantity: Number(showUpdate.quantity) || 0 });
       toast.success("Item updated!");
       setShowUpdate(null);
-      load();
+      invalidateCatalog();
     } catch (err) { toast.error(err.message); }
   };
 
   const handleDelete = async (id) => {
     if (!confirm("Delete this item?")) return;
-    try { await api.deleteCatalogItem(id); toast.success("Deleted!"); load(); }
+    try { await api.deleteCatalogItem(id); toast.success("Deleted!"); invalidateCatalog(); }
     catch (err) { toast.error(err.message); }
   };
 
@@ -143,7 +140,7 @@ export default function CatalogPage() {
     return "";
   }
 
-  if (loading) return <LoadingSpinner />;
+  if (isLoading) return <LoadingSpinner />;
 
   return (
     <section className="catalog-page">

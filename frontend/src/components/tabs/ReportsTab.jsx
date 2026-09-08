@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { api } from "../../services/api";
+import { useReportSummary } from "../../hooks/useQueries";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
 import {
@@ -66,21 +67,8 @@ const EMPTY_SUMMARY = {
 };
 
 export default function ReportsTab() {
-  const [summary, setSummary] = useState(EMPTY_SUMMARY);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => { load(); }, []);
-
-  async function load() {
-    try {
-      const data = await api.getReportSummary();
-      setSummary({ ...EMPTY_SUMMARY, ...data });
-    } catch {
-      toast.error("Failed to load overview data");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const { data: rawData, isLoading } = useReportSummary();
+  const summary = useMemo(() => ({ ...EMPTY_SUMMARY, ...rawData }), [rawData]);
 
   async function downloadReport(type) {
     try {
@@ -126,7 +114,7 @@ export default function ReportsTab() {
   const recentBorrowed = useMemo(() => (summary.borrowed || []).slice(0, 5), [summary.borrowed]);
   const recentReturned = useMemo(() => (summary.returned || []).slice(0, 5), [summary.returned]);
 
-  if (loading) return <div className="page-loading"><div className="spinner-lg" /></div>;
+  if (isLoading) return <div className="page-loading"><div className="spinner-lg" /></div>;
 
   return (
     <div className="tab-content">

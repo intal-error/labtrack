@@ -1,47 +1,38 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { api } from "../services/api";
+import { useState, useEffect, useMemo } from "react";
+import { useCatalog } from "../hooks/useQueries";
 import { COURSES } from "../constants/courses";
 import { numOr, getAvailableQuantity } from "../utils/helpers";
 import { filterBySearch } from "../utils/search";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Pagination from "../components/ui/Pagination";
-import toast from "react-hot-toast";
 import "../styles/pages/catalog.css";
 import { MdInventory } from "react-icons/md";
 import PageHero from "../components/ui/PageHero";
 import ViewToggle from "../components/ui/ViewToggle";
 
 export default function InventoryPage() {
-  const [allItems, setAllItems] = useState([]);
   const [filter, setFilter] = useState("All");
   const [filterCourse, setFilterCourse] = useState("All");
   const [sort, setSort] = useState("name");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [paginationData, setPaginationData] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [imageOverlay, setImageOverlay] = useState(null);
   const [viewMode, setViewMode] = useState("list");
 
   useEffect(() => { setPage(1); }, [search, filter, filterCourse, sort]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = `?page=${page}&limit=25&search=${search}&status=${filter !== "All" ? filter : ""}&course=${filterCourse !== "All" ? filterCourse : ""}&sort=${sort}`;
-      const response = await api.getCatalog(params);
-      if (Array.isArray(response)) {
-        setAllItems(response);
-        setPaginationData(null);
-      } else {
-        setAllItems(response.data);
-        setPaginationData(response.pagination);
-      }
-    } catch (err) { toast.error(err.message || "Failed to load inventory"); }
-    finally { setLoading(false); }
-  }, [page, search, filter, filterCourse, sort]);
+  const params = `?page=${page}&limit=25&search=${search}&status=${filter !== "All" ? filter : ""}&course=${filterCourse !== "All" ? filterCourse : ""}&sort=${sort}`;
+  const { data: response, isLoading } = useCatalog(params);
 
-  useEffect(() => { load(); }, [load]);
+  const allItems = useMemo(() => {
+    if (!response) return [];
+    return Array.isArray(response) ? response : (response.data || []);
+  }, [response]);
+
+  const paginationData = useMemo(() => {
+    if (!response || Array.isArray(response)) return null;
+    return response.pagination || null;
+  }, [response]);
 
   const filteredItems = useMemo(() => {
     let result = [...allItems];
@@ -72,7 +63,7 @@ export default function InventoryPage() {
     return "";
   }
 
-  if (loading) return <LoadingSpinner />;
+  if (isLoading) return <LoadingSpinner />;
 
   return (
     <section className="catalog-page">
