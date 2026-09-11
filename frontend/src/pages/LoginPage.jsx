@@ -152,12 +152,12 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="login-page">
-      <img src="/slsulucena.jpg" alt="" className="login-bg" loading="eager" width="1920" height="1080" decoding="async" />
+      <div className="login-page">
+      <picture>
+            <source srcSet="/Lucena.webp" type="image/webp" />
+            <img src="/Lucena.png" alt="" className="login-bg" loading="eager" width="1920" height="1080" decoding="async" />
+          </picture>
       <div className="login-overlay" />
-      <div className="login-shape login-shape-1" />
-      <div className="login-shape login-shape-2" />
-      <div className="login-shape login-shape-3" />
 
       <div className="login-content">
         <div className="login-left">

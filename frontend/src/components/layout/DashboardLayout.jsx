@@ -143,7 +143,7 @@ export default function DashboardLayout() {
       <aside className={`sidebar ${collapsed ? "collapsed" : ""} ${sidebarOpen ? "active" : ""}`}>
         <div className="sidebar-header">
           <div className="sidebar-logo-wrap">
-            <img className="sidebar-logo-icon" src="/slsulucena.jpg" alt="SLSU" loading="lazy" width="40" height="40" decoding="async" />
+            <img className="sidebar-logo-icon" src="/logo.png" alt="SLSU" loading="lazy" width="40" height="40" decoding="async" />
             {!collapsed && (
               <div className="sidebar-brand">
                 <div className="sidebar-brand-title">LabTrack</div>

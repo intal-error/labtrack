@@ -14,7 +14,7 @@ export default defineConfig({
     }),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["logo.png", "slsulucena.jpg"],
+      includeAssets: ["logo.png", "Lucena.webp", "Lucena.png"],
       manifest: {
         name: "SLSU LabTrack - Laboratory Equipment Tracking",
         short_name: "LabTrack",

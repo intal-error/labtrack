@@ -33,36 +33,6 @@ const getAll = async (req, res) => {
   }
 };
 
-const getByUser = async (req, res) => {
-  try {
-    const userId = req.user.uid;
-
-    const { data: notifications, error } = await supabase
-      .from("notifications")
-      .select("*")
-      .eq("target_user_id", userId)
-      .order("created_at", { ascending: false });
-
-    if (error) throw error;
-
-    let filtered = (notifications || []).filter(
-      (n) => !(n.dismissed_by || []).includes(userId)
-    );
-
-    if (req.query.unreadOnly === "true") {
-      filtered = filtered.filter((n) => !n.read);
-    }
-
-    const { paginate, page, limit } = parsePagination(req);
-    if (paginate) {
-      return res.json(paginatedResponse(transformKeys(filtered), filtered.length, page, limit));
-    }
-    res.json(transformKeys(filtered));
-  } catch (err) {
-    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
-  }
-};
-
 const create = async (req, res) => {
   try {
     if (req.user.role !== "admin") {
@@ -175,4 +145,4 @@ const dismiss = async (req, res) => {
   }
 };
 
-module.exports = { getAll, getByUser, create, markRead, markAllRead, dismiss };
+module.exports = { getAll, create, markRead, markAllRead, dismiss };

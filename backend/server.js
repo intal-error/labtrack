@@ -8,6 +8,8 @@ const cron = require("node-cron");
 const rateLimit = require("express-rate-limit");
 const { ipKeyGenerator } = rateLimit;
 const { verifyToken, authorize, errorHandler } = require("./src/middleware/auth");
+const { kioskAuth } = require("./src/middleware/kioskAuth");
+const { courseFilter } = require("./src/middleware/courseFilter");
 const authRoutes = require("./src/routes/auth");
 const catalogRoutes = require("./src/routes/catalog");
 const transactionRoutes = require("./src/routes/transactions");
@@ -156,15 +158,15 @@ const methodAwareLimiter = (req, res, next) => {
 // Public routes
 app.use("/api/auth", authLimiter, authRoutes);
 
-// Public attendance kiosk routes (no auth required)
+// Public attendance kiosk routes (kiosk-authenticated)
 app.use("/api/attendance", attendanceLimiter, (req, res, next) => {
   const publicPaths = ["/time-in", "/time-out", "/auto-scan"];
   const isLookup = req.path.startsWith("/lookup-student/");
   if (publicPaths.includes(req.path) || isLookup) {
-    return next();
+    return kioskAuth(req, res, next);
   }
   return verifyToken(req, res, next);
-}, attendanceRoutes);
+}, courseFilter, attendanceRoutes);
 app.get("/api/health", async (req, res) => {
   const health = { status: "ok", timestamp: new Date().toISOString() };
   try {
@@ -197,6 +199,9 @@ app.use("/api/borrow-requests", verifyToken, methodAwareLimiter, cacheMiddleware
 // Admin-only routes
 app.use("/api/admin", verifyToken, authorize("admin"), methodAwareLimiter, adminRoutes);
 app.use("/api/settings", verifyToken, authorize("admin"), methodAwareLimiter, cacheMiddleware(60), settingsRoutes);
+
+// 404 handler for undefined routes
+app.use((req, res) => res.status(404).json({ error: "Not found" }));
 
 // Error handler
 app.use(errorHandler);

@@ -5,7 +5,7 @@ import { auth } from "../services/firebase";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { COURSES } from "../constants/courses";
-import { MdSchool, MdPerson, MdVisibility, MdVisibilityOff, MdEmail, MdLock, MdBadge, MdBook, MdCalendarToday, MdAssignment, MdArrowForward } from "react-icons/md";
+import { MdSchool, MdPerson, MdVisibility, MdVisibilityOff, MdEmail, MdLock, MdBadge, MdBook, MdCalendarToday, MdAssignment, MdArrowForward, MdClose, MdCheckCircle } from "react-icons/md";
 import toast from "react-hot-toast";
 import "../styles/pages/register.css";
 
@@ -18,6 +18,12 @@ export default function RegisterPage() {
   const navigate = useNavigate();
   const { role, loading: authLoading } = useAuth();
   const [registered, setRegistered] = useState(false);
+  const [passwordRequirements, setPasswordRequirements] = useState({
+    minLength: false,
+    hasUppercase: false,
+    hasLowercase: false,
+    hasNumber: false,
+  });
 
   useEffect(() => {
     if (!registered || authLoading || !role) return;
@@ -38,14 +44,23 @@ export default function RegisterPage() {
 
   const update = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
 
+  useEffect(() => {
+    setPasswordRequirements({
+      minLength: form.password.length >= 8,
+      hasUppercase: /[A-Z]/.test(form.password),
+      hasLowercase: /[a-z]/.test(form.password),
+      hasNumber: /[0-9]/.test(form.password),
+    });
+  }, [form.password]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (form.password !== form.confirmPassword) {
       return toast.error("Passwords do not match");
     }
-    if (form.password.length < 6) {
-      return toast.error("Password must be at least 6 characters");
+    if (form.password.length < 8) {
+      return toast.error("Password must be at least 8 characters");
     }
     if (!form.firstName || !form.lastName || !form.email) {
       return toast.error("Please fill in all required fields");
@@ -93,7 +108,10 @@ export default function RegisterPage() {
 
   return (
     <div className="register-page">
-      <img src="/slsulucena.jpg" alt="" className="register-bg" loading="eager" width="1920" height="1080" decoding="async" />
+      <picture>
+            <source srcSet="/Lucena.webp" type="image/webp" />
+            <img src="/Lucena.png" alt="" className="register-bg" loading="eager" width="1920" height="1080" decoding="async" />
+          </picture>
       <div className="register-overlay" />
 
       <div className="register-content">
@@ -234,7 +252,7 @@ export default function RegisterPage() {
                   <div className="register-input-wrap">
                     <input
                       type={showPassword ? "text" : "password"}
-                      placeholder="Min. 6 characters"
+                      placeholder="Min. 8 characters"
                       value={form.password}
                       onChange={(e) => update("password", e.target.value)}
                       required
@@ -243,6 +261,26 @@ export default function RegisterPage() {
                       {showPassword ? <MdVisibilityOff size={18} /> : <MdVisibility size={18} />}
                     </button>
                   </div>
+                  {form.password.length > 0 && (
+                    <div className="password-requirements">
+                      <div className={`password-req-item ${passwordRequirements.minLength ? "met" : "unmet"}`}>
+                        {passwordRequirements.minLength ? <MdCheckCircle size={14} /> : <MdClose size={14} />}
+                        <span>Minimum 8 characters</span>
+                      </div>
+                      <div className={`password-req-item ${passwordRequirements.hasUppercase ? "met" : "unmet"}`}>
+                        {passwordRequirements.hasUppercase ? <MdCheckCircle size={14} /> : <MdClose size={14} />}
+                        <span>At least one uppercase letter</span>
+                      </div>
+                      <div className={`password-req-item ${passwordRequirements.hasLowercase ? "met" : "unmet"}`}>
+                        {passwordRequirements.hasLowercase ? <MdCheckCircle size={14} /> : <MdClose size={14} />}
+                        <span>At least one lowercase letter</span>
+                      </div>
+                      <div className={`password-req-item ${passwordRequirements.hasNumber ? "met" : "unmet"}`}>
+                        {passwordRequirements.hasNumber ? <MdCheckCircle size={14} /> : <MdClose size={14} />}
+                        <span>At least one number</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="register-field">
                   <label>Confirm Password <span className="register-required" /></label>

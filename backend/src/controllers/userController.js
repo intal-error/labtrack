@@ -8,16 +8,21 @@ const search = async (req, res) => {
     const { firstName, lastName } = req.query;
     if (!firstName || !lastName) return res.status(400).json({ error: "firstName and lastName required" });
 
-    const queryFirst = firstName.trim();
-    const queryLast = lastName.trim();
+    const queryFirst = firstName.trim().toLowerCase();
+    const queryLast = lastName.trim().toLowerCase();
 
-    const snap = await db.collection(USERS).get();
-    const qFirst = queryFirst.toLowerCase();
-    const qLast = queryLast.toLowerCase();
-    const matched = snap.docs.filter((doc) => {
+    // Use Firestore prefix range query instead of loading all users
+    const firstSnap = await db
+      .collection(USERS)
+      .where("firstName", ">=", queryFirst)
+      .where("firstName", "<=", queryFirst + "\uf8ff")
+      .limit(20)
+      .get();
+
+    // Filter by lastName from the small result set
+    const matched = firstSnap.docs.filter((doc) => {
       const u = doc.data();
-      return String(u.firstName || "").toLowerCase().includes(qFirst) &&
-             String(u.lastName || "").toLowerCase().includes(qLast);
+      return String(u.lastName || "").toLowerCase().includes(queryLast);
     });
 
     if (matched.length === 0) return res.status(404).json({ error: "No person found" });

@@ -73,8 +73,18 @@ const downloadBackup = async (req, res) => {
 const importBackup = async (req, res) => {
   try {
     const { backupData, overwrite } = req.body;
-    if (!backupData || !backupData.collections) {
+
+    // Validate payload size (approximate check)
+    const payloadSize = JSON.stringify(req.body || {}).length;
+    if (payloadSize > 10 * 1024 * 1024) {
+      return res.status(413).json({ error: "Backup payload too large (max 10MB)" });
+    }
+
+    if (!backupData || typeof backupData !== "object") {
       return res.status(400).json({ error: "Invalid backup data" });
+    }
+    if (!backupData.collections || typeof backupData.collections !== "object") {
+      return res.status(400).json({ error: "Invalid backup format: missing collections" });
     }
 
     let imported = 0;

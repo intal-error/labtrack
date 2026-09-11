@@ -92,6 +92,12 @@
 }
 .register-input-wrap .register-password-toggle:hover{color:#fff}
 
+/* Password requirements */
+.password-requirements{display:flex;flex-direction:column;gap:5px;margin:8px 0 0}
+.password-req-item{display:flex;align-items:center;gap:7px;font-size:.78rem;font-weight:500;transition:color .2s}
+.password-req-item.unmet{color:rgba(239,83,80,.85)}
+.password-req-item.met{color:rgba(102,187,106,.9)}
+
 /* Submit */
 .register-submit{
   width:100%;padding:14px;border:none;border-radius:12px;

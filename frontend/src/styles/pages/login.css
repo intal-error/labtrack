@@ -1,13 +1,6 @@
 .login-page{position:relative;min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;overflow-y:auto;overflow-x:hidden}
 .login-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
-.login-overlay{position:absolute;inset:0;background:linear-gradient(135deg,rgba(0,40,20,.88) 0%,rgba(0,77,38,.75) 45%,rgba(0,120,60,.55) 100%);z-index:1}
-
-/* Floating depth shapes */
-.login-shape{position:absolute;border-radius:50%;filter:blur(70px);opacity:.28;z-index:1;pointer-events:none}
-.login-shape-1{width:420px;height:420px;background:radial-gradient(circle,#66bb6a,transparent 70%);top:-120px;right:-80px;animation:shapeFloat 14s ease-in-out infinite}
-.login-shape-2{width:320px;height:320px;background:radial-gradient(circle,#1b5e20,transparent 70%);bottom:-100px;left:-60px;animation:shapeFloat 18s ease-in-out infinite reverse}
-.login-shape-3{width:200px;height:200px;background:radial-gradient(circle,#a5d6a7,transparent 70%);top:55%;left:42%;animation:shapeFloat 11s ease-in-out 2s infinite}
-@keyframes shapeFloat{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(24px,-32px) scale(1.06)}66%{transform:translate(-20px,20px) scale(.96)}}
+.login-overlay{position:absolute;inset:0;background:linear-gradient(135deg,rgba(0,0,0,.88) 0%,rgba(0,20,10,.75) 45%,rgba(0,40,20,.55) 100%);z-index:1}
 
 .login-content{position:relative;z-index:2;width:100%;max-width:1200px;padding:40px;display:grid;grid-template-columns:1.1fr 1fr;gap:60px;align-items:center}
 
@@ -29,9 +22,9 @@
 
 /* Right card */
 .login-card{
-  background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);
+  background:rgba(19,19,19,.85);border:1px solid rgba(255,255,255,.15);
   border-radius:22px;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
-  box-shadow:0 12px 40px rgba(0,0,0,.3);
+  box-shadow:0 12px 40px rgba(0,0,0,.4);
   padding:42px 38px;max-width:440px;width:100%;justify-self:end;
   animation:cardIn .55s cubic-bezier(.22,.9,.35,1.2) .15s backwards;
 }
@@ -44,7 +37,7 @@
 .login-role-selector{display:flex;gap:8px;margin-bottom:20px}
 .login-role-card{
   position:relative;flex:1;padding:14px 8px;border-radius:14px;text-align:center;
-  background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.15);
+  background:rgba(255,255,255,.06);border:2px solid rgba(255,255,255,.15);
   cursor:pointer;transition:all .22s;
 }
 .login-role-card:hover{background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.35);transform:translateY(-2px)}
@@ -87,7 +80,7 @@
 .login-input-icon{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:rgba(255,255,255,.55);pointer-events:none;transition:color .22s;display:grid;place-items:center}
 .login-field input{
   width:100%;padding:13px 14px 13px 42px;
-  background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.28);
+  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.28);
   border-radius:11px;font-size:15px;color:#fff;transition:all .22s;
 }
 .login-field input::placeholder{color:rgba(255,255,255,.5)}
@@ -159,7 +152,7 @@
 
 /* Respect reduced motion */
 @media(prefers-reduced-motion:reduce){
-  .login-shape,.login-feature-item,.login-card,.login-left,
+  .login-feature-item,.login-card,.login-left,
   .login-role-selector,.login-card form .login-field,
   .login-extras,.login-submit,.login-register-link,.login-error-banner{animation:none}
   .login-role-card,.login-submit{transition:none}

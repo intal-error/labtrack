@@ -2,6 +2,7 @@ import { auth } from "./firebase";
 import { getIdToken } from "firebase/auth";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
+const KIOSK_SECRET = import.meta.env.VITE_KIOSK_SECRET || "";
 const TIMEOUT_MS = 30000;
 
 function toQuery(params) {
@@ -45,6 +46,31 @@ async function request(path, options = {}) {
     throw new Error(err.error || `HTTP ${res.status}`);
   }
   return res.json();
+}
+
+function kioskRequest(path, options = {}) {
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Kiosk-Token": KIOSK_SECRET,
+    ...options.headers,
+  };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  return fetch(`${API_URL}${path}`, { ...options, headers, signal: controller.signal })
+    .then(async (res) => {
+      clearTimeout(timer);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Request failed" }));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      return res.json();
+    })
+    .catch((err) => {
+      clearTimeout(timer);
+      if (err.name === "AbortError") throw new Error("Request timed out");
+      if (err.message === "Failed to fetch") throw new Error("Server is offline. Please try again later.");
+      throw err;
+    });
 }
 
 export const api = {
@@ -273,11 +299,11 @@ export const api = {
     }
   },
 
-  // Lab Attendance
-  lookupStudent: (schoolId) => request(`/attendance/lookup-student/${schoolId}`),
-  timeIn: (data) => request("/attendance/time-in", { method: "POST", body: JSON.stringify(data) }),
-  timeOut: (data) => request("/attendance/time-out", { method: "POST", body: JSON.stringify(data) }),
-  autoScan: (data) => request("/attendance/auto-scan", { method: "POST", body: JSON.stringify(data) }),
+  // Lab Attendance (kiosk endpoints use kiosk auth)
+  lookupStudent: (schoolId) => kioskRequest(`/attendance/lookup-student/${schoolId}`),
+  timeIn: (data) => kioskRequest("/attendance/time-in", { method: "POST", body: JSON.stringify(data) }),
+  timeOut: (data) => kioskRequest("/attendance/time-out", { method: "POST", body: JSON.stringify(data) }),
+  autoScan: (data) => kioskRequest("/attendance/auto-scan", { method: "POST", body: JSON.stringify(data) }),
   getActiveStudents: (params) => request(`/attendance/active${toQuery(params)}`),
   getTodayAttendance: () => request("/attendance/today"),
   getDailyLog: (date) => request(`/attendance/daily-log/${date}`),

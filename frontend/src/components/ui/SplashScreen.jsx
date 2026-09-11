@@ -20,7 +20,7 @@ export default function SplashScreen({ onComplete }) {
       <div className="splash-content">
         <div className="splash-logo-container">
           <img
-            src="/slsulucena.jpg"
+            src="/logo.png"
             alt="SLSU Logo"
             className="splash-logo"
             draggable={false}

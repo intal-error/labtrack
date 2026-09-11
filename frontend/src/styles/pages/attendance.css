@@ -1519,9 +1519,11 @@ body.dark .room-add-card:hover .add-icon {
   max-width: 95vw;
   max-height: 85vh;
   overflow-y: auto;
+  scrollbar-width: none;
   box-shadow: 0 0 20px rgba(0,0,0,.4);
   animation: attendSlideUp .25s ease;
 }
+.attendance-modal::-webkit-scrollbar{width:0}
 
 .attendance-modal h2 {
   font-size: 20px;

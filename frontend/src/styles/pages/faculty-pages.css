@@ -203,7 +203,9 @@
   width: 100%;
   max-height: 85vh;
   overflow-y: auto;
+  scrollbar-width: none;
 }
+.modal-content::-webkit-scrollbar{width:0}
 
 .modal-content h2 {
   margin-bottom: 1rem;
@@ -257,7 +259,9 @@
 .history-list {
   max-height: 200px;
   overflow-y: auto;
+  scrollbar-width: none;
 }
+.history-list::-webkit-scrollbar{width:0}
 
 .history-item {
   display: flex;

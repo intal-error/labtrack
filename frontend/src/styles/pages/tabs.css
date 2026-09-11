@@ -1190,7 +1190,8 @@ body.dark .fines-kebab-dropdown button.danger:hover{background:#3a1b1b}
 body.dark .fines-outstanding{background:rgba(245,124,0,.05);border-color:rgba(245,124,0,.2)}
 
 /* ========== DETAIL MODAL SECTIONS ========== */
-.fines-detail-modal{padding:4px 0;max-height:70vh;overflow-y:auto}
+.fines-detail-modal{padding:4px 0;max-height:70vh;overflow-y:auto;scrollbar-width:none}
+.fines-detail-modal::-webkit-scrollbar{width:0}
 .fines-detail-section{margin-bottom:20px}
 .fines-detail-section:last-child{margin-bottom:0}
 .fines-detail-section-title{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:0 0 12px 0;padding-bottom:8px;border-bottom:1px solid var(--border)}
