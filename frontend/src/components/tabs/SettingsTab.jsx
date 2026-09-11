@@ -7,7 +7,6 @@ import {
   MdSave, MdRestartAlt, MdWarning, MdBackup, MdSettings
 } from "react-icons/md";
 import PesoIcon from "../ui/PesoIcon";
-import PageHero from "../ui/PageHero";
 import "../../styles/pages/tabs.css";
 
 const DEFAULTS = {
@@ -204,7 +203,11 @@ export default function SettingsTab() {
 
   return (
     <div className="tab-content">
-      <PageHero icon={MdSettings} title="Settings" subtitle={lastSaved ? `Last saved: ${lastSaved.toLocaleTimeString()}` : "Manage system preferences and configurations"} />
+      {lastSaved && (
+        <p className="settings-subtitle" style={{ marginBottom: 16 }}>
+          Last saved: {lastSaved.toLocaleTimeString()}
+        </p>
+      )}
 
       <div className="settings-grid">
         <div className="settings-section">

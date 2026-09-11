@@ -3,7 +3,6 @@ import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { MdAdd, MdList, MdPerson, MdLock, MdPhone, MdWork, MdEmail, MdArrowBack, MdShield, MdEdit, MdDelete, MdVisibility, MdEditNote, MdAssignment, MdSwapHoriz, MdSchool, MdAdminPanelSettings, MdMoreVert, MdClose } from "react-icons/md";
-import PageHero from "../components/ui/PageHero";
 import ViewToggle from "../components/ui/ViewToggle";
 import { COURSES } from "../constants/courses";
 
@@ -116,8 +115,6 @@ export default function AdminPage() {
     } catch (err) { toast.error(err.message); }
   };
 
-  const handleLogout = async () => { await logout(); navigate("/login"); };
-
   const togglePermission = (perm) => {
     setForm((f) => ({
       ...f,
@@ -131,7 +128,6 @@ export default function AdminPage() {
 
   return (
     <section className="admin-page">
-      <PageHero icon={MdAdminPanelSettings} title="Admin" />
 
       {view === "main" && (
         <div className="admin-main-card fade-in-up">

@@ -20,11 +20,10 @@ const ScannerPage = lazy(() => import("./pages/ScannerPage"));
 const TransactionsPage = lazy(() => import("./pages/TransactionsPage"));
 const CatalogPage = lazy(() => import("./pages/CatalogPage"));
 const PersonaPage = lazy(() => import("./pages/PersonaPage"));
-const AdminPage = lazy(() => import("./pages/AdminPage"));
-const AboutPage = lazy(() => import("./pages/AboutPage"));
+
 const HomePage = lazy(() => import("./pages/HomePage"));
 const NotificationsTab = lazy(() => import("./components/tabs/NotificationsTab"));
-const SettingsTab = lazy(() => import("./components/tabs/SettingsTab"));
+const SettingsPage = lazy(() => import("./components/tabs/SettingsPage"));
 const DocumentsTab = lazy(() => import("./components/tabs/DocumentsTab"));
 const MaintenanceTab = lazy(() => import("./components/tabs/MaintenanceTab"));
 const IncidentTab = lazy(() => import("./components/tabs/IncidentTab"));
@@ -34,8 +33,8 @@ const ReportsTab = lazy(() => import("./components/tabs/ReportsTab"));
 const FinesTab = lazy(() => import("./components/tabs/FinesTab"));
 const BorrowRequestsTab = lazy(() => import("./components/tabs/BorrowRequestsTab"));
 const MyRequestsPage = lazy(() => import("./pages/MyRequestsPage"));
-const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const AttendanceKioskPage = lazy(() => import("./pages/AttendanceKioskPage"));
+
 const AttendanceLogsPage = lazy(() => import("./pages/AttendanceLogsPage"));
 const RoomAttendancePage = lazy(() => import("./pages/RoomAttendancePage"));
 const MyAttendancePage = lazy(() => import("./pages/MyAttendancePage"));
@@ -49,8 +48,6 @@ const routePrefetchers = {
   "/catalog": () => import("./pages/CatalogPage"),
   "/inventory": () => import("./pages/InventoryPage"),
   "/persona": () => import("./pages/PersonaPage"),
-  "/admin": () => import("./pages/AdminPage"),
-  "/about": () => import("./pages/AboutPage"),
   "/maintenance": () => import("./components/tabs/MaintenanceTab"),
   "/incidents": () => import("./components/tabs/IncidentTab"),
   "/manuals": () => import("./components/tabs/ManualsTab"),
@@ -59,13 +56,12 @@ const routePrefetchers = {
   "/fines": () => import("./components/tabs/FinesTab"),
   "/borrow-requests": () => import("./components/tabs/BorrowRequestsTab"),
   "/notifications": () => import("./components/tabs/NotificationsTab"),
-  "/settings": () => import("./components/tabs/SettingsTab"),
+  "/settings": () => import("./components/tabs/SettingsPage"),
   "/documents": () => import("./components/tabs/DocumentsTab"),
   "/attendance": () => import("./pages/AttendanceLogsPage"),
   "/my-attendance": () => import("./pages/MyAttendancePage"),
   "/attendance-scan": () => import("./pages/AttendanceScannerPage"),
   "/my-requests": () => import("./pages/MyRequestsPage"),
-  "/profile": () => import("./pages/ProfilePage"),
 };
 
 const prefetched = {};
@@ -151,7 +147,7 @@ function App() {
               <Route path="overview" element={<Navigate to="/home" replace />} />
 
               <Route path="notifications" element={<NotificationsTab />} />
-              <Route path="settings" element={<RoleRoute allowed={["admin"]}><SettingsTab /></RoleRoute>} />
+              <Route path="settings" element={<SettingsPage />} />
               <Route path="documents" element={<RoleRoute allowed={["admin"]}><DocumentsTab /></RoleRoute>} />
               <Route path="scanner" element={<RoleRoute allowed={["student"]}><ScannerPage /></RoleRoute>} />
               <Route path="transactions" element={<TransactionsPage />} />
@@ -160,7 +156,7 @@ function App() {
               <Route path="catalog" element={<RoleRoute allowed={["admin"]}><CatalogPage /></RoleRoute>} />
               <Route path="inventory" element={<RoleRoute allowed={["student"]}><InventoryPage /></RoleRoute>} />
               <Route path="persona" element={<RoleRoute allowed={["admin"]}><PersonaPage /></RoleRoute>} />
-              <Route path="admin" element={<RoleRoute allowed={["admin"]}><AdminPage /></RoleRoute>} />
+              <Route path="admin" element={<Navigate to="/settings" replace />} />
               <Route path="maintenance" element={<RoleRoute allowed={["admin"]}><MaintenanceTab /></RoleRoute>} />
               <Route path="incidents" element={<IncidentTab />} />
               <Route path="manuals" element={<ManualsTab />} />
@@ -173,9 +169,9 @@ function App() {
               <Route path="my-attendance" element={<RoleRoute allowed={["student"]}><MyAttendancePage /></RoleRoute>} />
               <Route path="attendance-scan" element={<RoleRoute allowed={["student"]}><AttendanceScannerPage /></RoleRoute>} />
               <Route path="my-requests" element={<MyRequestsPage />} />
-              <Route path="profile" element={<ProfilePage />} />
+              <Route path="profile" element={<Navigate to="/settings" replace />} />
 
-              <Route path="about" element={<AboutPage />} />
+              <Route path="about" element={<Navigate to="/settings" replace />} />
             </Route>
             <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>

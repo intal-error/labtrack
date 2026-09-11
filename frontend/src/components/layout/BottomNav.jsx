@@ -32,7 +32,12 @@ const getNavItems = (role) => {
       icon: MdNotifications,
       roles: ["student", "admin"],
     },
-    { path: "/profile", label: "Profile", icon: MdPerson, roles: ["student", "admin"] },
+    {
+      path: "/settings",
+      label: "Profile",
+      icon: MdPerson,
+      roles: ["student", "admin"],
+    },
   ];
   return baseItems.filter((item) => item.roles.includes(role));
 };

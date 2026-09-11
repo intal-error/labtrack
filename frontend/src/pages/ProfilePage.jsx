@@ -2,8 +2,7 @@ import { useState, useMemo, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../services/api";
 import toast from "react-hot-toast";
-import { MdPerson, MdLock, MdSave, MdVisibility, MdVisibilityOff, MdCameraAlt, MdAccountCircle } from "react-icons/md";
-import PageHero from "../components/ui/PageHero";
+import { MdPerson, MdLock, MdSave, MdVisibility, MdVisibilityOff, MdCameraAlt } from "react-icons/md";
 import "../styles/pages/profile.css";
 
 function getPasswordStrength(pw) {
@@ -141,7 +140,6 @@ export default function ProfilePage() {
 
   return (
     <div className="profile-page">
-      <PageHero icon={MdAccountCircle} title="My Profile" />
 
       <div className="profile-card">
         <div className="profile-sidebar">

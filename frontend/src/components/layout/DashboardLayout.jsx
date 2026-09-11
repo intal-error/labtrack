@@ -6,11 +6,11 @@ import { api } from "../../services/api";
 import { prefetchRoute } from "../../App";
 import { FiMenu, FiX } from "react-icons/fi";
 import {
-  MdQrCodeScanner, MdInventory, MdPerson, MdAdminPanelSettings, MdInfo,
+  MdQrCodeScanner, MdInventory, MdPerson, MdInfo,
   MdLogout, MdDarkMode, MdLightMode, MdHome,
   MdNotifications, MdFolderOpen, MdSettings,
   MdChevronLeft, MdChevronRight, MdExpandMore, MdExpandLess,
-  MdBuild, MdWarning, MdMenuBook, MdHistory, MdAssessment, MdAccountCircle,
+  MdBuild, MdWarning, MdMenuBook, MdHistory, MdAssessment,
   MdAssignment, MdEventAvailable, MdQrCode
 } from "react-icons/md";
 import PesoIcon from "../ui/PesoIcon";
@@ -54,16 +54,8 @@ const navSections = [
       { path: "/fines", label: "Fines", icon: PesoIcon, roles: ["student", "admin"] },
       { path: "/manuals", label: "Lab Manuals", icon: MdMenuBook, roles: ["student", "admin"] },
       { path: "/documents", label: "Documents", icon: MdFolderOpen, roles: ["admin"] },
-      { path: "/settings", label: "Settings", icon: MdSettings, roles: ["admin"] },
-    ],
-  },
-  {
-    label: "OTHER",
-    items: [
-      { path: "/profile", label: "My Profile", icon: MdAccountCircle, roles: ["student", "admin"] },
       { path: "/persona", label: "Persona", icon: MdPerson, roles: ["admin"] },
-      { path: "/admin", label: "Admin", icon: MdAdminPanelSettings, roles: ["admin"] },
-      { path: "/about", label: "About", icon: MdInfo, roles: ["student", "admin"] },
+      { path: "/settings", label: "Settings", icon: MdSettings, roles: ["student", "admin"] },
     ],
   },
 ];
