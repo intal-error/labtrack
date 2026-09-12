@@ -10,7 +10,7 @@ import "../../styles/pages/tabs.css";
 import "../../styles/pages/catalog.css";
 import "../../styles/pages/tables.css";
 import { MdAssignment, MdSearch, MdCheckCircle, MdCancel, MdSchedule, MdPerson, MdInventory, MdSort, MdSwapHoriz } from "react-icons/md";
-import PageHero from "../ui/PageHero";
+
 import ViewToggle from "../ui/ViewToggle";
 
 const PAGE_SIZE = 25;
@@ -226,8 +226,6 @@ export default function BorrowRequestsTab() {
 
   return (
     <div className="tab-content">
-      <PageHero icon={MdAssignment} title="Borrow Requests" />
-
       <div className="maintenance-stats">
         {[
           { key: "total", label: "Total", count: stats.total, icon: <MdAssignment size={20} /> },

@@ -19,7 +19,6 @@ import {
   MdMeetingRoom,
   MdEventAvailable,
 } from "react-icons/md";
-import PageHero from "../components/ui/PageHero";
 
 const TABS = [
   { key: "active", label: "Currently Inside", icon: MdPeople },
@@ -141,9 +140,6 @@ export default function AttendanceLogsPage() {
 
   return (
     <div className="attendance-page">
-      {/* Hero Header */}
-      <PageHero icon={MdEventAvailable} title="Attendance Logs" />
-
       <div className="attendance-shell">
         {/* Stats */}
         {stats && (

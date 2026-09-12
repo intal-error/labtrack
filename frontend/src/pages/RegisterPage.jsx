@@ -27,7 +27,7 @@ export default function RegisterPage() {
 
   useEffect(() => {
     if (!registered || authLoading || !role) return;
-    navigate("/home");
+    navigate("/dashboard");
   }, [registered, authLoading, role, navigate]);
 
   const [form, setForm] = useState({

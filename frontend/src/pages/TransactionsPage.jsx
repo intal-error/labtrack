@@ -11,7 +11,6 @@ import Pagination from "../components/ui/Pagination";
 import toast from "react-hot-toast";
 import "../styles/pages/tables.css";
 import { MdSwapHoriz } from "react-icons/md";
-import PageHero from "../components/ui/PageHero";
 import ViewToggle from "../components/ui/ViewToggle";
 
 const PAGE_LIMIT = 25;
@@ -250,18 +249,16 @@ export default function TransactionsPage() {
 
   return (
     <section className="transactions-page">
-      <PageHero icon={MdSwapHoriz} title="Transactions" subtitle={isStudent ? "Track your borrowed and returned equipment" : "Track all borrowed and returned equipment"}>
-        <button className="hero-action-btn ghost" onClick={load}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-          Refresh
+      <button className="hero-action-btn ghost" onClick={load}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        Refresh
+      </button>
+      {!isStudent && (
+        <button className="hero-action-btn primary" onClick={downloadReport}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download Report
         </button>
-        {!isStudent && (
-          <button className="hero-action-btn primary" onClick={downloadReport}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Download Report
-          </button>
-        )}
-      </PageHero>
+      )}
 
       <div className="transactions-stats">
         <div className="stat-card stat-active">

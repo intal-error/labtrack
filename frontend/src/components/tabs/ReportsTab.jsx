@@ -4,11 +4,11 @@ import { useReportSummary } from "../../hooks/useQueries";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
 import {
-  MdAssessment, MdDownload, MdPeople, MdInventory, MdWarning, MdBuild, MdSchedule,
+  MdDownload, MdPeople, MdInventory, MdWarning, MdBuild, MdSchedule,
   MdAssignment, MdEventAvailable, MdWarningAmber
 } from "react-icons/md";
 import PesoIcon from "../ui/PesoIcon";
-import PageHero from "../ui/PageHero";
+
 import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
@@ -118,17 +118,15 @@ export default function ReportsTab() {
 
   return (
     <div className="tab-content">
-      <PageHero icon={MdAssessment} title="Overview">
-        <button className="hero-action-btn ghost" onClick={() => downloadReport("borrowed")}>
-          <MdDownload size={16} /> Borrowed
-        </button>
-        <button className="hero-action-btn ghost" onClick={() => downloadReport("returned")}>
-          <MdDownload size={16} /> Returned
-        </button>
-        <button className="hero-action-btn ghost" onClick={() => downloadReport("catalog")}>
-          <MdDownload size={16} /> Catalog
-        </button>
-      </PageHero>
+      <button className="hero-action-btn ghost" onClick={() => downloadReport("borrowed")}>
+        <MdDownload size={16} /> Borrowed
+      </button>
+      <button className="hero-action-btn ghost" onClick={() => downloadReport("returned")}>
+        <MdDownload size={16} /> Returned
+      </button>
+      <button className="hero-action-btn ghost" onClick={() => downloadReport("catalog")}>
+        <MdDownload size={16} /> Catalog
+      </button>
 
       {/* Key Metrics */}
       <div className="overview-metrics">

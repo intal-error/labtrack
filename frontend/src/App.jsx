@@ -21,7 +21,7 @@ const TransactionsPage = lazy(() => import("./pages/TransactionsPage"));
 const CatalogPage = lazy(() => import("./pages/CatalogPage"));
 const PersonaPage = lazy(() => import("./pages/PersonaPage"));
 
-const HomePage = lazy(() => import("./pages/HomePage"));
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const NotificationsTab = lazy(() => import("./components/tabs/NotificationsTab"));
 const SettingsPage = lazy(() => import("./components/tabs/SettingsPage"));
 const DocumentsTab = lazy(() => import("./components/tabs/DocumentsTab"));
@@ -42,7 +42,7 @@ const AttendanceScannerPage = lazy(() => import("./pages/AttendanceScannerPage")
 const InventoryPage = lazy(() => import("./pages/InventoryPage"));
 
 const routePrefetchers = {
-  "/home": () => import("./pages/HomePage"),
+  "/dashboard": () => import("./pages/DashboardPage"),
   "/scanner": () => import("./pages/ScannerPage"),
   "/transactions": () => import("./pages/TransactionsPage"),
   "/catalog": () => import("./pages/CatalogPage"),
@@ -58,15 +58,18 @@ const routePrefetchers = {
   "/notifications": () => import("./components/tabs/NotificationsTab"),
   "/settings": () => import("./components/tabs/SettingsPage"),
   "/documents": () => import("./components/tabs/DocumentsTab"),
+  "/attendance/room": () => import("./pages/RoomAttendancePage"),
+  "/attendance-scan": () => import("./pages/AttendanceScannerPage"),
   "/attendance": () => import("./pages/AttendanceLogsPage"),
   "/my-attendance": () => import("./pages/MyAttendancePage"),
-  "/attendance-scan": () => import("./pages/AttendanceScannerPage"),
   "/my-requests": () => import("./pages/MyRequestsPage"),
 };
 
+const sortedPrefetchKeys = Object.keys(routePrefetchers).sort((a, b) => b.length - a.length);
+
 const prefetched = {};
 export function prefetchRoute(path) {
-  const matcher = Object.keys(routePrefetchers).find((key) => path.startsWith(key));
+  const matcher = sortedPrefetchKeys.find((key) => path.startsWith(key));
   if (matcher && !prefetched[matcher]) {
     prefetched[matcher] = true;
     routePrefetchers[matcher]();
@@ -84,28 +87,28 @@ function ProtectedRoute({ children }) {
 function RoleRoute({ children, allowed }) {
   const { role, loading } = useAuth();
   if (loading) return <div className="loading-screen"><div className="spinner-lg" /></div>;
-  if (!allowed.includes(role)) return <Navigate to="/home" replace />;
+  if (!allowed.includes(role)) return <Navigate to="/dashboard" replace />;
   return children;
 }
 
 function IndexRedirect() {
-  return <Navigate to="/home" replace />;
+  return <Navigate to="/dashboard" replace />;
 }
 
 function GuestRoute({ children }) {
-  const { user, role, loading } = useAuth();
+  const { user, loading } = useAuth();
   if (loading) return <div className="loading-screen"><div className="spinner-lg" /></div>;
-  if (user && role !== null) return <Navigate to="/home" replace />;
+  if (user) return <Navigate to="/dashboard" replace />;
   return children;
 }
 
 class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, error: null };
   }
-  static getDerivedStateFromError() {
-    return { hasError: true };
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
   }
   componentDidCatch(error, info) {
     console.error("ErrorBoundary caught:", error, info);
@@ -113,10 +116,10 @@ class ErrorBoundary extends Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", gap: 16, background: "var(--bg)", color: "var(--text)" }}>
-          <h2>Something went wrong</h2>
-          <p style={{ color: "var(--text-muted)" }}>Please refresh the page or try again.</p>
-          <button className="btn btn-primary" onClick={() => { this.setState({ hasError: false }); window.location.reload(); }}>Reload Page</button>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", gap: 16, background: "#f5f5f0", color: "#1a1a1a", padding: 20, textAlign: "center" }}>
+          <h2 style={{ margin: 0 }}>Something went wrong</h2>
+          <p style={{ color: "#666", margin: 0 }}>{this.state.error?.message || "An unexpected error occurred."}</p>
+          <button className="btn btn-primary" onClick={() => { window.location.reload(); }}>Reload Page</button>
         </div>
       );
     }
@@ -143,8 +146,9 @@ function App() {
             <Route path="/attend/kiosk" element={<AttendanceKioskPage />} />
             <Route path="/" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
               <Route index element={<IndexRedirect />} />
-              <Route path="home" element={<HomePage />} />
-              <Route path="overview" element={<Navigate to="/home" replace />} />
+              <Route path="dashboard" element={<DashboardPage />} />
+              <Route path="home" element={<Navigate to="/dashboard" replace />} />
+              <Route path="overview" element={<Navigate to="/dashboard" replace />} />
 
               <Route path="notifications" element={<NotificationsTab />} />
               <Route path="settings" element={<SettingsPage />} />
@@ -173,7 +177,7 @@ function App() {
 
               <Route path="about" element={<Navigate to="/settings" replace />} />
             </Route>
-            <Route path="*" element={<Navigate to="/home" replace />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
           </Suspense>
           </ErrorBoundary>

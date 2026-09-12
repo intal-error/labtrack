@@ -6,7 +6,6 @@ import toast from "react-hot-toast";
 import "../styles/pages/tables.css";
 import "../styles/pages/catalog.css";
 import { MdAssignment } from "react-icons/md";
-import PageHero from "../components/ui/PageHero";
 import ViewToggle from "../components/ui/ViewToggle";
 
 const STATUS_COLORS = {
@@ -86,8 +85,6 @@ export default function MyRequestsPage() {
 
   return (
     <section className="transactions-page">
-      <PageHero icon={MdAssignment} title="My Requests" />
-
       <div className="transactions-stats">
         <div className="stat-card stat-active">
           <div className="stat-info">

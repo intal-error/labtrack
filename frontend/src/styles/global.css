@@ -130,3 +130,42 @@ body.dark .card:hover{box-shadow:0 4px 16px rgba(0,0,0,.25)}
     overscroll-behavior-y: contain;
   }
 }
+
+/* Hero action buttons (used across transactions, catalog, reports, etc.) */
+.hero-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.hero-action-btn.primary {
+  background: var(--green);
+  color: #000;
+}
+.hero-action-btn.primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+.hero-action-btn.ghost {
+  background: var(--bg-card, rgba(0, 0, 0, 0.04));
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.hero-action-btn.ghost:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+body.dark .hero-action-btn.ghost {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+body.dark .hero-action-btn.ghost:hover {
+  background: rgba(255, 255, 255, 0.15);
+}

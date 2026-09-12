@@ -11,7 +11,7 @@ import "../../styles/pages/catalog.css";
 import "../../styles/pages/shared-form-panel.css";
 import "../../styles/pages/tables.css";
 import { MdBuild, MdAdd, MdEdit, MdDelete, MdCalendarToday, MdWarning, MdSearch, MdCheckCircle, MdSchedule, MdPlayArrow, MdAssignment, MdCameraAlt, MdClose, MdInfo, MdLocationOn, MdBusiness } from "react-icons/md";
-import PageHero from "../ui/PageHero";
+
 import ViewToggle from "../ui/ViewToggle";
 import Pagination from "../ui/Pagination";
 
@@ -231,11 +231,9 @@ export default function MaintenanceTab() {
 
   return (
     <div className="tab-content">
-      <PageHero icon={MdBuild} title="Maintenance">
-        {role === "admin" && (
-          <button className="hero-action-btn ghost" onClick={openCreate}><MdAdd size={16} /> New MAF</button>
-        )}
-      </PageHero>
+      {role === "admin" && (
+        <button className="hero-action-btn ghost" onClick={openCreate}><MdAdd size={16} /> New MAF</button>
+      )}
 
       <div className="maintenance-stats">
         {["total", "scheduled", "in-progress", "completed"].map((key) => (

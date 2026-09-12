@@ -8,7 +8,6 @@ import { COURSES } from "../constants/courses";
 import toast from "react-hot-toast";
 import "../styles/pages/scanner.css";
 import { MdQrCodeScanner } from "react-icons/md";
-import PageHero from "../components/ui/PageHero";
 
 const ScannerCamera = lazy(() => import("../components/scanner/ScannerCamera"));
 
@@ -264,8 +263,6 @@ export default function ScannerPage() {
 
   return (
     <section className="scanner-page">
-      <PageHero icon={MdQrCodeScanner} title="Scan Borrow / Return" />
-
       <div className="scanner-shell">
         <div className="scanner-mode">
           <button className={`scanner-mode-btn ${isBorrow ? "active" : ""}`} onClick={() => setAction("borrowed")} type="button">

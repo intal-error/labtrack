@@ -7,7 +7,7 @@ import Modal from "../ui/Modal";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
 import { MdWarning, MdInfo, MdCheckCircle, MdError, MdNotificationsOff, MdOpenInNew, MdNotifications } from "react-icons/md";
-import PageHero from "../ui/PageHero";
+
 import Pagination from "../ui/Pagination";
 
 const TYPE_CONFIG = {
@@ -92,13 +92,11 @@ export default function NotificationsTab() {
 
   return (
     <div className="tab-content">
-      <PageHero icon={MdNotifications} title="Notifications" subtitle={unread > 0 ? `${unread} unread notifications` : "Stay updated on your lab activity"}>
-        {unread > 0 && (
-          <button className="hero-action-btn ghost" onClick={markAllRead}>
-            <MdCheckCircle size={16} /> Mark all read
-          </button>
-        )}
-      </PageHero>
+      {unread > 0 && (
+        <button className="hero-action-btn ghost" onClick={markAllRead}>
+          <MdCheckCircle size={16} /> Mark all read
+        </button>
+      )}
 
       <div className="notif-filters">
         <button className={`notif-filter-btn ${filter === "all" ? "active" : ""}`} onClick={() => { setFilter("all"); setPage(1); }}>

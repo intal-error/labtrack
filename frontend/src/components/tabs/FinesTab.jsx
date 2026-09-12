@@ -8,7 +8,7 @@ import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
 import { MdSearch, MdCheckCircle, MdCancel, MdWarning, MdSort, MdPerson, MdMoreVert, MdVisibility, MdAttachMoney, MdEventBusy, MdPeople, MdClose } from "react-icons/md";
 import PesoIcon from "../ui/PesoIcon";
-import PageHero from "../ui/PageHero";
+
 import Pagination from "../ui/Pagination";
 
 const STATUS_COLORS = { pending: "#f57c00", paid: "#43A047", waived: "#1976d2" };
@@ -165,7 +165,6 @@ export default function FinesTab() {
 
   if (queryError) return (
     <div className="tab-content">
-      <PageHero icon={PesoIcon} title={isAdmin ? "Fines & Penalties" : "My Fines"} />
       <div className="maintenance-empty">
         <MdWarning size={48} />
         <h3>Failed to Load Fines</h3>
@@ -177,8 +176,6 @@ export default function FinesTab() {
 
   return (
     <div className="tab-content">
-      <PageHero icon={PesoIcon} title={isAdmin ? "Fines & Penalties" : "My Fines"} subtitle={isAdmin ? "Manage and monitor all fine records" : "View your fine records and overdue information"} />
-
       {isAdmin ? (
         <AdminView
           stats={stats} overdueCount={overdueCount} filter={filter} setFilter={setFilter}

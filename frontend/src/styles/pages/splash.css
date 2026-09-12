@@ -5,6 +5,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
   background: linear-gradient(135deg, #0f3418 0%, #081e0e 50%, #0a2a12 100%);
   transition: opacity 0.4s ease, transform 0.4s ease;
 }

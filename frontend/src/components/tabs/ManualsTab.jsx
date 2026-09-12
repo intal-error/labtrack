@@ -7,7 +7,7 @@ import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
 import "../../styles/pages/shared-form-panel.css";
 import { MdMenuBook, MdAdd, MdDelete, MdEdit, MdSearch, MdOpenInNew, MdCloudUpload, MdClose, MdInfo, MdAssignment, MdDescription, MdDownload, MdVisibility, MdFilterList, MdSort, MdClear, MdWarning } from "react-icons/md";
-import PageHero from "../ui/PageHero";
+
 
 const CATEGORIES = ["All", "General", "Safety", "Equipment Guide", "Software", "Procedure", "Other"];
 const STATUSES = ["Active", "Archived"];
@@ -260,11 +260,9 @@ export default function ManualsTab() {
 
   return (
     <div className="tab-content">
-      <PageHero icon={MdMenuBook} title="Laboratory Manuals">
-        {isAdmin && (
-          <button className="hero-action-btn ghost" onClick={openAdd}><MdAdd size={16} /> Upload Manual</button>
-        )}
-      </PageHero>
+      {isAdmin && (
+        <button className="hero-action-btn ghost" onClick={openAdd}><MdAdd size={16} /> Upload Manual</button>
+      )}
 
       <div className="manuals-stats">
         <div className={`manuals-stat-card ${filterStatus === "All" ? "active" : ""}`} onClick={() => setFilterStatus("All")}>

@@ -8,7 +8,6 @@ import {
   MdQrCodeScanner, MdLogin, MdLogout, MdCheckCircle, MdError,
   MdAccessTime, MdMeetingRoom, MdBook,
 } from "react-icons/md";
-import PageHero from "../components/ui/PageHero";
 import "../styles/pages/scanner.css";
 import "../styles/pages/attendance-scanner.css";
 
@@ -229,9 +228,6 @@ export default function AttendanceScannerPage() {
 
   return (
     <section className="attendance-scan-page">
-      {/* Header */}
-      <PageHero icon={MdQrCodeScanner} title="Scan Attendance" />
-
       <div className="attendance-scan-shell">
         {/* Mode Toggle */}
         <div className="attendance-scan-mode">

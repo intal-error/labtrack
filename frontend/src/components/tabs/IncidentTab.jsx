@@ -8,7 +8,7 @@ import "../../styles/pages/tabs.css";
 import "../../styles/pages/shared-form-panel.css";
 import "../../styles/pages/incident-modal.css";
 import { MdWarning, MdAdd, MdEdit, MdDelete, MdSearch, MdInfo, MdOutlineWarning, MdCameraAlt, MdFilterList, MdClose, MdPerson, MdAssignment, MdSchedule } from "react-icons/md";
-import PageHero from "../ui/PageHero";
+
 import Pagination from "../ui/Pagination";
 
 const SEVERITY_COLORS = { low: "#43A047", medium: "#f57c00", high: "#d32f2f", critical: "#b71c1c" };
@@ -230,11 +230,9 @@ export default function IncidentTab() {
 
   return (
     <div className="tab-content">
-      <PageHero icon={MdWarning} title="Incident Reports">
-        {canCreate && (
-          <button className="hero-action-btn ghost" onClick={openAdd}><MdAdd size={16} /> Report Incident</button>
-        )}
-      </PageHero>
+      {canCreate && (
+        <button className="hero-action-btn ghost" onClick={openAdd}><MdAdd size={16} /> Report Incident</button>
+      )}
 
       <div className="incident-stats">
         <div className={`incident-stat-card ${filterStatus === "All" ? "active" : ""}`} onClick={() => setFilterStatus("All")}>

@@ -1,5 +1,4 @@
 import { useState, useMemo } from "react";
-import { Link } from "react-router-dom";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { useMyBorrowed, useMyReturned, useStudentAttendance } from "../../hooks/useQueries";
@@ -10,9 +9,9 @@ import "../../styles/pages/attendance.css";
 import {
   MdHistory, MdCheckCircle, MdAccessTime, MdWarning, MdSearch,
   MdEventBusy, MdInventory, MdQrCodeScanner, MdSchedule,
-  MdEventAvailable, MdMenuBook, MdQrCode, MdFileDownload
+  MdEventAvailable, MdMenuBook, MdFileDownload
 } from "react-icons/md";
-import PageHero from "../ui/PageHero";
+
 
 function toDate(val) {
   if (!val) return null;
@@ -151,17 +150,6 @@ export default function UsageLogsTab() {
 
   return (
     <div className="tab-content">
-      <PageHero icon={MdHistory} title="My Activity">
-        <Link to="/scanner" className="hero-action-btn ghost">
-          <MdQrCodeScanner size={16} /> Scan to Return
-        </Link>
-        {tab === "attendance" && (
-          <Link to="/attendance-scan" className="hero-action-btn ghost">
-            <MdQrCode size={16} /> Scan Attendance
-          </Link>
-        )}
-      </PageHero>
-
       <div className="activity-stats">
         <div className={`activity-stat-card ${tab === "borrowed" ? "active" : ""}`} onClick={() => setTab("borrowed")}>
           <div className="activity-stat-icon active-borrow"><MdAccessTime size={20} /></div>

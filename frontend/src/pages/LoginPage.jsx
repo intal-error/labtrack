@@ -54,7 +54,7 @@ export default function LoginPage() {
       return;
     }
     toast.success("Welcome back!");
-    navigate("/home");
+    navigate("/dashboard");
   }, [signedIn, authLoading, role, selectedRole, navigate]);
 
   function handleRoleKeyDown(e, key) {

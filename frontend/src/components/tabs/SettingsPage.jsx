@@ -3,7 +3,7 @@ import { useAuth } from "../../context/AuthContext";
 import {
   MdSettings, MdAccountCircle, MdAdminPanelSettings, MdInfo,
 } from "react-icons/md";
-import PageHero from "../ui/PageHero";
+
 import SettingsTab from "./SettingsTab";
 import ProfilePage from "../../pages/ProfilePage";
 import AdminPage from "../../pages/AdminPage";
@@ -32,8 +32,6 @@ export default function SettingsPage() {
 
   return (
     <div className="settings-page">
-      <PageHero icon={MdSettings} title="Settings" subtitle={activeTabInfo?.subtitle || "Manage your account and system preferences"} />
-
       <div className="settings-tabs-nav">
         {tabs.map((tab) => (
           <button

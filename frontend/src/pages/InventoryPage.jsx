@@ -7,7 +7,6 @@ import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Pagination from "../components/ui/Pagination";
 import "../styles/pages/catalog.css";
 import { MdInventory } from "react-icons/md";
-import PageHero from "../components/ui/PageHero";
 import ViewToggle from "../components/ui/ViewToggle";
 
 export default function InventoryPage() {
@@ -67,8 +66,6 @@ export default function InventoryPage() {
 
   return (
     <section className="catalog-page">
-      <PageHero icon={MdInventory} title="Inventory" />
-
       <div className="catalog-stats">
         <div className="stat-card stat-total">
           <div className="stat-icon">

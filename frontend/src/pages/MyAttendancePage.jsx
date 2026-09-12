@@ -4,7 +4,6 @@ import { useStudentAttendance } from "../hooks/useQueries";
 import { useAuth } from "../context/AuthContext";
 import { formatDuration, formatTime, getTodayString } from "../utils/attendanceHelpers";
 import { MdSearch, MdFileDownload, MdQrCodeScanner, MdMenuBook, MdEventAvailable } from "react-icons/md";
-import PageHero from "../components/ui/PageHero";
 import "../styles/pages/attendance.css";
 
 export default function MyAttendancePage() {
@@ -61,11 +60,9 @@ export default function MyAttendancePage() {
 
   return (
     <div className="attendance-page">
-      <PageHero icon={MdEventAvailable} title="My Logs">
-        <button className="hero-action-btn ghost" onClick={() => navigate("/attendance-scan")}>
-          <MdQrCodeScanner size={16} /> Scan Attendance
-        </button>
-      </PageHero>
+      <button className="hero-action-btn ghost" onClick={() => navigate("/attendance-scan")}>
+        <MdQrCodeScanner size={16} /> Scan Attendance
+      </button>
 
       <div className="attendance-shell">
         {/* Quick Scan */}

@@ -53,8 +53,8 @@
 }
 
 .lab-slide-close {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--bg);

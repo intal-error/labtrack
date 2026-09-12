@@ -74,7 +74,7 @@
 
 /* Display Toggle */
 .admin-display-toggle{display:flex;gap:4px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:3px}
-.admin-toggle-btn{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border:none;border-radius:8px;background:transparent;color:var(--text-muted);cursor:pointer;transition:all .2s}
+.admin-toggle-btn{display:flex;align-items:center;justify-content:center;width:40px;height:40px;border:none;border-radius:8px;background:transparent;color:var(--text-muted);cursor:pointer;transition:all .2s}
 .admin-toggle-btn:hover{color:var(--text);background:var(--bg-card)}
 .admin-toggle-btn.active{background:var(--green);color:#000;box-shadow:0 2px 8px rgba(46,125,50,.3)}
 
@@ -97,7 +97,7 @@
 
 /* Kebab Menu */
 .admin-kebab-wrap{position:relative}
-.admin-kebab-btn{width:32px;height:32px;border-radius:8px;border:none;background:transparent;color:var(--text-muted);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s}
+.admin-kebab-btn{width:40px;height:40px;border-radius:8px;border:none;background:transparent;color:var(--text-muted);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s}
 .admin-kebab-btn:hover{background:var(--bg);color:var(--text)}
 .admin-kebab-dropdown{position:absolute;top:100%;right:0;margin-top:4px;background:var(--bg-card);border:1.5px solid var(--border);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:200;min-width:160px;padding:6px;animation:fadeInUp .15s ease}
 .admin-kebab-dropdown button{display:flex;align-items:center;gap:8px;width:100%;padding:8px 12px;border:none;border-radius:8px;background:transparent;color:var(--text);font-size:13px;font-weight:500;cursor:pointer;transition:background .15s;text-align:left;font-family:inherit}
@@ -157,7 +157,7 @@ body.dark .admin-action-card{background:#0a0a0a;border-color:rgba(46,125,50,.1)}
 body.dark .admin-action-card:hover{border-color:rgba(46,125,50,.3);box-shadow:0 12px 28px rgba(46,125,50,.15);transform:translateY(-6px)}
 body.dark .admin-action-label{color:#FFFFFF}
 body.dark .admin-action-desc{color:#888}
-body.dark .admin-create-card,.body.dark .admin-list-card{background:linear-gradient(145deg,#131313,#1a1a1a);border-color:rgba(255,255,255,.1)}
+body.dark .admin-create-card,body.dark .admin-list-card{background:linear-gradient(145deg,#131313,#1a1a1a);border-color:rgba(255,255,255,.1)}
 body.dark .admin-card-header h2{color:#FFFFFF}
 body.dark .admin-back-btn{background:#0a0a0a;border-color:rgba(255,255,255,.1);color:#FFFFFF}
 body.dark .admin-input-wrap input{background:#0a0a0a;border-color:rgba(255,255,255,.1);color:#fff}

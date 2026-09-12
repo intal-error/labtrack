@@ -13,7 +13,6 @@ import "../styles/pages/catalog.css";
 import "../styles/pages/scanner.css";
 import "../styles/pages/shared-form-panel.css";
 import { MdClose, MdEdit, MdInfo, MdImage, MdAssignment, MdTag, MdQrCode, MdInventory, MdDownload, MdMoreVert, MdQrCodeScanner, MdDelete, MdWarning } from "react-icons/md";
-import PageHero from "../components/ui/PageHero";
 import ViewToggle from "../components/ui/ViewToggle";
 import { useAuth } from "../context/AuthContext";
 
@@ -144,15 +143,13 @@ export default function CatalogPage() {
 
   return (
     <section className="catalog-page">
-      <PageHero icon={MdInventory} title="Catalog">
-        <button className="hero-action-btn ghost" onClick={() => setShowCreate(true)}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
-          Create Item
-        </button>
-        <button className="hero-action-btn ghost" onClick={async () => { try { await api.downloadReport("catalog"); toast.success("Downloaded!"); } catch { toast.error("Failed"); } }}>
-          <MdDownload size={16} /> Download Report
-        </button>
-      </PageHero>
+      <button className="hero-action-btn ghost" onClick={() => setShowCreate(true)}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
+        Create Item
+      </button>
+      <button className="hero-action-btn ghost" onClick={async () => { try { await api.downloadReport("catalog"); toast.success("Downloaded!"); } catch { toast.error("Failed"); } }}>
+        <MdDownload size={16} /> Download Report
+      </button>
 
       {restriction?.restricted && (
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 18px", background: "linear-gradient(135deg, rgba(211,47,47,.06), rgba(211,47,47,.02))", border: "1.5px solid rgba(211,47,47,.2)", borderRadius: 12, marginBottom: 16 }}>

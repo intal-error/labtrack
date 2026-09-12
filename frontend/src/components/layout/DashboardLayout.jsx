@@ -1,29 +1,54 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { api } from "../../services/api";
+import { useMyNotifications } from "../../hooks/useQueries";
 import { prefetchRoute } from "../../App";
+import { timeAgo } from "../../utils/helpers";
 import { FiMenu, FiX } from "react-icons/fi";
 import {
   MdQrCodeScanner, MdInventory, MdPerson, MdInfo,
   MdLogout, MdDarkMode, MdLightMode, MdHome,
   MdNotifications, MdFolderOpen, MdSettings,
   MdChevronLeft, MdChevronRight, MdExpandMore, MdExpandLess,
-  MdBuild, MdWarning, MdMenuBook, MdHistory, MdAssessment,
-  MdAssignment, MdEventAvailable, MdQrCode
+  MdBuild, MdWarning, MdMenuBook, MdHistory,
+  MdAssignment, MdEventAvailable,
+  MdSearch, MdClose, MdCheckCircle, MdGavel, MdTune,
 } from "react-icons/md";
 import PesoIcon from "../ui/PesoIcon";
 import { FaExchangeAlt } from "react-icons/fa";
 import BottomNav from "./BottomNav";
 import "../../styles/pages/layout.css";
 
-const navSections = [
+const ROUTE_NAMES = {
+  "/dashboard": "Dashboard",
+  "/settings": "Settings",
+  "/notifications": "Notifications",
+  "/transactions": "Transactions",
+  "/catalog": "Catalog",
+  "/inventory": "Inventory",
+  "/scanner": "Scan Borrow/Return",
+  "/borrow-requests": "Borrow Requests",
+  "/my-requests": "My Requests",
+  "/maintenance": "Maintenance",
+  "/incidents": "Incidents",
+  "/fines": "Fines",
+  "/manuals": "Lab Manuals",
+  "/documents": "Documents",
+  "/persona": "Persona",
+  "/attendance": "Attendance Logs",
+  "/attendance-scan": "Scan Attendance",
+  "/my-attendance": "My Activity",
+  "/usage-logs": "My Activity",
+  "/reports": "Reports",
+};
+
+const NAV_ITEMS = [
   {
     label: "HOME",
     items: [
-      { path: "/home", label: "Home", icon: MdHome, roles: ["student", "admin"] },
-      { path: "/reports", label: "Overview", icon: MdAssessment, roles: ["admin"] },
+      { path: "/dashboard", label: "Dashboard", icon: MdHome, roles: ["student", "admin"] },
     ],
   },
   {
@@ -60,31 +85,55 @@ const navSections = [
   },
 ];
 
+function getNotifIcon(title) {
+  const t = (title || "").toLowerCase();
+  if (t.includes("borrow") || t.includes("return")) return <MdAssignment size={16} style={{ color: "#43a047" }} />;
+  if (t.includes("fine") || t.includes("overdue")) return <MdGavel size={16} style={{ color: "#e53935" }} />;
+  if (t.includes("maintenance") || t.includes("repair")) return <MdBuild size={16} style={{ color: "#f57c00" }} />;
+  if (t.includes("incident")) return <MdWarning size={16} style={{ color: "#e53935" }} />;
+  if (t.includes("attendance")) return <MdEventAvailable size={16} style={{ color: "#1976d2" }} />;
+  if (t.includes("approved")) return <MdCheckCircle size={16} style={{ color: "#43a047" }} />;
+  if (t.includes("reject")) return <MdClose size={16} style={{ color: "#e53935" }} />;
+  return <MdInfo size={16} style={{ color: "#43a047" }} />;
+}
+
 export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [openSections, setOpenSections] = useState(
-    Object.fromEntries(navSections.map((s) => [s.label, true]))
+    Object.fromEntries(NAV_ITEMS.map((s) => [s.label, true]))
   );
-  const [unreadCount, setUnreadCount] = useState(0);
   const [logbookActive, setLogbookActive] = useState(false);
-  const { role, userProfile, logout, loading } = useAuth();
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [userOpen, setUserOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const notifRef = useRef(null);
+  const userRef = useRef(null);
+  const { user, role, userProfile, logout, loading } = useAuth();
   const { dark, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
 
-  async function fetchUnreadCount() {
-    try {
-      const data = await api.getMyNotifications();
-      const unread = data.filter((n) => !n.read).length;
-      setUnreadCount(unread);
-    } catch {
-      setUnreadCount(0);
-    }
-  }
+  const notifData = useMyNotifications();
+  const rawNotifs = notifData?.data;
+  const notifications = Array.isArray(rawNotifs) ? rawNotifs : Array.isArray(rawNotifs?.data) ? rawNotifs.data : [];
+  const unreadNotifications = notifications.filter((n) => !n?.read);
+  const unreadCount = unreadNotifications.length;
+
+  const pageTitle = ROUTE_NAMES[location.pathname] || "Dashboard";
+
+  const firstName = (userProfile?.name || userProfile?.firstName || "User").split(" ")[0];
+  const initials = userProfile?.name
+    ? userProfile.name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)
+    : "U";
+
+  useEffect(() => {
+    if (!loading && !user) navigate("/login", { replace: true });
+  }, [loading, user, navigate]);
 
   async function fetchLogbookStatus() {
     try {
+      if (!userProfile?.schoolId) return;
       const data = await api.getStudentAttendance(userProfile.schoolId);
       const hasActive = (data.records || []).some((r) => r.status === "active");
       setLogbookActive(hasActive);
@@ -94,22 +143,13 @@ export default function DashboardLayout() {
   }
 
   useEffect(() => {
-    if (role) fetchUnreadCount();
-  }, [role]);
-
-  useEffect(() => {
     if (role === "student" && userProfile?.schoolId) {
       fetchLogbookStatus();
     }
   }, [role, userProfile?.schoolId]);
 
-  useEffect(() => {
-    if (location.pathname === "/notifications") {
-      fetchUnreadCount();
-    }
-  }, [location.pathname]);
-
   const handleLogout = async () => {
+    setUserOpen(false);
     await logout();
     navigate("/login");
   };
@@ -117,6 +157,56 @@ export default function DashboardLayout() {
   const toggleSection = (label) => {
     setOpenSections((prev) => ({ ...prev, [label]: !prev[label] }));
   };
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      const path = role === "admin" ? "/catalog" : "/my-requests";
+      navigate(`${path}?search=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      await api.markAllNotificationsRead();
+      if (notifData?.refetch) notifData.refetch();
+    } catch {
+      console.error("Failed to mark all notifications as read");
+    }
+  };
+
+  const handleNotifClick = useCallback(() => {
+    setNotifOpen((o) => {
+      if (!o) setUserOpen(false);
+      return !o;
+    });
+  }, []);
+
+  const handleUserClick = useCallback(() => {
+    setUserOpen((o) => {
+      if (!o) setNotifOpen(false);
+      return !o;
+    });
+  }, []);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false);
+      if (userRef.current && !userRef.current.contains(e.target)) setUserOpen(false);
+    }
+    function handleEscape(e) {
+      if (e.key === "Escape") {
+        setNotifOpen(false);
+        setUserOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
 
   if (loading || !role) {
     return (
@@ -128,10 +218,6 @@ export default function DashboardLayout() {
 
   return (
     <div className="app-layout">
-      <button className="burger-btn" onClick={() => setSidebarOpen(!sidebarOpen)}>
-        {sidebarOpen ? <FiX size={22} /> : <FiMenu size={22} />}
-      </button>
-
       <aside className={`sidebar ${collapsed ? "collapsed" : ""} ${sidebarOpen ? "active" : ""}`}>
         <div className="sidebar-header">
           <div className="sidebar-logo-wrap">
@@ -147,7 +233,7 @@ export default function DashboardLayout() {
 
         <nav>
           <ul>
-            {navSections.map((section) => {
+            {NAV_ITEMS.map((section) => {
               const visibleItems = section.items.filter((item) => item.roles.includes(role));
               if (visibleItems.length === 0) return null;
               const isOpen = openSections[section.label];
@@ -212,9 +298,102 @@ export default function DashboardLayout() {
 
       <div className={`sidebar-overlay ${sidebarOpen ? "active" : ""}`} onClick={() => setSidebarOpen(false)} />
 
-      <main className="main-content">
-        <Outlet />
-      </main>
+      <div className="main-wrap">
+        <header className="dash-header">
+          <button className="burger-btn" onClick={() => setSidebarOpen(!sidebarOpen)}>
+            {sidebarOpen ? <FiX size={22} /> : <FiMenu size={22} />}
+          </button>
+          <div className="dash-header-left">
+            <h1 className="dash-header-title">{pageTitle}</h1>
+            <span className="dash-header-date">
+              {new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" })}
+            </span>
+          </div>
+
+          <form className="dash-header-search" onSubmit={handleSearch}>
+            <MdSearch size={18} />
+            <input
+              type="text"
+              placeholder="Search anything..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </form>
+
+          <div className="dash-header-right">
+            <div className="dash-header-bell-wrap" ref={notifRef}>
+              <button className="dash-bell" onClick={handleNotifClick} title="Notifications">
+                <MdNotifications size={20} />
+                {unreadCount > 0 && <span className="dash-bell-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>}
+              </button>
+
+              {notifOpen && (
+                <div className="dash-notif-dropdown">
+                  <div className="dash-dd-header">
+                    <h4>Notifications {unreadNotifications.length > 0 && <span className="dash-dd-count">{unreadNotifications.length}</span>}</h4>
+                    {unreadNotifications.length > 0 && (
+                      <button className="dash-dd-mark-read" onClick={handleMarkAllRead}>Mark all read</button>
+                    )}
+                  </div>
+                  {notifications.length === 0 ? (
+                    <div className="dash-dd-empty">
+                      <MdNotifications size={36} />
+                      <p>No notifications yet</p>
+                    </div>
+                  ) : (
+                    <ul className="dash-dd-list">
+                      {notifications.slice(0, 8).map((notif, idx) => (
+                        <li key={notif?.id || `notif-${idx}`} className={`dash-dd-item ${notif?.read ? "" : "unread"}`} onClick={() => { setNotifOpen(false); navigate("/notifications"); }}>
+                          <div className="dash-dd-item-icon">{getNotifIcon(notif?.title)}</div>
+                          <div className="dash-dd-item-body">
+                            <div className="dash-dd-item-title">{notif?.title || "Notification"}</div>
+                            <div className="dash-dd-item-msg">{notif?.message || ""}</div>
+                          </div>
+                          <span className="dash-dd-item-time">{timeAgo(notif?.createdAt || notif?.created_at)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="dash-dd-footer">
+                    <button onClick={() => { setNotifOpen(false); navigate("/notifications"); }}>View All Notifications</button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="dash-header-user" ref={userRef} onClick={handleUserClick}>
+              <div className="dash-header-user-info">
+                <span className="dash-header-user-name">{userProfile?.name || firstName}</span>
+                <span className="dash-header-user-role">{role === "admin" ? "Administrator" : "Student"}</span>
+              </div>
+              <div className={`dash-header-avatar ${role}`}>{initials}</div>
+
+              {userOpen && (
+                <div className="dash-user-dropdown" onClick={(e) => e.stopPropagation()}>
+                  <div className="dash-ud-profile">
+                    <div className={`dash-ud-avatar ${role}`}>{initials}</div>
+                    <div className="dash-ud-name">{userProfile?.name || firstName}</div>
+                    {userProfile?.email && <div className="dash-ud-email">{userProfile.email}</div>}
+                    <span className={`dash-ud-role ${role}`}>{role === "admin" ? "Administrator" : "Student"}</span>
+                  </div>
+                  <div className="dash-ud-menu">
+                    <button className="dash-ud-menu-item" onClick={() => { setUserOpen(false); navigate("/settings"); }}>
+                      <MdTune size={18} /> Settings
+                    </button>
+                    <button className="dash-ud-menu-item danger" onClick={handleLogout}>
+                      <MdLogout size={18} /> Logout
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </header>
+
+        <main className="main-content">
+          <Outlet />
+        </main>
+      </div>
 
       <BottomNav />
     </div>

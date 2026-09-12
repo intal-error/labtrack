@@ -15,8 +15,9 @@ export default function InstallPrompt() {
       return;
     }
 
-    // Check if iOS
-    const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    // Check if iOS (including iPadOS 13+)
+    const isIOSDevice = (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream)
+      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
     setIsIOS(isIOSDevice);
 
     // Listen for beforeinstallprompt
