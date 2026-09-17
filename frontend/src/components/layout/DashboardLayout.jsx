@@ -28,7 +28,7 @@ const ROUTE_NAMES = {
   "/transactions": "Transactions",
   "/catalog": "Catalog",
   "/inventory": "Inventory",
-  "/scanner": "Scan Borrow/Return",
+  "/scanner": "Scanner",
   "/borrow-requests": "Borrow Requests",
   "/my-requests": "My Requests",
   "/maintenance": "Maintenance",
@@ -38,7 +38,6 @@ const ROUTE_NAMES = {
   "/documents": "Documents",
   "/persona": "Persona",
   "/attendance": "Attendance Logs",
-  "/attendance-scan": "Scan Attendance",
   "/my-attendance": "My Activity",
   "/usage-logs": "My Activity",
   "/reports": "Reports",
@@ -55,14 +54,13 @@ const NAV_ITEMS = [
     label: "ATTENDANCE",
     items: [
       { path: "/usage-logs", label: "My Activity", icon: MdHistory, roles: ["student"] },
-      { path: "/attendance-scan", label: "Scan Attendance", icon: MdQrCodeScanner, roles: ["student"] },
       { path: "/attendance", label: "Attendance Logs", icon: MdEventAvailable, roles: ["admin"] },
     ],
   },
   {
     label: "TOOLS",
     items: [
-      { path: "/scanner", label: "Scan Borrow/Return", icon: MdQrCodeScanner, roles: ["student"] },
+      { path: "/scanner", label: "Scanner", icon: MdQrCodeScanner, roles: ["student"] },
       { path: "/transactions", label: "Transactions", icon: FaExchangeAlt, roles: ["student", "admin"] },
       { path: "/borrow-requests", label: "Borrow Requests", icon: MdAssignment, roles: ["admin"] },
       { path: "/my-requests", label: "My Requests", icon: MdAssignment, roles: ["student"] },
@@ -263,7 +261,7 @@ export default function DashboardLayout() {
                           >
                             <span className="nav-icon"><Icon size={18} /></span>
                             {!collapsed && <span className="nav-label">{label}</span>}
-                            {path === "/attendance-scan" && !collapsed && (
+                            {path === "/scanner" && !collapsed && (
                               <span className={`logbook-dot ${logbookActive ? "active" : ""}`} />
                             )}
                             {path === "/notifications" && unreadCount > 0 && (

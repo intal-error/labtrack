@@ -16,7 +16,7 @@ const queryClient = new QueryClient({
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage"));
 const DashboardLayout = lazy(() => import("./components/layout/DashboardLayout"));
-const ScannerPage = lazy(() => import("./pages/ScannerPage"));
+const ScannerHubPage = lazy(() => import("./pages/components/ScannerHubPage"));
 const TransactionsPage = lazy(() => import("./pages/TransactionsPage"));
 const CatalogPage = lazy(() => import("./pages/CatalogPage"));
 const PersonaPage = lazy(() => import("./pages/PersonaPage"));
@@ -38,12 +38,11 @@ const AttendanceKioskPage = lazy(() => import("./pages/AttendanceKioskPage"));
 const AttendanceLogsPage = lazy(() => import("./pages/AttendanceLogsPage"));
 const RoomAttendancePage = lazy(() => import("./pages/RoomAttendancePage"));
 const MyAttendancePage = lazy(() => import("./pages/MyAttendancePage"));
-const AttendanceScannerPage = lazy(() => import("./pages/AttendanceScannerPage"));
 const InventoryPage = lazy(() => import("./pages/InventoryPage"));
 
 const routePrefetchers = {
   "/dashboard": () => import("./pages/DashboardPage"),
-  "/scanner": () => import("./pages/ScannerPage"),
+  "/scanner": () => import("./pages/components/ScannerHubPage"),
   "/transactions": () => import("./pages/TransactionsPage"),
   "/catalog": () => import("./pages/CatalogPage"),
   "/inventory": () => import("./pages/InventoryPage"),
@@ -59,7 +58,6 @@ const routePrefetchers = {
   "/settings": () => import("./components/tabs/SettingsPage"),
   "/documents": () => import("./components/tabs/DocumentsTab"),
   "/attendance/room": () => import("./pages/RoomAttendancePage"),
-  "/attendance-scan": () => import("./pages/AttendanceScannerPage"),
   "/attendance": () => import("./pages/AttendanceLogsPage"),
   "/my-attendance": () => import("./pages/MyAttendancePage"),
   "/my-requests": () => import("./pages/MyRequestsPage"),
@@ -153,7 +151,7 @@ function App() {
               <Route path="notifications" element={<NotificationsTab />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route path="documents" element={<RoleRoute allowed={["admin"]}><DocumentsTab /></RoleRoute>} />
-              <Route path="scanner" element={<RoleRoute allowed={["student"]}><ScannerPage /></RoleRoute>} />
+              <Route path="scanner" element={<RoleRoute allowed={["student"]}><ScannerHubPage /></RoleRoute>} />
               <Route path="transactions" element={<TransactionsPage />} />
               <Route path="borrowed" element={<Navigate to="/transactions" replace />} />
               <Route path="returned" element={<Navigate to="/transactions" replace />} />
@@ -171,7 +169,7 @@ function App() {
               <Route path="attendance" element={<RoleRoute allowed={["admin"]}><AttendanceLogsPage /></RoleRoute>} />
               <Route path="attendance/room/:roomId" element={<RoleRoute allowed={["admin"]}><RoomAttendancePage /></RoleRoute>} />
               <Route path="my-attendance" element={<RoleRoute allowed={["student"]}><MyAttendancePage /></RoleRoute>} />
-              <Route path="attendance-scan" element={<RoleRoute allowed={["student"]}><AttendanceScannerPage /></RoleRoute>} />
+              <Route path="attendance-scan" element={<Navigate to="/scanner?tab=attendance" replace />} />
               <Route path="my-requests" element={<MyRequestsPage />} />
               <Route path="profile" element={<Navigate to="/settings" replace />} />
 

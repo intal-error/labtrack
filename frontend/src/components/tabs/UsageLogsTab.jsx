@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { useMyBorrowed, useMyReturned, useStudentAttendance } from "../../hooks/useQueries";
@@ -58,6 +59,7 @@ function getDueProgress(borrowedAt, dueDate) {
 }
 
 export default function UsageLogsTab() {
+  const navigate = useNavigate();
   const { userProfile } = useAuth();
   const [tab, setTab] = useState("borrowed");
   const [search, setSearch] = useState("");
@@ -243,9 +245,9 @@ export default function UsageLogsTab() {
               <h3>{search || filterSubject || filterDate ? "No matching records" : "No attendance logs yet"}</h3>
               <p>{search || filterSubject || filterDate ? "Try adjusting your search or filters" : "Scan a room QR code to start logging your attendance"}</p>
               {!search && !filterSubject && !filterDate && (
-                <a href="/attendance-scan" className="activity-empty-link">
+                <button className="activity-empty-link" onClick={() => navigate("/scanner?tab=attendance")}>
                   <MdQrCodeScanner size={14} /> Go to Scanner
-                </a>
+                </button>
               )}
             </div>
           ) : (

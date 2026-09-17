@@ -60,13 +60,13 @@ export default function MyAttendancePage() {
 
   return (
     <div className="attendance-page">
-      <button className="hero-action-btn ghost" onClick={() => navigate("/attendance-scan")}>
+      <button className="hero-action-btn ghost" onClick={() => navigate("/scanner?tab=attendance")}>
         <MdQrCodeScanner size={16} /> Scan Attendance
       </button>
 
       <div className="attendance-shell">
         {/* Quick Scan */}
-        <button className="logbook-quick-scan" onClick={() => navigate("/attendance-scan")}>
+        <button className="logbook-quick-scan" onClick={() => navigate("/scanner?tab=attendance")}>
           <MdQrCodeScanner size={18} />
           Scan Attendance
         </button>
@@ -125,7 +125,7 @@ export default function MyAttendancePage() {
             </div>
             <h3>No Logs Yet</h3>
             <p>Scan a room QR code to start logging your attendance</p>
-            <button className="scan-attendance-btn" onClick={() => navigate("/attendance-scan")} style={{ marginTop: 8 }}>
+            <button className="scan-attendance-btn" onClick={() => navigate("/scanner?tab=attendance")} style={{ marginTop: 8 }}>
               <MdQrCodeScanner size={16} /> Scan Attendance
             </button>
           </div>
