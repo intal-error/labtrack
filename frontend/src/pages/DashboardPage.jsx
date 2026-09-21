@@ -3,11 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
   useMyBorrowed,
-  useMyReturned,
   useMyBorrowRequests,
   useBorrowRequests,
   useReportSummary,
-  useMyNotifications,
+  useStudentAttendance,
   useMyFines,
 } from "../hooks/useQueries";
 import { toDate } from "../utils/helpers";
@@ -19,49 +18,32 @@ import {
   MdSwapHoriz,
   MdAssignment,
   MdWarning,
-  MdNotifications,
-  MdCheckCircle,
-  MdErrorOutline,
-  MdInfoOutline,
   MdArrowForward,
   MdEventBusy,
   MdInventory2,
   MdPeople,
   MdEventAvailable,
   MdBuild,
-  MdNotificationsActive,
   MdAttachMoney,
 } from "react-icons/md";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 import "../styles/pages/dashboard.css";
-
-function getGreeting() {
-  const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
-}
 
 function formatShortDate(date) {
   const d = toDate(date);
   if (!d) return "—";
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
-
-const NOTIF_ICONS = {
-  success: MdCheckCircle,
-  alert: MdErrorOutline,
-  overdue: MdWarning,
-  warning: MdWarning,
-  info: MdInfoOutline,
-};
-
-const NOTIF_COLORS = {
-  success: "#43A047",
-  alert: "#d32f2f",
-  overdue: "#d32f2f",
-  warning: "#f57c00",
-  info: "#1565c0",
-};
 
 function LoadingState() {
   return (
@@ -78,25 +60,14 @@ function LoadingState() {
 /* ═══════════════════════════════════════════════ */
 function StudentDashboard() {
   const navigate = useNavigate();
-  const { user, userProfile } = useAuth();
-  const firstName =
-    userProfile?.firstName ||
-    user?.displayName?.split(" ")[0] ||
-    "there";
+  const { userProfile } = useAuth();
 
   const { data: borrowedData, isLoading: borrowedLoading } = useMyBorrowed();
-  const { data: returnedData } = useMyReturned();
-  const { data: notifData } = useMyNotifications();
   const { data: myRequestsData } = useMyBorrowRequests();
   const { data: finesData } = useMyFines();
+  const { data: attendanceData } = useStudentAttendance(userProfile?.schoolId);
 
   const borrowed = useMemo(() => borrowedData || [], [borrowedData]);
-  const returned = useMemo(() => returnedData || [], [returnedData]);
-  const notifs = useMemo(() => {
-    if (!notifData) return [];
-    const raw = notifData?.data;
-    return Array.isArray(raw) ? raw : Array.isArray(notifData) ? notifData : [];
-  }, [notifData]);
   const myRequests = useMemo(() => myRequestsData || [], [myRequestsData]);
   const fines = useMemo(() => finesData || [], [finesData]);
 
@@ -117,6 +88,9 @@ function StudentDashboard() {
     () => fines.filter((f) => f.status === "unpaid"),
     [fines]
   );
+
+  const attendanceSummary = attendanceData?.summary || {};
+  const totalSessions = attendanceSummary.totalSessions || 0;
 
   const stats = [
     {
@@ -147,16 +121,16 @@ function StudentDashboard() {
       icon: MdAttachMoney,
       tone: "blue",
     },
+    {
+      key: "sessions",
+      label: "Lab Sessions",
+      value: totalSessions,
+      icon: MdEventAvailable,
+      tone: "teal",
+    },
   ];
 
   const quickActions = [
-    {
-      label: "Scan to Borrow",
-      desc: "Scan equipment QR code",
-      icon: MdQrCodeScanner,
-      path: "/scanner",
-      primary: true,
-    },
     {
       label: "My Requests",
       desc: "Track borrow requests",
@@ -177,24 +151,44 @@ function StudentDashboard() {
     },
   ];
 
-  const unreadCount = notifs.filter((n) => !n.read).length;
-  const displayedUnread = notifs.slice(0, 5).filter((n) => !n.read).length;
-  const remainingUnread = unreadCount - displayedUnread;
-
   if (borrowedLoading) return <LoadingState />;
 
   return (
     <div className="dash-page">
-      {/* Greeting */}
-      <div className="dash-greeting">
-        <h1>{getGreeting()}, <span style={{ color: "#a5d6a7" }}>{firstName}</span></h1>
-        <p>Here's what's happening with your equipment today.</p>
+      {/* Hero Actions */}
+      <div className="dash-hero-actions">
+        <button
+          className="dash-hero-action primary"
+          onClick={() => navigate("/scanner")}
+        >
+          <span className="dash-hero-icon">
+            <MdQrCodeScanner size={28} />
+          </span>
+          <div className="dash-hero-text">
+            <span className="dash-hero-label">Scan to Borrow</span>
+            <span className="dash-hero-desc">Scan equipment QR code</span>
+          </div>
+          <MdArrowForward size={18} className="dash-hero-arrow" />
+        </button>
+        <button
+          className="dash-hero-action secondary"
+          onClick={() => navigate("/scanner?tab=attendance")}
+        >
+          <span className="dash-hero-icon">
+            <MdEventAvailable size={28} />
+          </span>
+          <div className="dash-hero-text">
+            <span className="dash-hero-label">Log Attendance</span>
+            <span className="dash-hero-desc">Sign in to lab room</span>
+          </div>
+          <MdArrowForward size={18} className="dash-hero-arrow" />
+        </button>
       </div>
 
       {/* Stats */}
       <div className="dash-stats">
         {stats.map(({ key, label, value, icon: Icon, tone }) => (
-          <div className="dash-stat" key={key}>
+          <div className={`dash-stat ${key}`} key={key}>
             <span className={`dash-stat-icon ${tone}`}>
               <Icon size={22} />
             </span>
@@ -208,10 +202,10 @@ function StudentDashboard() {
 
       {/* Quick Actions */}
       <div className="dash-actions">
-        {quickActions.map(({ label, desc, icon: Icon, path, primary }) => (
+        {quickActions.map(({ label, desc, icon: Icon, path }) => (
           <button
             key={path}
-            className={`dash-action${primary ? " primary" : ""}`}
+            className="dash-action"
             onClick={() => navigate(path)}
           >
             <span className="dash-action-icon">
@@ -225,134 +219,6 @@ function StudentDashboard() {
           </button>
         ))}
       </div>
-
-      {/* Panels */}
-      <div className="dash-panels">
-        {/* My Current Borrows */}
-        <div className="dash-panel">
-          <div className="dash-panel-header">
-            <h3>
-              <MdHistory size={18} /> My Current Borrows
-            </h3>
-            <button
-              className="dash-panel-link"
-              onClick={() => navigate("/usage-logs")}
-            >
-              View all <MdArrowForward size={13} />
-            </button>
-          </div>
-
-          {overdueItems.length > 0 && (
-            <div className="dash-overdue-alert">
-              <MdWarning size={16} />
-              <span>
-                You have <strong>{overdueItems.length}</strong> overdue item
-                {overdueItems.length > 1 ? "s" : ""} — return them to avoid
-                fines.
-              </span>
-            </div>
-          )}
-
-          {borrowed.length === 0 ? (
-            <div className="dash-empty">
-              <MdInventory size={32} />
-              <p>You haven't borrowed anything yet</p>
-              <button onClick={() => navigate("/scanner")}>
-                Scan to borrow
-              </button>
-            </div>
-          ) : (
-            <div className="dash-table-wrap">
-              <table className="dash-table">
-                <thead>
-                  <tr>
-                    <th>Item</th>
-                    <th>Qty</th>
-                    <th>Due Date</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {borrowed.slice(0, 6).map((item, i) => {
-                    const due = toDate(item.dueDate);
-                    const isOverdue = due && due < new Date();
-                    return (
-                      <tr key={item.id || i}>
-                        <td style={{ fontWeight: 600 }}>
-                          {item.itemName || "—"}
-                        </td>
-                        <td>{item.quantity || 1}</td>
-                        <td>{formatShortDate(item.dueDate)}</td>
-                        <td>
-                          <span
-                            className={`dash-badge ${isOverdue ? "overdue" : "borrowed"}`}
-                          >
-                            {isOverdue ? "Overdue" : "Borrowed"}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* Notifications */}
-        <div className="dash-panel">
-          <div className="dash-panel-header">
-            <h3>
-              <MdNotificationsActive size={18} /> Notifications
-            </h3>
-            <button
-              className="dash-panel-link"
-              onClick={() => navigate("/notifications")}
-            >
-              View all <MdArrowForward size={13} />
-            </button>
-          </div>
-
-          {notifs.length === 0 ? (
-            <div className="dash-empty">
-              <MdNotifications size={32} />
-              <p>No notifications right now</p>
-            </div>
-          ) : (
-            <ul className="dash-notif-list">
-              {notifs.slice(0, 5).map((n) => {
-                const Icon = NOTIF_ICONS[n.type] || MdInfoOutline;
-                const color = NOTIF_COLORS[n.type] || NOTIF_COLORS.info;
-                return (
-                  <li
-                    key={n.id}
-                    className={`dash-notif-item${n.read ? "" : " unread"}`}
-                    onClick={() => navigate("/notifications")}
-                  >
-                    <span className="dash-notif-icon" style={{ color }}>
-                      <Icon size={17} />
-                    </span>
-                    <div className="dash-notif-body">
-                      <span className="dash-notif-title">
-                        {n.title || "Announcement"}
-                      </span>
-                      <span className="dash-notif-msg">{n.message}</span>
-                    </div>
-                  </li>
-                );
-              })}
-              {remainingUnread > 0 && (
-                <li
-                  className="dash-notif-more"
-                  onClick={() => navigate("/notifications")}
-                >
-                  +{remainingUnread} more unread
-                </li>
-              )}
-            </ul>
-          )}
-        </div>
-      </div>
     </div>
   );
 }
@@ -362,14 +228,8 @@ function StudentDashboard() {
 /* ═══════════════════════════════════════════════ */
 function AdminDashboard() {
   const navigate = useNavigate();
-  const { user, userProfile } = useAuth();
-  const firstName =
-    userProfile?.firstName ||
-    user?.displayName?.split(" ")[0] ||
-    "there";
 
   const { data: rawData, isLoading: reportLoading } = useReportSummary();
-  const { data: notifData } = useMyNotifications();
   const { data: borrowRequestsData } = useBorrowRequests({ status: "pending" });
 
   const summary = useMemo(
@@ -378,17 +238,10 @@ function AdminDashboard() {
         counts: {},
         charts: {},
         stats: {},
-        borrowed: [],
-        returned: [],
       },
     [rawData]
   );
 
-  const notifs = useMemo(() => {
-    if (!notifData) return [];
-    const raw = notifData?.data;
-    return Array.isArray(raw) ? raw : Array.isArray(notifData) ? notifData : [];
-  }, [notifData]);
   const pendingRequests = useMemo(
     () => (borrowRequestsData || []).slice(0, 5),
     [borrowRequestsData]
@@ -456,22 +309,6 @@ function AdminDashboard() {
     },
   ];
 
-  const overdueItems = useMemo(() => {
-    const now = new Date();
-    return (summary.borrowed || [])
-      .filter((b) => {
-        const due = toDate(b.dueDate);
-        return due && due < now;
-      })
-      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
-      .slice(0, 5);
-  }, [summary.borrowed]);
-
-  const recentTransactions = useMemo(
-    () => (summary.borrowed || []).slice(0, 5),
-    [summary.borrowed]
-  );
-
   const quickActions = [
     {
       label: "Catalog",
@@ -499,24 +336,18 @@ function AdminDashboard() {
     },
   ];
 
-  const unreadCount = notifs.filter((n) => !n.read).length;
-  const displayedUnread = notifs.slice(0, 5).filter((n) => !n.read).length;
-  const remainingUnread = unreadCount - displayedUnread;
+  const categoryData = summary.charts?.categoryData || [];
+  const topBorrowedData = summary.charts?.topBorrowedData || [];
+  const hasCharts = categoryData.length > 0 || topBorrowedData.length > 0;
 
   if (reportLoading) return <LoadingState />;
 
   return (
     <div className="dash-page">
-      {/* Greeting */}
-      <div className="dash-greeting">
-        <h1>{getGreeting()}, <span style={{ color: "#a5d6a7" }}>{firstName}</span></h1>
-        <p>Here's your laboratory overview for today.</p>
-      </div>
-
       {/* Stats */}
       <div className="dash-stats">
         {stats.map(({ key, label, value, icon: Icon, tone, detail }) => (
-          <div className="dash-stat" key={key}>
+          <div className={`dash-stat ${key}`} key={key}>
             <span className={`dash-stat-icon ${tone}`}>
               <Icon size={22} />
             </span>
@@ -551,134 +382,100 @@ function AdminDashboard() {
         ))}
       </div>
 
-      {/* Panels */}
-      <div className="dash-panels">
-        {/* Recent Transactions */}
-        <div className="dash-panel">
-          <div className="dash-panel-header">
-            <h3>
-              <MdSwapHoriz size={18} /> Recent Transactions
-            </h3>
-            <button
-              className="dash-panel-link"
-              onClick={() => navigate("/transactions")}
-            >
-              View all <MdArrowForward size={13} />
-            </button>
-          </div>
-
-          {overdueItems.length > 0 && (
-            <div className="dash-overdue-alert">
-              <MdWarning size={16} />
-              <span>
-                <strong>{overdueItems.length}</strong> overdue item
-                {overdueItems.length > 1 ? "s" : ""} require attention
-              </span>
-            </div>
-          )}
-
-          {recentTransactions.length === 0 ? (
-            <div className="dash-empty">
-              <MdSwapHoriz size={32} />
-              <p>No transactions yet</p>
-              <button onClick={() => navigate("/transactions")}>
-                Open transactions
-              </button>
-            </div>
-          ) : (
-            <div className="dash-table-wrap">
-              <table className="dash-table">
-                <thead>
-                  <tr>
-                    <th>Borrower</th>
-                    <th>Item</th>
-                    <th>Action</th>
-                    <th>Due</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentTransactions.map((t, i) => {
-                    const due = toDate(t.dueDate);
-                    const isOverdue = due && due < new Date();
-                    return (
-                      <tr key={t.id || i}>
-                        <td style={{ fontWeight: 600 }}>
-                          {t.firstName
-                            ? `${t.firstName} ${t.lastName || ""}`
-                            : t.userName || "—"}
-                        </td>
-                        <td>{t.itemName || "—"}</td>
-                        <td>
-                          <span
-                            className={`dash-badge ${isOverdue ? "overdue" : "borrowed"}`}
-                          >
-                            {t.action || "borrowed"}
-                          </span>
-                        </td>
-                        <td>{formatShortDate(t.dueDate)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* Notifications */}
-        <div className="dash-panel">
-          <div className="dash-panel-header">
-            <h3>
-              <MdNotificationsActive size={18} /> Notifications
-            </h3>
-            <button
-              className="dash-panel-link"
-              onClick={() => navigate("/notifications")}
-            >
-              View all <MdArrowForward size={13} />
-            </button>
-          </div>
-
-          {notifs.length === 0 ? (
-            <div className="dash-empty">
-              <MdNotifications size={32} />
-              <p>No notifications right now</p>
-            </div>
-          ) : (
-            <ul className="dash-notif-list">
-              {notifs.slice(0, 5).map((n) => {
-                const Icon = NOTIF_ICONS[n.type] || MdInfoOutline;
-                const color = NOTIF_COLORS[n.type] || NOTIF_COLORS.info;
-                return (
-                  <li
-                    key={n.id}
-                    className={`dash-notif-item${n.read ? "" : " unread"}`}
-                    onClick={() => navigate("/notifications")}
-                  >
-                    <span className="dash-notif-icon" style={{ color }}>
-                      <Icon size={17} />
+      {/* Charts */}
+      {hasCharts && (
+        <div className="dash-charts">
+          {categoryData.length > 0 && (
+            <div className="dash-chart-card">
+              <h3 className="dash-chart-title">
+                <MdInventory2 size={18} /> Items by Category
+              </h3>
+              <div className="dash-chart-body">
+                <ResponsiveContainer width="100%" height={220}>
+                  <PieChart>
+                    <Pie
+                      data={categoryData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={85}
+                      paddingAngle={3}
+                      dataKey="value"
+                    >
+                      {categoryData.map((_, i) => (
+                        <Cell
+                          key={i}
+                          fill={["#2e7d32", "#43a047", "#66bb6a", "#81c784", "#a5d6a7", "#1b5e20", "#388e3c", "#4caf50"][i % 8]}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        background: "var(--bg-card)",
+                        border: "1px solid var(--border)",
+                        borderRadius: 8,
+                        fontSize: 12,
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="dash-chart-legend">
+                  {categoryData.map((item, i) => (
+                    <span key={i} className="dash-legend-item">
+                      <span
+                        className="dash-legend-dot"
+                        style={{ background: ["#2e7d32", "#43a047", "#66bb6a", "#81c784", "#a5d6a7", "#1b5e20", "#388e3c", "#4caf50"][i % 8] }}
+                      />
+                      {item.name} ({item.value})
                     </span>
-                    <div className="dash-notif-body">
-                      <span className="dash-notif-title">
-                        {n.title || "Announcement"}
-                      </span>
-                      <span className="dash-notif-msg">{n.message}</span>
-                    </div>
-                  </li>
-                );
-              })}
-              {remainingUnread > 0 && (
-                <li
-                  className="dash-notif-more"
-                  onClick={() => navigate("/notifications")}
-                >
-                  +{remainingUnread} more unread
-                </li>
-              )}
-            </ul>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {topBorrowedData.length > 0 && (
+            <div className="dash-chart-card">
+              <h3 className="dash-chart-title">
+                <MdHistory size={18} /> Top Borrowed Items
+              </h3>
+              <div className="dash-chart-body">
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart
+                    data={topBorrowedData}
+                    layout="vertical"
+                    margin={{ left: 10, right: 20, top: 0, bottom: 0 }}
+                  >
+                    <XAxis type="number" tick={{ fontSize: 11 }} />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      width={100}
+                      tick={{ fontSize: 11 }}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: "var(--bg-card)",
+                        border: "1px solid var(--border)",
+                        borderRadius: 8,
+                        fontSize: 12,
+                      }}
+                    />
+                    <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={18}>
+                      {topBorrowedData.map((_, i) => (
+                        <Cell
+                          key={i}
+                          fill={["#2e7d32", "#43a047", "#66bb6a", "#81c784", "#a5d6a7"][i % 5]}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
           )}
         </div>
-      </div>
+      )}
 
       {/* Pending Requests Row */}
       {pendingRequests.length > 0 && (
