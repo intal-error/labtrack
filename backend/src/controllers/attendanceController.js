@@ -148,7 +148,7 @@ const timeIn = async (req, res) => {
 
 const timeOut = async (req, res) => {
   try {
-    const { schoolId } = req.body;
+    const { schoolId, roomCode } = req.body;
     if (!schoolId) return res.status(400).json({ error: "Student ID is required" });
 
     const today = getTodayString();
@@ -163,6 +163,19 @@ const timeOut = async (req, res) => {
 
     if (!activeDoc) {
       return res.status(400).json({ error: "No active session found. Please time in first." });
+    }
+
+    if (activeDoc.room_code && !roomCode) {
+      return res.status(400).json({ error: "Room code is required for sign-out." });
+    }
+
+    if (roomCode && activeDoc.room_code) {
+      const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      if (norm(roomCode) !== norm(activeDoc.room_code)) {
+        return res.status(400).json({
+          error: `Cannot sign out from a different room. Please sign out from ${activeDoc.lab_room || "the correct room"}.`,
+        });
+      }
     }
 
     const timeInDate = new Date(activeDoc.time_in);
@@ -562,7 +575,7 @@ const updateRecord = async (req, res) => {
       .single();
     if (fetchError || !existing) return res.status(404).json({ error: "Record not found" });
 
-    const allowed = ["subject", "professor", "lab_room", "room_code", "time_in", "time_out", "total_duration", "status"];
+    const allowed = ["subject", "professor", "lab_room", "room_code", "time_in", "time_out", "total_duration"];
     const sanitized = {};
     const fieldMap = {
       subject: "subject",
@@ -572,7 +585,6 @@ const updateRecord = async (req, res) => {
       timeIn: "time_in",
       timeOut: "time_out",
       totalDuration: "total_duration",
-      status: "status",
     };
     for (const key of allowed) {
       const bodyKey = Object.keys(fieldMap).find((k) => fieldMap[k] === key) || key;
@@ -955,6 +967,19 @@ const autoScan = async (req, res) => {
     const activeSession = studentRecords.find((r) => r.status === "active");
 
     if (activeSession) {
+      if (activeSession.room_code && !roomCode) {
+        return res.status(400).json({ error: "Room code is required for sign-out." });
+      }
+
+      if (roomCode && activeSession.room_code) {
+        const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+        if (norm(roomCode) !== norm(activeSession.room_code)) {
+          return res.status(400).json({
+            error: `Cannot sign out from a different room. Please sign out from ${activeSession.lab_room || "the correct room"}.`,
+          });
+        }
+      }
+
       const timeInDate = new Date(activeSession.time_in);
       if (Number.isNaN(timeInDate.getTime())) {
         return res.status(500).json({ error: "Invalid time-in record. Cannot calculate duration." });

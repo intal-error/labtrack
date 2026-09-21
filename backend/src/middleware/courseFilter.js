@@ -7,6 +7,8 @@ const { db } = require("../config/firebase");
  */
 async function courseFilter(req, res, next) {
   try {
+    if (!req.user) return next();
+
     const uid = req.user.uid;
     const role = req.user.role;
 

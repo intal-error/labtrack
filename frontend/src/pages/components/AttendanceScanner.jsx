@@ -72,7 +72,7 @@ export default function AttendanceScanner() {
     if (!schoolId) { setLogsLoading(false); return; }
     try {
       const data = await api.getStudentAttendance(schoolId);
-      setRecentLogs(Array.isArray(data) ? data.slice(0, 8) : []);
+      setRecentLogs((data.records || []).slice(0, 8));
     } catch {
       // silent
     } finally {
@@ -84,10 +84,12 @@ export default function AttendanceScanner() {
     const t = text.trim();
     if (t.startsWith("LABROOM:")) {
       const code = t.replace("LABROOM:", "").trim();
-      return { code, name: code.replace(/-/g, " ").trim() };
+      const normalizedCode = code.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      return { code: normalizedCode, name: code.replace(/-/g, " ").trim() };
     }
     if (t.includes("lab") || t.includes("room") || t.includes("computer")) {
-      return { code: t.toLowerCase().replace(/[^a-z0-9]+/g, "-"), name: t };
+      const normalizedCode = t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      return { code: normalizedCode, name: t };
     }
     return null;
   };
@@ -119,15 +121,17 @@ export default function AttendanceScanner() {
       setTxStatusType("error");
       return;
     }
+    const normalizedCode = codeInput.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     const name = codeInput.replace(/-/g, " ").trim();
+    setRoomCode(normalizedCode);
     setLabRoom(name);
-    setRoomResult({ code: codeInput, name });
+    setRoomResult({ code: normalizedCode, name });
     setTxStatus("Room found.");
     setTxStatusType("success");
     setStep1Collapsed(true);
 
     if (!isTimeIn) {
-      handleTimeOut(codeInput, name);
+      handleTimeOut(normalizedCode, name);
     }
   };
 
@@ -141,7 +145,7 @@ export default function AttendanceScanner() {
     setTxStatus("Recording time-out...");
     setTxStatusType("");
     try {
-      const result = await api.timeOut({ schoolId });
+      const result = await api.timeOut({ schoolId, roomCode: code || roomCode });
       setResultData(result.record);
       setTxStatus("");
       toast.success("Time-out recorded!");

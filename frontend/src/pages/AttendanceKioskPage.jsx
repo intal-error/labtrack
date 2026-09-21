@@ -139,7 +139,7 @@ export default function AttendanceKioskPage() {
         subject,
         professor,
         labRoom: roomName,
-        roomCode: roomName.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+        roomCode: roomName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
       });
       setResultData(result.record);
       setStep(STEPS.SUCCESS);
@@ -155,7 +155,10 @@ export default function AttendanceKioskPage() {
     if (!schoolIdInput) return;
     setSubmitting(true);
     try {
-      const result = await api.timeOut({ schoolId: schoolIdInput });
+      const result = await api.timeOut({
+        schoolId: schoolIdInput,
+        roomCode: roomName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+      });
       setResultData(result.record);
       setStep(STEPS.SUCCESS);
     } catch (err) {
