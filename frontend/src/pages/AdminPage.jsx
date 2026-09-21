@@ -285,14 +285,14 @@ export default function AdminPage() {
                 <div className="lab-form-field">
                   <label>First Name <span className="lab-required" /></label>
                   <div className="lab-input-wrap">
-                    <input type="text" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} required placeholder="First name" />
+                    <input type="text" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} required />
                     <MdEdit size={16} />
                   </div>
                 </div>
                 <div className="lab-form-field">
                   <label>Last Name <span className="lab-required" /></label>
                   <div className="lab-input-wrap">
-                    <input type="text" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} required placeholder="Last name" />
+                    <input type="text" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} required />
                     <MdEdit size={16} />
                   </div>
                 </div>
@@ -300,7 +300,7 @@ export default function AdminPage() {
               <div className="lab-form-field">
                 <label>Email <span className="lab-required" /></label>
                 <div className="lab-input-wrap">
-                  <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required placeholder="Email address" disabled={!!editing} />
+                  <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required disabled={!!editing} />
                   <MdEmail size={16} />
                 </div>
               </div>
@@ -330,14 +330,14 @@ export default function AdminPage() {
                 <div className="lab-form-field">
                   <label>Contact</label>
                   <div className="lab-input-wrap">
-                    <input type="text" value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} placeholder="Contact number" />
+                    <input type="text" value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} />
                     <MdPhone size={16} />
                   </div>
                 </div>
                 <div className="lab-form-field">
                   <label>Position</label>
                   <div className="lab-input-wrap">
-                    <input type="text" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} placeholder="Position" />
+                    <input type="text" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} />
                     <MdWork size={16} />
                   </div>
                 </div>

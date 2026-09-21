@@ -264,7 +264,6 @@ export default function AttendanceKioskPage() {
               <label>School ID *</label>
               <input
                 type="text"
-                placeholder="Enter School ID"
                 value={schoolIdInput}
                 onChange={(e) => setSchoolIdInput(e.target.value)}
               />
@@ -284,7 +283,6 @@ export default function AttendanceKioskPage() {
               <label>Professor / Instructor *</label>
               <input
                 type="text"
-                placeholder="Enter professor name"
                 value={professor}
                 onChange={(e) => setProfessor(e.target.value)}
               />
@@ -321,7 +319,6 @@ export default function AttendanceKioskPage() {
               <label>School ID *</label>
               <input
                 type="text"
-                placeholder="Enter School ID"
                 value={schoolIdInput}
                 onChange={(e) => setSchoolIdInput(e.target.value)}
                 autoFocus

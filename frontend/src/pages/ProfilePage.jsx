@@ -244,7 +244,7 @@ export default function ProfilePage() {
                     type="text"
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
-                    placeholder="Enter first name"
+                    placeholder=""
                   />
                 </div>
                 <div className="profile-field">
@@ -253,7 +253,7 @@ export default function ProfilePage() {
                     type="text"
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
-                    placeholder="Enter last name"
+                    placeholder=""
                   />
                 </div>
                 <div className="profile-field">
@@ -262,7 +262,7 @@ export default function ProfilePage() {
                     type="text"
                     value={contact}
                     onChange={(e) => setContact(e.target.value)}
-                    placeholder="Enter contact number"
+                    placeholder=""
                   />
                 </div>
                 <div className="profile-field">
@@ -319,7 +319,7 @@ export default function ProfilePage() {
                       type={showCurrent ? "text" : "password"}
                       value={currentPassword}
                       onChange={(e) => setCurrentPassword(e.target.value)}
-                      placeholder="Enter current password"
+                      placeholder=""
                     />
                     <button type="button" className="password-toggle" onClick={() => setShowCurrent(!showCurrent)} tabIndex={-1}>
                       {showCurrent ? <MdVisibilityOff size={18} /> : <MdVisibility size={18} />}
@@ -333,7 +333,7 @@ export default function ProfilePage() {
                       type={showNew ? "text" : "password"}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Enter new password"
+                      placeholder=""
                     />
                     <button type="button" className="password-toggle" onClick={() => setShowNew(!showNew)} tabIndex={-1}>
                       {showNew ? <MdVisibilityOff size={18} /> : <MdVisibility size={18} />}
@@ -355,7 +355,7 @@ export default function ProfilePage() {
                     type={showNew ? "text" : "password"}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Confirm new password"
+                    placeholder=""
                   />
                   {confirmPassword && confirmPassword !== newPassword && (
                     <span className="field-hint" style={{ color: "var(--red)" }}>Passwords do not match</span>

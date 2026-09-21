@@ -215,13 +215,13 @@ export default function SettingsTab() {
             <MdDarkMode size={20} />
             <h3>Appearance</h3>
           </div>
-          <label className="settings-row">
+          <div className="settings-row">
             <div className="settings-row-info">
               <span className="settings-row-label">Dark Mode</span>
               <span className="settings-row-desc">Switch between light and dark themes</span>
             </div>
             <div className={`toggle ${dark ? "on" : ""}`} onClick={toggleTheme} />
-          </label>
+          </div>
         </div>
 
         <div className="settings-section">
@@ -230,13 +230,13 @@ export default function SettingsTab() {
             <h3>Notifications</h3>
           </div>
           {["emailNotifications", "autoBackup"].map((key) => (
-            <label key={key} className="settings-row">
+            <div key={key} className="settings-row">
               <div className="settings-row-info">
                 <span className="settings-row-label">{SETTING_META[key].label}</span>
                 <span className="settings-row-desc">{SETTING_META[key].desc}</span>
               </div>
               <div className={`toggle ${settings[key] ? "on" : ""}`} onClick={() => handleToggle(key)} />
-            </label>
+            </div>
           ))}
         </div>
 
@@ -246,7 +246,7 @@ export default function SettingsTab() {
             <h3>Security</h3>
           </div>
           {["requirePasswordChange", "maintenanceMode"].map((key) => (
-            <label key={key} className={`settings-row ${SETTING_META[key]?.critical && settings[key] ? "critical-active" : ""}`}>
+            <div key={key} className={`settings-row ${SETTING_META[key]?.critical && settings[key] ? "critical-active" : ""}`}>
               <div className="settings-row-info">
                 <span className="settings-row-label">
                   {SETTING_META[key].label}
@@ -257,9 +257,9 @@ export default function SettingsTab() {
                 <span className="settings-row-desc">{SETTING_META[key].desc}</span>
               </div>
               <div className={`toggle ${settings[key] ? "on" : ""}`} onClick={() => handleToggle(key)} />
-            </label>
+            </div>
           ))}
-          <label className="settings-row settings-row-select">
+          <div className="settings-row settings-row-select">
             <div className="settings-row-info">
               <span className="settings-row-label">{SETTING_META.sessionTimeout.label}</span>
               <span className="settings-row-desc">{SETTING_META.sessionTimeout.desc}</span>
@@ -273,8 +273,8 @@ export default function SettingsTab() {
               <option value={60}>1 hour</option>
               <option value={120}>2 hours</option>
             </select>
-          </label>
-          <label className="settings-row settings-row-select">
+          </div>
+          <div className="settings-row settings-row-select">
             <div className="settings-row-info">
               <span className="settings-row-label">{SETTING_META.maxLoginAttempts.label}</span>
               <span className="settings-row-desc">{SETTING_META.maxLoginAttempts.desc}</span>
@@ -287,7 +287,7 @@ export default function SettingsTab() {
               <option value={5}>5 attempts</option>
               <option value={10}>10 attempts</option>
             </select>
-          </label>
+          </div>
         </div>
 
         <div className="settings-section">
@@ -295,14 +295,14 @@ export default function SettingsTab() {
             <MdPeople size={20} />
             <h3>Role Management</h3>
           </div>
-          <label className="settings-row">
+          <div className="settings-row">
             <div className="settings-row-info">
               <span className="settings-row-label">{SETTING_META.allowStudentRegistration.label}</span>
               <span className="settings-row-desc">{SETTING_META.allowStudentRegistration.desc}</span>
             </div>
             <div className={`toggle ${settings.allowStudentRegistration ? "on" : ""}`} onClick={() => handleToggle("allowStudentRegistration")} />
-          </label>
-          <label className="settings-row settings-row-select">
+          </div>
+          <div className="settings-row settings-row-select">
             <div className="settings-row-info">
               <span className="settings-row-label">{SETTING_META.defaultRole.label}</span>
               <span className="settings-row-desc">{SETTING_META.defaultRole.desc}</span>
@@ -313,7 +313,7 @@ export default function SettingsTab() {
             >
               <option value="Student">Student</option>
             </select>
-          </label>
+          </div>
         </div>
 
         <div className="settings-section">
@@ -321,7 +321,7 @@ export default function SettingsTab() {
             <PesoIcon size={20} />
             <h3>Fine Management</h3>
           </div>
-          <label className="settings-row settings-row-select">
+          <div className="settings-row settings-row-select">
             <div className="settings-row-info">
               <span className="settings-row-label">Fine Per Day</span>
               <span className="settings-row-desc">Amount charged per day for overdue items (PHP)</span>
@@ -330,8 +330,8 @@ export default function SettingsTab() {
               <span style={{ color: "var(--text-muted)" }}>₱</span>
               <input type="number" min="0" value={settings.finePerDay} onChange={(e) => handleChange("finePerDay", Number(e.target.value))} style={{ width: 80, padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)" }} />
             </div>
-          </label>
-          <label className="settings-row settings-row-select">
+          </div>
+          <div className="settings-row settings-row-select">
             <div className="settings-row-info">
               <span className="settings-row-label">Restriction Threshold</span>
               <span className="settings-row-desc">Block borrowing when unpaid fines reach this amount (PHP)</span>
@@ -340,7 +340,7 @@ export default function SettingsTab() {
               <span style={{ color: "var(--text-muted)" }}>₱</span>
               <input type="number" min="0" value={settings.fineRestrictionThreshold} onChange={(e) => handleChange("fineRestrictionThreshold", Number(e.target.value))} style={{ width: 80, padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)" }} />
             </div>
-          </label>
+          </div>
         </div>
 
         <div className="settings-section">

@@ -406,14 +406,14 @@ export default function MaintenanceTab() {
                 <div className="lab-form-field">
                   <label>Inspected By</label>
                   <div className="lab-input-wrap">
-                    <input type="text" value={form.inspectedBy} onChange={(e) => setForm({ ...form, inspectedBy: e.target.value })} placeholder="Name" />
+                    <input type="text" value={form.inspectedBy} onChange={(e) => setForm({ ...form, inspectedBy: e.target.value })} />
                     <MdAssignment size={16} />
                   </div>
                 </div>
                 <div className="lab-form-field">
                   <label>Noted By</label>
                   <div className="lab-input-wrap">
-                    <input type="text" value={form.notedBy} onChange={(e) => setForm({ ...form, notedBy: e.target.value })} placeholder="Name" />
+                    <input type="text" value={form.notedBy} onChange={(e) => setForm({ ...form, notedBy: e.target.value })} />
                     <MdAssignment size={16} />
                   </div>
                 </div>

@@ -150,7 +150,7 @@ export default function RegisterPage() {
                   <div className="register-input-wrap">
                     <input
                       type="text"
-                      placeholder="First name"
+                      placeholder=""
                       value={form.firstName}
                       onChange={(e) => update("firstName", e.target.value)}
                       required
@@ -163,7 +163,7 @@ export default function RegisterPage() {
                   <div className="register-input-wrap">
                     <input
                       type="text"
-                      placeholder="Last name"
+                      placeholder=""
                       value={form.lastName}
                       onChange={(e) => update("lastName", e.target.value)}
                       required

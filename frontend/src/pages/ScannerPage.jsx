@@ -29,7 +29,7 @@ export default function ScannerPage() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState("student");
+
   const [quantity, setQuantity] = useState(1);
   const [dueDate, setDueDate] = useState("");
   const [selectedItem, setSelectedItem] = useState(null);
@@ -71,7 +71,6 @@ export default function ScannerPage() {
       setFirstName(d.firstName || d.firstname || "");
       setLastName(d.lastName || d.lastname || "");
       setEmail(d.email || "");
-      setRole("student");
       setSelectedUser(userProfile);
       setBorrowerResult({
         name: `${d.firstName || d.firstname || ""} ${d.lastName || d.lastname || ""}`.trim(),
@@ -109,7 +108,6 @@ export default function ScannerPage() {
     setFirstName(d.firstName || d.firstname || "");
     setLastName(d.lastName || d.lastname || "");
     setEmail(d.email || "");
-    setRole("student");
     setBorrowerResult({ name: `${d.firstName || ""} ${d.lastName || ""}`.trim(), schoolID: d.schoolId || d.employeeId || d.schoolID || d.studentID || schoolId, role: d.role, course: d.course });
     setTxStatus("Borrower found."); setTxStatusType("success");
     setStep1Collapsed(true);
@@ -186,7 +184,7 @@ export default function ScannerPage() {
         } else {
           await api.recordBorrow({
             itemId: selectedItem.id,
-            borrower: { schoolID: schoolId.trim(), firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim(), role, userId: selectedUser?.id },
+            borrower: { schoolID: schoolId.trim(), firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim(), role: selectedUser?.role || "student", userId: selectedUser?.id },
             quantity: qty,
             dueDate: due.toISOString(),
             borrowPhotoURL,
@@ -238,7 +236,6 @@ export default function ScannerPage() {
       setFirstName(userProfile.firstName || userProfile.firstname || "");
       setLastName(userProfile.lastName || userProfile.lastname || "");
       setEmail(userProfile.email || "");
-      setRole("student");
       setSelectedUser(userProfile);
       setQuantity(1);
       setBorrowerResult({
@@ -400,21 +397,15 @@ export default function ScannerPage() {
                     <div className="scanner-fields-grid">
                       <div className="scanner-field">
                         <label>First Name</label>
-                        <input type="text" placeholder="First name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+                        <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
                       </div>
                       <div className="scanner-field">
                         <label>Last Name</label>
-                        <input type="text" placeholder="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
+                        <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
                       </div>
                       <div className="scanner-field full-width">
                         <label>Email</label>
-                        <input type="email" placeholder="Email (optional)" value={email} onChange={(e) => setEmail(e.target.value)} />
-                      </div>
-                      <div className="scanner-field">
-                        <label>Role</label>
-                        <select value={role} onChange={(e) => setRole(e.target.value)}>
-                          <option value="student">Student</option>
-                        </select>
+                        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
                       </div>
                     </div>
                   )}
