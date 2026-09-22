@@ -521,18 +521,18 @@ export default function BorrowRequestsTab() {
                 </div>
                 <div className="form-actions">
                   <button
-                    className="btn btn-primary"
-                    onClick={() => handleApprove(selectedRequest.id)}
-                    disabled={processing === selectedRequest.id}
-                  >
-                    <MdCheckCircle size={14} /> {processing === selectedRequest.id ? "Processing..." : "Approve"}
-                  </button>
-                  <button
                     className="btn btn-danger"
                     onClick={() => handleReject(selectedRequest.id)}
                     disabled={processing === selectedRequest.id}
                   >
                     <MdCancel size={14} /> Reject
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => handleApprove(selectedRequest.id)}
+                    disabled={processing === selectedRequest.id}
+                  >
+                    <MdCheckCircle size={14} /> {processing === selectedRequest.id ? "Processing..." : "Approve"}
                   </button>
                 </div>
               </div>
@@ -578,15 +578,15 @@ export default function BorrowRequestsTab() {
                 />
               </div>
               <div className="form-actions">
+                <button className="btn btn-secondary" onClick={() => { setReassignTarget(null); setReassignAdminId(""); setReassignReason(""); }}>
+                  Cancel
+                </button>
                 <button
                   className="btn btn-primary"
                   onClick={handleReassign}
                   disabled={!reassignAdminId || reassignLoading}
                 >
                   <MdSwapHoriz size={14} /> {reassignLoading ? "Reassigning..." : "Reassign"}
-                </button>
-                <button className="btn btn-secondary" onClick={() => { setReassignTarget(null); setReassignAdminId(""); setReassignReason(""); }}>
-                  Cancel
                 </button>
               </div>
             </div>

@@ -484,6 +484,10 @@ body.dark .dash-table tbody td {
   .dash-charts {
     grid-template-columns: 1fr;
   }
+  .dash-page {
+    padding: 16px;
+    gap: 16px;
+  }
 }
 @media (max-width: 900px) {
   .dash-page {
@@ -494,6 +498,19 @@ body.dark .dash-table tbody td {
   .dash-page {
     gap: 14px;
     padding: 14px 16px;
+  }
+  .dash-hero-actions {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .dash-hero-action {
+    padding: 16px;
+    gap: 12px;
+  }
+  .dash-hero-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
   }
   .dash-stats {
     grid-template-columns: repeat(2, 1fr);
@@ -521,5 +538,12 @@ body.dark .dash-table tbody td {
 @media (max-width: 480px) {
   .dash-stats {
     grid-template-columns: 1fr;
+  }
+  .dash-page {
+    padding: 12px 12px 16px;
+    gap: 12px;
+  }
+  .dash-hero-label {
+    font-size: 14px;
   }
 }

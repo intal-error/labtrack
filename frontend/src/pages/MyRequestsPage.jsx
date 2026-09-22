@@ -115,6 +115,18 @@ export default function MyRequestsPage() {
               </button>
             ))}
           </div>
+          <select
+            className="transactions-filter-select"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            aria-label="Filter requests"
+          >
+            {["all", "pending", "approved", "rejected", "cancelled"].map((f) => (
+              <option key={f} value={f}>
+                {f.charAt(0).toUpperCase() + f.slice(1)}
+              </option>
+            ))}
+          </select>
         </div>
         <ViewToggle value={viewMode} onChange={setViewMode} localStorageKey="labtrack-myrequests-view" />
       </div>

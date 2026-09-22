@@ -7,7 +7,7 @@
   border: 1px solid rgba(102, 187, 106, 0.3);
   border-radius: 16px;
   padding: 16px;
-  z-index: 999;
+  z-index: 1001;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
   animation: slideUp 0.3s ease-out;
   backdrop-filter: blur(20px);
@@ -130,6 +130,6 @@ body.dark .install-icon {
 /* Hide when bottom nav is visible */
 @media (max-width: 1024px) {
   .install-prompt {
-    bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
   }
 }

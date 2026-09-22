@@ -212,6 +212,9 @@ body.dark .logbook-recent-entry.active { background: rgba(46,125,50,.08); }
 body.dark .logbook-recent-badge.out { background: rgba(255,255,255,.08); color: #888; }
 
 /* ========== Responsive ========== */
+@media (max-width: 1024px) {
+  .logbook-recent { padding: 16px; }
+}
 @media (max-width: 600px) {
   .logbook-recent { padding: 16px; }
   .logbook-recent-entry { padding: 8px 10px; }

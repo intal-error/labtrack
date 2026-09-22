@@ -543,7 +543,7 @@ body.dark .attendance-active-timer { background: rgba(102,187,106,.1); }
   overflow-x: auto;
   scrollbar-width: none;
 }
-@media(max-width:1024px){.attendance-table-wrapper{max-height:calc(100vh - 400px)}.attendance-table-wrapper::-webkit-scrollbar{width:4px;height:4px}.attendance-table-wrapper::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}}
+@media(max-width:1024px){.attendance-table-wrapper{max-height:none;overflow-x:auto}.attendance-table-wrapper::-webkit-scrollbar{width:4px;height:4px}.attendance-table-wrapper::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}}
 
 .attendance-table-wrapper::-webkit-scrollbar {
   width: 0;
@@ -1150,6 +1150,10 @@ body.dark .attendance-date-filter {
   .attendance-search input { min-width: 0; width: 100%; }
   .attendance-header { padding: 20px 18px; }
   .attendance-header h1 { font-size: 1.25rem; }
+  .attendance-modal { padding: 22px 16px; margin: 0 12px; }
+  .attendance-toolbar { gap: 8px; }
+  .attendance-kiosk-url-card { flex-direction: column; align-items: stretch; text-align: center; }
+  .attendance-kiosk-url-card .btn { width: 100%; justify-content: center; }
 }
 
 /* ──────────────────────────────────
@@ -1515,9 +1519,10 @@ body.dark .room-add-card:hover .add-icon {
   background: var(--bg-card);
   padding: 28px 24px;
   border-radius: 14px;
-  width: 440px;
-  max-width: 95vw;
+  width: 100%;
+  max-width: 440px;
   max-height: 85vh;
+  max-height: 85dvh;
   overflow-y: auto;
   scrollbar-width: none;
   box-shadow: 0 0 20px rgba(0,0,0,.4);

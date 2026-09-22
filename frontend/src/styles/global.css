@@ -1,10 +1,10 @@
 :root{--green:#2E7D32;--green-dark:#1B5E20;--green-light:#43A047;--dark-green:#1B5E20;--bg:#f5f5f0;--bg-card:#ffffff;--text:#1a1a1a;--text-muted:#888;--border:#d0d0d0;--card-shadow:0 2px 8px rgba(0,0,0,.06);--orange:#ef6c00;--orange-hover:#e65100;--amber:#F57C00;--amber-light:#FF8F00;--red:#d32f2f;--red-hover:#b71c1c;--yellow:#fbc02d;--yellow-hover:#f9a825;--accent-glow:rgba(46,125,50,.06)}
 body.dark{--bg:#000000;--bg-card:#131313;--text:#FFFFFF;--text-muted:#888;--border:#353535;--card-shadow:0 2px 8px rgba(0,0,0,.15);--green:#43A047;--green-dark:#2E7D32;--green-light:#66BB6A;--dark-green:#A5D6A7;--amber:#FFB74D;--amber-light:#FFA726;--accent-glow:rgba(46,125,50,.06)}
 *{margin:0;padding:0;box-sizing:border-box;font-family:"Poppins",Arial,sans-serif}
-body,html{min-height:100%;background:var(--bg);color:var(--text)}
+body,html{min-height:100%;background:var(--bg);color:var(--text);-webkit-text-size-adjust:100%;text-size-adjust:100%}
 a{text-decoration:none;color:inherit}
 ul{list-style:none}
-.loading-screen{display:flex;justify-content:center;align-items:center;height:100vh}
+.loading-screen{display:flex;justify-content:center;align-items:center;height:100vh;height:100dvh}
 .spinner-lg{width:40px;height:40px;border:4px solid var(--green);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .page-loading{display:flex;justify-content:center;align-items:center;min-height:400px}
@@ -62,14 +62,43 @@ body.dark .card:hover{box-shadow:0 4px 16px rgba(0,0,0,.25)}
   html{font-size:14px}
   .btn{min-height:44px}
   input,select,textarea{min-height:44px;font-size:16px}
+  .modal-overlay{padding:16px;align-items:flex-end}
+  .modal-content{width:100%;max-width:100%;max-height:85dvh;border-radius:16px 16px 0 0;padding:24px 18px}
+}
+/* iOS focus-zoom lock: all form controls ≥16px on mobile (beats class selectors) */
+@media(max-width:1024px){
+  input,select,textarea,
+  input[class],select[class],textarea[class],
+  .modal-content form input,.modal-content form select,
+  .dash-header-search input,
+  .catalog-search-box input,.catalog-course-filter,.catalog-sort select,
+  .tables-course-filter,
+  .transactions-sort-select,.transactions-date-filter,.transactions-course-filter,.transactions-search input,
+  .records-filters input,.records-filters select,
+  .settings-row-select select,
+  .doc-search input,.doc-filter-select,
+  .search-box input,.form-group input,.form-group select,.form-group textarea,
+  .maintenance-search input,.incident-search input,.incident-resolution-textarea,
+  .manuals-search input,.manuals-select,
+  .activity-search input,.activity-filter-select,
+  .maintenance-sort select,
+  .scanner-input-wrap input,.scanner-field input,.scanner-field select,
+  .attendance-search input,.attendance-filter-select,
+  .attendance-date-filter input[type="date"],.attendance-date-filter,
+  .attendance-edit-form input,.attendance-edit-form select,
+  .scan-form-field input,.scan-form-field select,
+  .lab-input-wrap input,.lab-input-wrap select,.lab-form-field textarea,
+  .login-field input,
+  .register-input-wrap input,.register-input-wrap select,
+  .admin-input-wrap input,.course-toggle-fields select,
+  .persona-input-wrap input,
+  .profile-field input{
+    font-size:16px !important;
+  }
 }
 
 /* PWA Standalone Mode - iOS & Android */
-@supports (padding-top: env(safe-area-inset-top)) {
-  body {
-    padding-top: env(safe-area-inset-top);
-  }
-}
+/* Safe-area top is owned by .dash-header only — do not pad body/app-layout here */
 
 /* iOS Standalone Mode Adjustments */
 @media all and (display-mode: standalone) {
@@ -85,18 +114,6 @@ body.dark .card:hover{box-shadow:0 4px 16px rgba(0,0,0,.25)}
   html {
     overscroll-behavior: none;
     -webkit-overflow-scrolling: touch;
-  }
-
-  /* Hide browser UI hints */
-  .main-content {
-    padding-top: env(safe-area-inset-top, 0px);
-  }
-
-  /* Fix for iOS status bar in standalone */
-  @supports (padding-top: env(safe-area-inset-top)) {
-    .app-layout {
-      padding-top: env(safe-area-inset-top);
-    }
   }
 }
 

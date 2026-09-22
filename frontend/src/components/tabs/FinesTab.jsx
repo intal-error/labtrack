@@ -208,7 +208,7 @@ export default function FinesTab() {
 function AdminView({ stats, overdueCount, filter, setFilter, search, setSearch, sortBy, setSortBy, filtered, paginationData, page, setPage, setSelectedFine, openKebab, setOpenKebab, handlePay, processing }) {
   return (
     <>
-      <div className="maintenance-stats" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
+      <div className="maintenance-stats stats-5">
         {[
           { key: "all", label: "Total Fines", count: stats.total, icon: <PesoIcon size={20} />, cls: "" },
           { key: "pending", label: "Outstanding", count: `₱${stats.totalPendingAmount.toLocaleString()}`, icon: <MdAttachMoney size={20} />, cls: "outstanding" },

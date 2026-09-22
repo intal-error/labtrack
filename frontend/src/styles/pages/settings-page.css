@@ -34,6 +34,10 @@
   to{opacity:1;transform:translateY(0)}
 }
 
+@media(max-width:1024px){
+  .settings-page{padding-bottom:8px}
+  .settings-tabs-nav{margin-bottom:16px}
+}
 @media(max-width:600px){
   .settings-tab-btn{padding:12px 14px;font-size:12px;min-height:44px;min-width:44px}
   .settings-tab-btn span{display:none}
