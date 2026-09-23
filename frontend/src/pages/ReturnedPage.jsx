@@ -26,7 +26,17 @@ export default function ReturnedPage() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    (async () => {
+      try {
+        setItems(await api.getReturned());
+      } catch (err) {
+        setError(err.message || "Failed to load");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
   const filtered = filterCourse === "All" ? items : items.filter((i) => i.course === filterCourse);
 

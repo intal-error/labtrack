@@ -25,12 +25,12 @@ const FEATURES = [
 
 export default function LoginPage() {
   const [selectedRole, setSelectedRole] = useState("student");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => localStorage.getItem("slsu_remembered_email") || "");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(() => Boolean(localStorage.getItem("slsu_remembered_email")));
+  const [showPassword, setShowPassword] = useState(false);
   const [capsLockOn, setCapsLockOn] = useState(false);
   const navigate = useNavigate();
   const { role, loading: authLoading } = useAuth();
@@ -38,19 +38,13 @@ export default function LoginPage() {
   const roleRefs = useRef({});
 
   useEffect(() => {
-    const savedEmail = localStorage.getItem("slsu_remembered_email");
-    if (savedEmail) {
-      setEmail(savedEmail);
-      setRememberMe(true);
-    }
-  }, []);
-
-  useEffect(() => {
     if (!signedIn || authLoading || !role) return;
     if (role !== selectedRole) {
-      setError(`This account is registered as ${role}. Please select the correct role.`);
+      setTimeout(() => {
+        setError(`This account is registered as ${role}. Please select the correct role.`);
+        setSignedIn(false);
+      }, 0);
       signOut(auth);
-      setSignedIn(false);
       return;
     }
     toast.success("Welcome back!");

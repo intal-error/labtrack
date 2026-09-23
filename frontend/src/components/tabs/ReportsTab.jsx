@@ -172,7 +172,7 @@ export default function ReportsTab() {
           <div className="overview-metric-icon" style={{ background: "rgba(0,137,123,.1)", color: "#00897b" }}><MdEventAvailable size={20} /></div>
           <div className="overview-metric-body">
             <div className="overview-metric-value">{stats.todaySessions}</div>
-            <div className="overview-metric-label">Today's Sessions</div>
+            <div className="overview-metric-label">Today&apos;s Sessions</div>
           </div>
         </div>
         <div className="overview-metric-card">

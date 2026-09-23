@@ -20,9 +20,7 @@ export default function AttendanceKioskPage() {
   const roomName = searchParams.get("room") || "Laboratory";
 
   const [step, setStep] = useState(STEPS.SCAN);
-  const [mode, setMode] = useState(null);
   const [schoolIdInput, setSchoolIdInput] = useState("");
-  const [studentData, setStudentData] = useState(null);
   const [subject, setSubject] = useState("");
   const [professor, setProfessor] = useState("");
   const [resultData, setResultData] = useState(null);
@@ -49,6 +47,25 @@ export default function AttendanceKioskPage() {
   }, []);
 
   useEffect(() => () => { stopScanner(); }, [stopScanner]);
+
+  const handleScan = useCallback(async (decodedText) => {
+    const text = decodedText.trim();
+
+    if (text.startsWith("SLSU-STUDENT:")) {
+      const schoolId = text.replace("SLSU-STUDENT:", "").trim();
+      setSchoolIdInput(schoolId);
+      setStep(STEPS.MODE_SELECT);
+      return;
+    }
+
+    if (text.startsWith("LABROOM:")) {
+      setStep(STEPS.MODE_SELECT);
+      return;
+    }
+
+    setSchoolIdInput(text);
+    setStep(STEPS.MODE_SELECT);
+  }, []);
 
   const startScanner = useCallback(async () => {
     await stopScanner();
@@ -89,40 +106,25 @@ export default function AttendanceKioskPage() {
         setStep(STEPS.ERROR);
       }
     }
-  }, [stopScanner]);
+  }, [stopScanner, handleScan]);
 
-  useEffect(() => {
+  const [prevStep, setPrevStep] = useState();
+  if (prevStep !== step) {
+    setPrevStep(step);
     if (step === STEPS.SCAN) {
-      setStudentData(null);
       setSubject("");
       setProfessor("");
       setSchoolIdInput("");
-      setMode(null);
+    }
+  }
+
+  useEffect(() => {
+    if (step === STEPS.SCAN) {
       setTimeout(() => startScanner(), 100);
     }
   }, [step, startScanner]);
 
-  const handleScan = async (decodedText) => {
-    const text = decodedText.trim();
-
-    if (text.startsWith("SLSU-STUDENT:")) {
-      const schoolId = text.replace("SLSU-STUDENT:", "").trim();
-      setSchoolIdInput(schoolId);
-      setStep(STEPS.MODE_SELECT);
-      return;
-    }
-
-    if (text.startsWith("LABROOM:")) {
-      setStep(STEPS.MODE_SELECT);
-      return;
-    }
-
-    setSchoolIdInput(text);
-    setStep(STEPS.MODE_SELECT);
-  };
-
   const handleModeSelect = (selectedMode) => {
-    setMode(selectedMode);
     if (selectedMode === "time_in") {
       setStep(STEPS.TIME_IN_FORM);
     } else {
@@ -171,9 +173,7 @@ export default function AttendanceKioskPage() {
 
   const resetToScan = () => {
     setStep(STEPS.SCAN);
-    setMode(null);
     setSchoolIdInput("");
-    setStudentData(null);
     setResultData(null);
     setErrorMessage("");
     setSubject("");

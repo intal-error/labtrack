@@ -6,7 +6,7 @@ import { LAB_ROOMS } from "../../constants/labRooms";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
 import "../../styles/pages/shared-form-panel.css";
-import { MdMenuBook, MdAdd, MdDelete, MdEdit, MdSearch, MdOpenInNew, MdCloudUpload, MdClose, MdInfo, MdAssignment, MdDescription, MdDownload, MdVisibility, MdFilterList, MdSort, MdClear, MdWarning } from "react-icons/md";
+import { MdMenuBook, MdAdd, MdDelete, MdEdit, MdSearch, MdOpenInNew, MdCloudUpload, MdClose, MdInfo, MdAssignment, MdDescription, MdDownload, MdVisibility, MdClear, MdWarning } from "react-icons/md";
 
 
 const CATEGORIES = ["All", "General", "Safety", "Equipment Guide", "Software", "Procedure", "Other"];

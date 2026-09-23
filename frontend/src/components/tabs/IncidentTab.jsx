@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
@@ -56,13 +56,24 @@ export default function IncidentTab() {
   const [uploading, setUploading] = useState(false);
   const [resolutionNote, setResolutionNote] = useState("");
   const [imageOverlay, setImageOverlay] = useState(null);
-  const [showDetail, setShowDetail] = useState(false);
+  const [, setShowDetail] = useState(false);
   const [page, setPage] = useState(1);
 
   const PAGE_LIMIT = 12;
   const canCreate = true;
 
-  useEffect(() => { setPage(1); }, [search, filterStatus, filterSeverity, filterMy, dateFrom, dateTo]);
+  const [prevResetKeys, setPrevResetKeys] = useState([search, filterStatus, filterSeverity, filterMy, dateFrom, dateTo]);
+  if (
+    prevResetKeys[0] !== search ||
+    prevResetKeys[1] !== filterStatus ||
+    prevResetKeys[2] !== filterSeverity ||
+    prevResetKeys[3] !== filterMy ||
+    prevResetKeys[4] !== dateFrom ||
+    prevResetKeys[5] !== dateTo
+  ) {
+    setPrevResetKeys([search, filterStatus, filterSeverity, filterMy, dateFrom, dateTo]);
+    setPage(1);
+  }
 
   const incidentParams = useMemo(() => {
     const params = new URLSearchParams();

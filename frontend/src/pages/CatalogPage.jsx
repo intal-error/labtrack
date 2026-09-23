@@ -12,7 +12,7 @@ import toast from "react-hot-toast";
 import "../styles/pages/catalog.css";
 import "../styles/pages/scanner.css";
 import "../styles/pages/shared-form-panel.css";
-import { MdClose, MdEdit, MdInfo, MdImage, MdAssignment, MdTag, MdQrCode, MdInventory, MdDownload, MdMoreVert, MdQrCodeScanner, MdDelete, MdWarning } from "react-icons/md";
+import { MdClose, MdEdit, MdInfo, MdImage, MdAssignment, MdTag, MdQrCode, MdDownload, MdMoreVert, MdQrCodeScanner, MdDelete, MdWarning } from "react-icons/md";
 import ViewToggle from "../components/ui/ViewToggle";
 import { useAuth } from "../context/AuthContext";
 
@@ -34,7 +34,16 @@ export default function CatalogPage() {
   const { role, userProfile } = useAuth();
   const [restriction, setRestriction] = useState(null);
 
-  useEffect(() => { setPage(1); }, [search, filter, filterCourse, sort]);
+  const [prevResetKeys, setPrevResetKeys] = useState([search, filter, filterCourse, sort]);
+  if (
+    prevResetKeys[0] !== search ||
+    prevResetKeys[1] !== filter ||
+    prevResetKeys[2] !== filterCourse ||
+    prevResetKeys[3] !== sort
+  ) {
+    setPrevResetKeys([search, filter, filterCourse, sort]);
+    setPage(1);
+  }
 
   useEffect(() => {
     const handler = (e) => { if (!e.target.closest(".catalog-kebab-wrap")) setOpenKebab(null); };

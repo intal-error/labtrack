@@ -18,12 +18,6 @@ export default function RegisterPage() {
   const navigate = useNavigate();
   const { role, loading: authLoading } = useAuth();
   const [registered, setRegistered] = useState(false);
-  const [passwordRequirements, setPasswordRequirements] = useState({
-    minLength: false,
-    hasUppercase: false,
-    hasLowercase: false,
-    hasNumber: false,
-  });
 
   useEffect(() => {
     if (!registered || authLoading || !role) return;
@@ -44,14 +38,12 @@ export default function RegisterPage() {
 
   const update = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
 
-  useEffect(() => {
-    setPasswordRequirements({
-      minLength: form.password.length >= 8,
-      hasUppercase: /[A-Z]/.test(form.password),
-      hasLowercase: /[a-z]/.test(form.password),
-      hasNumber: /[0-9]/.test(form.password),
-    });
-  }, [form.password]);
+  const passwordRequirements = {
+    minLength: form.password.length >= 8,
+    hasUppercase: /[A-Z]/.test(form.password),
+    hasLowercase: /[a-z]/.test(form.password),
+    hasNumber: /[0-9]/.test(form.password),
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
@@ -10,7 +10,7 @@ import "../../styles/pages/tabs.css";
 import "../../styles/pages/catalog.css";
 import "../../styles/pages/shared-form-panel.css";
 import "../../styles/pages/tables.css";
-import { MdBuild, MdAdd, MdEdit, MdDelete, MdCalendarToday, MdWarning, MdSearch, MdCheckCircle, MdSchedule, MdPlayArrow, MdAssignment, MdCameraAlt, MdClose, MdInfo, MdLocationOn, MdBusiness } from "react-icons/md";
+import { MdBuild, MdAdd, MdEdit, MdDelete, MdCalendarToday, MdSearch, MdCheckCircle, MdSchedule, MdPlayArrow, MdAssignment, MdCameraAlt, MdClose, MdInfo, MdLocationOn, MdBusiness } from "react-icons/md";
 
 import ViewToggle from "../ui/ViewToggle";
 import Pagination from "../ui/Pagination";
@@ -62,14 +62,6 @@ function toLocalDateTime(date) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function toLocalDate(date) {
-  if (!date) return "";
-  const d = date?.toDate ? date.toDate() : new Date(date);
-  if (isNaN(d.getTime())) return "";
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
 const EMPTY_FORM = {
   catalogId: "", itemName: "", status: "scheduled",
   inspectedDate: "", collegeBuilding: "", location: "",
@@ -92,7 +84,11 @@ export default function MaintenanceTab() {
   const [page, setPage] = useState(1);
   const [form, setForm] = useState({ ...EMPTY_FORM });
 
-  useEffect(() => { setPage(1); }, [search, filter]);
+  const [prevResetKeys, setPrevResetKeys] = useState([search, filter]);
+  if (prevResetKeys[0] !== search || prevResetKeys[1] !== filter) {
+    setPrevResetKeys([search, filter]);
+    setPage(1);
+  }
 
   const params = useMemo(() => {
     const p = { page, limit: 10 };

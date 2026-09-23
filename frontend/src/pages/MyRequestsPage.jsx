@@ -1,11 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { api } from "../services/api";
-import { useAuth } from "../context/AuthContext";
 import Modal from "../components/ui/Modal";
 import toast from "react-hot-toast";
 import "../styles/pages/tables.css";
 import "../styles/pages/catalog.css";
-import { MdAssignment } from "react-icons/md";
 import ViewToggle from "../components/ui/ViewToggle";
 
 const STATUS_COLORS = {
@@ -37,14 +35,11 @@ function timeAgo(date) {
 }
 
 export default function MyRequestsPage() {
-  const { userProfile } = useAuth();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [viewMode, setViewMode] = useState("list");
-
-  useEffect(() => { load(); }, []);
 
   async function load() {
     try {
@@ -56,6 +51,19 @@ export default function MyRequestsPage() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await api.getMyBorrowRequests();
+        setRequests(data || []);
+      } catch {
+        toast.error("Failed to load requests");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
   async function handleCancel(id) {
     if (!confirm("Cancel this request?")) return;

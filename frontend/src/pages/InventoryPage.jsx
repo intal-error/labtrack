@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useCatalog } from "../hooks/useQueries";
 import { COURSES } from "../constants/courses";
 import { numOr, getAvailableQuantity } from "../utils/helpers";
@@ -6,7 +6,6 @@ import { filterBySearch } from "../utils/search";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Pagination from "../components/ui/Pagination";
 import "../styles/pages/catalog.css";
-import { MdInventory } from "react-icons/md";
 import ViewToggle from "../components/ui/ViewToggle";
 
 export default function InventoryPage() {
@@ -18,7 +17,16 @@ export default function InventoryPage() {
   const [imageOverlay, setImageOverlay] = useState(null);
   const [viewMode, setViewMode] = useState("list");
 
-  useEffect(() => { setPage(1); }, [search, filter, filterCourse, sort]);
+  const [prevResetKeys, setPrevResetKeys] = useState([search, filter, filterCourse, sort]);
+  if (
+    prevResetKeys[0] !== search ||
+    prevResetKeys[1] !== filter ||
+    prevResetKeys[2] !== filterCourse ||
+    prevResetKeys[3] !== sort
+  ) {
+    setPrevResetKeys([search, filter, filterCourse, sort]);
+    setPage(1);
+  }
 
   const params = `?page=${page}&limit=25&search=${search}&status=${filter !== "All" ? filter : ""}&course=${filterCourse !== "All" ? filterCourse : ""}&sort=${sort}`;
   const { data: response, isLoading } = useCatalog(params);

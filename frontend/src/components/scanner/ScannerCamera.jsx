@@ -5,6 +5,11 @@ export default function ScannerCamera({ target, onScan, onStop }) {
   const scannerRef = useRef(null);
   const runningRef = useRef(false);
   const [status, setStatus] = useState("");
+  const onScanRef = useRef(onScan);
+
+  useEffect(() => {
+    onScanRef.current = onScan;
+  }, [onScan]);
 
   const stopScanner = useCallback(async () => {
     const s = scannerRef.current;
@@ -18,47 +23,54 @@ export default function ScannerCamera({ target, onScan, onStop }) {
 
   useEffect(() => () => { stopScanner(); }, [stopScanner]);
 
-  const startScanner = async () => {
-    await stopScanner();
-    setStatus(target === "borrower" ? "Opening camera for borrower ID..." : "Opening camera for item code...");
-    try {
-      const scanner = new Html5Qrcode("qr-reader");
-      scannerRef.current = scanner;
-      await scanner.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 240, height: 240 }, aspectRatio: 1 },
-        async (decodedText) => {
-          if (!runningRef.current) return;
-          runningRef.current = false;
-          setStatus("Code scanned. Looking it up...");
-          await stopScanner();
-          onScan(decodedText);
-        },
-        () => {}
-      );
-      runningRef.current = true;
-      setStatus("Point the camera at the code.");
-    } catch {
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      await stopScanner();
+      if (cancelled) return;
+      setStatus(target === "borrower" ? "Opening camera for borrower ID..." : "Opening camera for item code...");
       try {
-        await stopScanner();
         const scanner = new Html5Qrcode("qr-reader");
         scannerRef.current = scanner;
-        await scanner.start({ facingMode: "user" }, { fps: 10, qrbox: { width: 240, height: 240 } }, async (t) => {
-          if (!runningRef.current) return;
-          runningRef.current = false;
-          await stopScanner();
-          onScan(t);
-        }, () => {});
+        await scanner.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: { width: 240, height: 240 }, aspectRatio: 1 },
+          async (decodedText) => {
+            if (!runningRef.current) return;
+            runningRef.current = false;
+            await stopScanner();
+            setStatus("Code scanned. Looking it up...");
+            onScanRef.current?.(decodedText);
+          },
+          () => {}
+        );
+        if (cancelled) return;
         runningRef.current = true;
         setStatus("Point the camera at the code.");
       } catch {
-        await stopScanner();
-        setStatus("Camera unavailable. Enter codes manually.");
+        try {
+          await stopScanner();
+          if (cancelled) return;
+          const scanner = new Html5Qrcode("qr-reader");
+          scannerRef.current = scanner;
+          await scanner.start({ facingMode: "user" }, { fps: 10, qrbox: { width: 240, height: 240 } }, async (t) => {
+            if (!runningRef.current) return;
+            runningRef.current = false;
+            await stopScanner();
+            onScanRef.current?.(t);
+          }, () => {});
+          if (cancelled) return;
+          runningRef.current = true;
+          setStatus("Point the camera at the code.");
+        } catch {
+          await stopScanner();
+          if (cancelled) return;
+          setStatus("Camera unavailable. Enter codes manually.");
+        }
       }
-    }
-  };
-
-  useEffect(() => { startScanner(); }, []);
+    })();
+    return () => { cancelled = true; };
+  }, [stopScanner, target]);
 
   return (
     <div className="scanner-camera-wrap">

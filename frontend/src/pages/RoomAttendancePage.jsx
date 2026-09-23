@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { formatDuration, formatTime } from "../utils/attendanceHelpers";
@@ -23,44 +23,51 @@ export default function RoomAttendancePage() {
   const [years, setYears] = useState([]);
   const [courses, setCourses] = useState([]);
 
-  const loadRecords = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (dateFrom) params.set("from", dateFrom);
-      if (dateTo) params.set("to", dateTo);
-      if (search) params.set("student", search);
-      if (filterYear) params.set("year", filterYear);
-      if (filterCourse) params.set("course", filterCourse);
-      params.set("page", page);
-      params.set("limit", "50");
-      const data = await api.getRoomAttendanceHistory(roomId, params.toString());
-      setRecords(data.records || []);
-      setTotal(data.total || 0);
-      setTotalPages(data.totalPages || 1);
-      if (data.roomName) setRoomName(data.roomName);
-      if (data.years) setYears(data.years);
-      if (data.courses) setCourses(data.courses);
-    } catch (err) {
-      toast.error(err.message || "Failed to load room attendance");
-    } finally {
-      setLoading(false);
-    }
+  useEffect(() => {
+    let cancelled = false;
+    const showLoading = setTimeout(() => {
+      if (!cancelled) setLoading(true);
+    }, 0);
+    (async () => {
+      try {
+        const params = new URLSearchParams();
+        if (dateFrom) params.set("from", dateFrom);
+        if (dateTo) params.set("to", dateTo);
+        if (search) params.set("student", search);
+        if (filterYear) params.set("year", filterYear);
+        if (filterCourse) params.set("course", filterCourse);
+        params.set("page", page);
+        params.set("limit", "50");
+        const data = await api.getRoomAttendanceHistory(roomId, params.toString());
+        if (cancelled) return;
+        setRecords(data.records || []);
+        setTotal(data.total || 0);
+        setTotalPages(data.totalPages || 1);
+        if (data.roomName) setRoomName(data.roomName);
+        if (data.years) setYears(data.years);
+        if (data.courses) setCourses(data.courses);
+      } catch (err) {
+        if (!cancelled) toast.error(err.message || "Failed to load room attendance");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      clearTimeout(showLoading);
+    };
   }, [roomId, dateFrom, dateTo, search, filterYear, filterCourse, page]);
 
-  useEffect(() => {
-    loadRecords();
-  }, [loadRecords]);
-
-  // Reset filters when roomId changes
-  useEffect(() => {
+  const [prevRoomId, setPrevRoomId] = useState(roomId);
+  if (prevRoomId !== roomId) {
+    setPrevRoomId(roomId);
     setPage(1);
     setSearch("");
     setDateFrom("");
     setDateTo("");
     setFilterYear("");
     setFilterCourse("");
-  }, [roomId]);
+  }
 
   function handleExport() {
     const params = new URLSearchParams();

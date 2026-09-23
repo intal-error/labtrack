@@ -247,9 +247,9 @@ const remove = async (req, res) => {
         if (doc.exists) {
           await docRef.set({ status: "inactive" }, { merge: true });
         }
-      } catch (e) {}
+      } catch {}
     }
-    try { await auth.updateUser(id, { disabled: true }); } catch (e) {}
+    try { await auth.updateUser(id, { disabled: true }); } catch {}
     res.json({ message: "Admin deactivated" });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });

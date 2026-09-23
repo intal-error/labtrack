@@ -26,11 +26,11 @@
 .settings-tab-btn svg{flex-shrink:0}
 
 .settings-tab-panel{
-  animation:settingsFadeIn .2s ease;
+  animation:settingsFadeIn .2s ease both;
 }
 
 @keyframes settingsFadeIn{
-  from{opacity:0;transform:translateY(6px)}
+  from{opacity:.4;transform:translateY(6px)}
   to{opacity:1;transform:translateY(0)}
 }
 

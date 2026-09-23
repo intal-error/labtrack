@@ -17,7 +17,6 @@ import {
   MdAccessTime,
   MdGroup,
   MdMeetingRoom,
-  MdEventAvailable,
 } from "react-icons/md";
 
 const TABS = [
@@ -33,13 +32,11 @@ export default function AttendanceLogsPage() {
   const [stats, setStats] = useState(null);
   const [activeStudents, setActiveStudents] = useState([]);
   const [todayRecords, setTodayRecords] = useState([]);
-  const [loading, setLoading] = useState(true);
-
   // Room filter for Currently Inside
   const [rooms, setRooms] = useState([]);
   const [filterRoom, setFilterRoom] = useState("");
   const filterRoomRef = useRef("");
-  filterRoomRef.current = filterRoom;
+  useEffect(() => { filterRoomRef.current = filterRoom; }, [filterRoom]);
 
   // Edit modal
   const [editModal, setEditModal] = useState(null);
@@ -75,25 +72,34 @@ export default function AttendanceLogsPage() {
     }
   }, []);
 
-  const loadRooms = useCallback(async () => {
-    try {
-      const data = await api.getRooms();
-      setRooms(data);
-    } catch (err) {
-      console.error("Failed to load rooms:", err);
-    }
-  }, []);
-
   useEffect(() => {
-    loadStats();
-    loadActive();
-    loadToday();
-    loadRooms();
-  }, [loadStats, loadActive, loadToday]);
+    api.getAttendanceStats()
+      .then(setStats)
+      .catch((err) => console.error("Failed to load stats:", err));
+    (async () => {
+      try {
+        const params = new URLSearchParams();
+        if (filterRoomRef.current) params.set("room", filterRoomRef.current);
+        const data = await api.getActiveStudents(params.toString());
+        setActiveStudents(data);
+      } catch (err) {
+        console.error("Failed to load active students:", err);
+      }
+    })();
+    api.getTodayAttendance()
+      .then(setTodayRecords)
+      .catch((err) => console.error("Failed to load today records:", err));
+    api.getRooms()
+      .then(setRooms)
+      .catch((err) => console.error("Failed to load rooms:", err));
+  }, []);
 
   // Refetch rooms when switching to active tab (picks up newly created rooms)
   useEffect(() => {
-    if (activeTab === "active") loadRooms();
+    if (activeTab !== "active") return;
+    api.getRooms()
+      .then(setRooms)
+      .catch((err) => console.error("Failed to load rooms:", err));
   }, [activeTab]);
 
   // Auto-refresh active every 30s
@@ -159,7 +165,7 @@ export default function AttendanceLogsPage() {
               </div>
               <div className="attendance-stat-info">
                 <span className="attendance-stat-value">{stats.totalToday}</span>
-                <span className="attendance-stat-label">Today's Sessions</span>
+                <span className="attendance-stat-label">Today&apos;s Sessions</span>
               </div>
             </div>
             <div className="attendance-stat">
@@ -419,7 +425,7 @@ function RoomAttendanceView() {
       <div className="attendance-empty">
         <div className="attendance-empty-icon"><MdMeetingRoom size={28} /></div>
         <h3>No Rooms Found</h3>
-        <p>Add laboratory rooms in the "Room QR Codes" tab first</p>
+        <p>Add laboratory rooms in the &quot;Room QR Codes&quot; tab first</p>
       </div>
     );
   }

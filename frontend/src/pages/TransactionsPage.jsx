@@ -1,16 +1,14 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useState, useCallback, useMemo } from "react";
 import { api } from "../services/api";
 import { useBorrowed, useMyBorrowed, useReturned, useMyReturned } from "../hooks/useQueries";
 import { COURSES } from "../constants/courses";
-import { toDate, formatDate, getRemainingQuantity } from "../utils/helpers";
+import { toDate, formatDate, getRemainingQuantity, computeTransactionStats } from "../utils/helpers";
 import { useAuth } from "../context/AuthContext";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Modal from "../components/ui/Modal";
 import Pagination from "../components/ui/Pagination";
 import toast from "react-hot-toast";
 import "../styles/pages/tables.css";
-import { MdSwapHoriz } from "react-icons/md";
 import ViewToggle from "../components/ui/ViewToggle";
 
 const PAGE_LIMIT = 25;
@@ -41,7 +39,7 @@ function timeAgo(date) {
   return formatDate(date);
 }
 
-function getOverdueInfo(date, quantity, returnedQuantity) {
+function getOverdueInfo(date) {
   if (!date) return null;
   const now = new Date();
   const diff = now - date;
@@ -87,22 +85,6 @@ const DATE_RANGES = [
   { value: "month", label: "This Month" },
 ];
 
-function matchesDateRange(date, range) {
-  if (!date || range === "all") return true;
-  const now = new Date();
-  const d = new Date(date);
-  if (range === "today") {
-    return d.toDateString() === now.toDateString();
-  }
-  if (range === "week") {
-    return (now - d) < 7 * 24 * 60 * 60 * 1000;
-  }
-  if (range === "month") {
-    return (now - d) < 30 * 24 * 60 * 60 * 1000;
-  }
-  return true;
-}
-
 function sortItems(items, sortBy) {
   const [key, dir] = sortBy.split("-");
   const mult = dir === "asc" ? 1 : -1;
@@ -126,20 +108,27 @@ function sortItems(items, sortBy) {
 
 export default function TransactionsPage() {
   const { role } = useAuth();
-  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("borrowed");
   const [search, setSearch] = useState("");
   const [filterCourse, setFilterCourse] = useState("All");
   const [sortBy, setSortBy] = useState("date-desc");
   const [dateRange, setDateRange] = useState("all");
   const [viewMode, setViewMode] = useState("list");
-  const [returningId, setReturningId] = useState(null);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [page, setPage] = useState(1);
 
   const isStudent = role === "student";
 
-  useEffect(() => { setPage(1); }, [activeTab, search, filterCourse, dateRange]);
+  const [prevResetKeys, setPrevResetKeys] = useState([activeTab, search, filterCourse, dateRange]);
+  if (
+    prevResetKeys[0] !== activeTab ||
+    prevResetKeys[1] !== search ||
+    prevResetKeys[2] !== filterCourse ||
+    prevResetKeys[3] !== dateRange
+  ) {
+    setPrevResetKeys([activeTab, search, filterCourse, dateRange]);
+    setPage(1);
+  }
 
   const params = useMemo(() => {
     const dateParams = getDateParams(dateRange);
@@ -187,26 +176,7 @@ export default function TransactionsPage() {
     refetchReturned();
   }, [refetchBorrowed, refetchReturned]);
 
-  const stats = useMemo(() => {
-    const dueSoon = borrowed.filter((b) => {
-      if (!b.dueDate) return false;
-      const due = toDate(b.dueDate);
-      if (!due) return false;
-      const daysLeft = Math.ceil((due.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-      return daysLeft >= 0 && daysLeft <= 3;
-    }).length;
-    return {
-      totalBorrowed: borrowed.length,
-      totalReturned: returned.length,
-      active: borrowed.filter((b) => getRemainingQuantity(b) > 0).length,
-      thisWeek: borrowed.filter((b) => {
-        const d = toDate(b.timestamp);
-        if (!d) return false;
-        return (Date.now() - d.getTime()) < 7 * 24 * 60 * 60 * 1000;
-      }).length,
-      dueSoon,
-    };
-  }, [borrowed, returned]);
+  const stats = useMemo(() => computeTransactionStats(borrowed, returned), [borrowed, returned]);
 
   const activeItems = useMemo(() =>
     activeTab === "borrowed" ? borrowed : returned,
@@ -224,22 +194,6 @@ export default function TransactionsPage() {
       toast.error(err.message || "Download failed");
     }
   };
-
-  async function handleQuickReturn(item) {
-    const remaining = getRemainingQuantity(item);
-    if (remaining <= 0) return;
-    if (!confirm(`Return ${remaining} of "${item.itemName}" from ${item.firstName}?`)) return;
-    setReturningId(item.id);
-    try {
-      await api.recordReturn({ borrowId: item.id, quantity: remaining });
-      toast.success("Item returned successfully");
-      load();
-    } catch (err) {
-      toast.error(err.message || "Return failed");
-    } finally {
-      setReturningId(null);
-    }
-  }
 
   function handleViewInfo(item) {
     setSelectedTransaction(item);
@@ -366,8 +320,7 @@ export default function TransactionsPage() {
             const remaining = isBorrowed ? getRemainingQuantity(item) : null;
             const fullName = `${item.firstName || ""} ${item.lastName || ""}`.trim();
             const color = getAvatarColor(fullName);
-            const overdue = isBorrowed ? getOverdueInfo(date, item.quantity, item.returnedQuantity) : null;
-            const isReturning = returningId === item.id;
+            const overdue = isBorrowed ? getOverdueInfo(date) : null;
             const returnDate = !isBorrowed ? toDate(item.returnedAt || item.timestamp) : null;
 
             return (
@@ -463,8 +416,7 @@ export default function TransactionsPage() {
                 const isBorrowed = activeTab === "borrowed";
                 const remaining = isBorrowed ? getRemainingQuantity(item) : null;
                 const fullName = `${item.firstName || ""} ${item.lastName || ""}`.trim();
-                const overdue = isBorrowed ? getOverdueInfo(date, item.quantity, item.returnedQuantity) : null;
-                const isReturning = returningId === item.id;
+                const overdue = isBorrowed ? getOverdueInfo(date) : null;
                 const returnDate = !isBorrowed ? toDate(item.returnedAt || item.timestamp) : null;
 
                 return (

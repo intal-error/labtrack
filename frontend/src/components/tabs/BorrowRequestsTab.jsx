@@ -68,7 +68,7 @@ function toDate(value) {
 }
 
 export default function BorrowRequestsTab() {
-  const { role, userProfile } = useAuth();
+  const { role } = useAuth();
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState("pending");
   const [search, setSearch] = useState("");
@@ -92,7 +92,11 @@ export default function BorrowRequestsTab() {
     return () => clearTimeout(searchTimer.current);
   }, [search]);
 
-  useEffect(() => { setPage(1); }, [debouncedSearch, filter]);
+  const [prevResetKeys, setPrevResetKeys] = useState([debouncedSearch, filter]);
+  if (prevResetKeys[0] !== debouncedSearch || prevResetKeys[1] !== filter) {
+    setPrevResetKeys([debouncedSearch, filter]);
+    setPage(1);
+  }
 
   const params = useMemo(() => {
     const p = new URLSearchParams();
@@ -372,7 +376,6 @@ export default function BorrowRequestsTab() {
             <tbody>
               {filtered.map((req) => {
                 const dueInfo = getDueDateInfo(toDate(req.dueDate));
-                const isCrossCourse = req.equipment_course && req.course && req.equipment_course !== req.course;
                 return (
                   <tr key={req.id} onClick={() => setSelectedRequest(req)} style={{ cursor: "pointer" }}>
                     <td>{req.firstName} {req.lastName}</td>

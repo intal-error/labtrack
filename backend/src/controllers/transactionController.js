@@ -447,7 +447,7 @@ const recordBorrow = async (req, res) => {
 
 const recordReturn = async (req, res) => {
   try {
-    const { borrowId, itemId, schoolID, quantity, returnPhotoURL, conditionOnReturn } = req.body;
+    const { borrowId, itemId, quantity, returnPhotoURL, conditionOnReturn } = req.body;
 
     const { data: catalogItem, error: catalogError } = await supabase
       .from("catalog").select("*").eq("id", itemId).single();

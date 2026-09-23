@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import SplashScreen from "./components/ui/SplashScreen";
 import InstallPrompt from "./components/ui/InstallPrompt";
+import DashboardLayout from "./components/layout/DashboardLayout";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -15,7 +16,6 @@ const queryClient = new QueryClient({
 
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage"));
-const DashboardLayout = lazy(() => import("./components/layout/DashboardLayout"));
 const ScannerHubPage = lazy(() => import("./pages/components/ScannerHubPage"));
 const TransactionsPage = lazy(() => import("./pages/TransactionsPage"));
 const CatalogPage = lazy(() => import("./pages/CatalogPage"));
@@ -39,41 +39,6 @@ const AttendanceLogsPage = lazy(() => import("./pages/AttendanceLogsPage"));
 const RoomAttendancePage = lazy(() => import("./pages/RoomAttendancePage"));
 const MyAttendancePage = lazy(() => import("./pages/MyAttendancePage"));
 const InventoryPage = lazy(() => import("./pages/InventoryPage"));
-
-const routePrefetchers = {
-  "/dashboard": () => import("./pages/DashboardPage"),
-  "/scanner": () => import("./pages/components/ScannerHubPage"),
-  "/transactions": () => import("./pages/TransactionsPage"),
-  "/catalog": () => import("./pages/CatalogPage"),
-  "/inventory": () => import("./pages/InventoryPage"),
-  "/persona": () => import("./pages/PersonaPage"),
-  "/maintenance": () => import("./components/tabs/MaintenanceTab"),
-  "/incidents": () => import("./components/tabs/IncidentTab"),
-  "/manuals": () => import("./components/tabs/ManualsTab"),
-  "/usage-logs": () => import("./components/tabs/UsageLogsTab"),
-  "/reports": () => import("./components/tabs/ReportsTab"),
-  "/fines": () => import("./components/tabs/FinesTab"),
-  "/borrow-requests": () => import("./components/tabs/BorrowRequestsTab"),
-  "/notifications": () => import("./components/tabs/NotificationsTab"),
-  "/settings": () => import("./components/tabs/SettingsPage"),
-  "/documents": () => import("./components/tabs/DocumentsTab"),
-  "/attendance/room": () => import("./pages/RoomAttendancePage"),
-  "/attendance": () => import("./pages/AttendanceLogsPage"),
-  "/my-attendance": () => import("./pages/MyAttendancePage"),
-  "/my-requests": () => import("./pages/MyRequestsPage"),
-};
-
-const sortedPrefetchKeys = Object.keys(routePrefetchers).sort((a, b) => b.length - a.length);
-
-const prefetched = {};
-export function prefetchRoute(path) {
-  const matcher = sortedPrefetchKeys.find((key) => path.startsWith(key));
-  if (matcher && !prefetched[matcher]) {
-    prefetched[matcher] = true;
-    routePrefetchers[matcher]();
-  }
-}
-
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -125,6 +90,10 @@ class ErrorBoundary extends Component {
   }
 }
 
+const fullScreenFallback = (
+  <div className="loading-screen"><div className="spinner-lg" /></div>
+);
+
 function App() {
   const [splashComplete, setSplashComplete] = useState(false);
 
@@ -137,11 +106,10 @@ function App() {
           {!splashComplete && <SplashScreen onComplete={() => setSplashComplete(true)} />}
           <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
           <InstallPrompt />
-          <Suspense fallback={<div className="loading-screen"><div className="spinner-lg" /></div>}>
           <Routes>
-            <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
-            <Route path="/register" element={<GuestRoute><RegisterPage /></GuestRoute>} />
-            <Route path="/attend/kiosk" element={<AttendanceKioskPage />} />
+            <Route path="/login" element={<Suspense fallback={fullScreenFallback}><GuestRoute><LoginPage /></GuestRoute></Suspense>} />
+            <Route path="/register" element={<Suspense fallback={fullScreenFallback}><GuestRoute><RegisterPage /></GuestRoute></Suspense>} />
+            <Route path="/attend/kiosk" element={<Suspense fallback={fullScreenFallback}><AttendanceKioskPage /></Suspense>} />
             <Route path="/" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
               <Route index element={<IndexRedirect />} />
               <Route path="dashboard" element={<DashboardPage />} />
@@ -177,7 +145,6 @@ function App() {
             </Route>
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
-          </Suspense>
           </ErrorBoundary>
         </ThemeProvider>
       </AuthProvider>

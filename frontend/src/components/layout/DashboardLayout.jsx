@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { api } from "../../services/api";
 import { useMyNotifications } from "../../hooks/useQueries";
-import { prefetchRoute } from "../../App";
+import { prefetchRoute } from "../../utils/prefetchRoute";
 import { timeAgo } from "../../utils/helpers";
 import { FiMenu, FiX } from "react-icons/fi";
 import {
@@ -129,21 +129,19 @@ export default function DashboardLayout() {
     if (!loading && !user) navigate("/login", { replace: true });
   }, [loading, user, navigate]);
 
-  async function fetchLogbookStatus() {
-    try {
-      if (!userProfile?.schoolId) return;
-      const data = await api.getStudentAttendance(userProfile.schoolId);
-      const hasActive = (data.records || []).some((r) => r.status === "active");
-      setLogbookActive(hasActive);
-    } catch {
-      setLogbookActive(false);
-    }
-  }
-
   useEffect(() => {
-    if (role === "student" && userProfile?.schoolId) {
-      fetchLogbookStatus();
-    }
+    if (role !== "student" || !userProfile?.schoolId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await api.getStudentAttendance(userProfile.schoolId);
+        if (cancelled) return;
+        setLogbookActive((data.records || []).some((r) => r.status === "active"));
+      } catch {
+        if (!cancelled) setLogbookActive(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [role, userProfile?.schoolId]);
 
   const handleLogout = async () => {
@@ -389,7 +387,9 @@ export default function DashboardLayout() {
         </header>
 
         <main className="main-content">
-          <Outlet />
+          <Suspense fallback={<div className="page-loading"><div className="spinner-lg" /></div>}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
 

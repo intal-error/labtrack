@@ -11,7 +11,6 @@ import PesoIcon from "../ui/PesoIcon";
 
 import Pagination from "../ui/Pagination";
 
-const STATUS_COLORS = { pending: "#f57c00", paid: "#43A047", waived: "#1976d2" };
 const STATUS_LABELS = { pending: "Unpaid", paid: "Paid", waived: "Waived" };
 
 function getInitials(name) {
@@ -39,7 +38,7 @@ function fmtDateTime(date) {
 }
 
 export default function FinesTab() {
-  const { role, userProfile } = useAuth();
+  const { role } = useAuth();
   const isAdmin = role === "admin";
   const queryClient = useQueryClient();
 
@@ -52,7 +51,11 @@ export default function FinesTab() {
   const [processing, setProcessing] = useState(null);
   const [openKebab, setOpenKebab] = useState(null);
 
-  useEffect(() => { setPage(1); }, [search, filter]);
+  const [prevResetKeys, setPrevResetKeys] = useState([search, filter]);
+  if (prevResetKeys[0] !== search || prevResetKeys[1] !== filter) {
+    setPrevResetKeys([search, filter]);
+    setPage(1);
+  }
   useEffect(() => {
     const handler = (e) => { if (!e.target.closest(".fines-kebab-wrap")) setOpenKebab(null); };
     document.addEventListener("click", handler);
@@ -205,7 +208,7 @@ export default function FinesTab() {
   );
 }
 
-function AdminView({ stats, overdueCount, filter, setFilter, search, setSearch, sortBy, setSortBy, filtered, paginationData, page, setPage, setSelectedFine, openKebab, setOpenKebab, handlePay, processing }) {
+function AdminView({ stats, overdueCount, filter, setFilter, search, setSearch, sortBy, setSortBy, filtered, paginationData, setPage, setSelectedFine, openKebab, setOpenKebab, handlePay, processing }) {
   return (
     <>
       <div className="maintenance-stats stats-5">
@@ -336,7 +339,7 @@ function AdminView({ stats, overdueCount, filter, setFilter, search, setSearch, 
   );
 }
 
-function StudentView({ stats, outstandingFine, pendingCount, filter, setFilter, search, setSearch, sortBy, setSortBy, filtered, paginationData, page, setPage, setSelectedFine }) {
+function StudentView({ stats, outstandingFine, pendingCount, filter, setFilter, search, setSearch, sortBy, setSortBy, filtered, paginationData, setPage, setSelectedFine }) {
   return (
     <>
       <div className="maintenance-stats">
@@ -454,7 +457,7 @@ function StudentView({ stats, outstandingFine, pendingCount, filter, setFilter, 
   );
 }
 
-function DetailModal({ fine, isAdmin, onClose, waiveReason, setWaiveReason, handlePay, handleWaive, processing }) {
+function DetailModal({ fine, isAdmin, onClose, waiveReason, setWaiveReason, handleWaive, processing }) {
   return (
     <Modal title="Fine Details" onClose={onClose}>
       <div className="fines-detail-modal">

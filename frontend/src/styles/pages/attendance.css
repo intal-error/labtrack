@@ -5,7 +5,7 @@
 
 /* ── Page entrance ── */
 @keyframes attendFadeIn {
-  from { opacity: 0; transform: translateY(12px); }
+  from { opacity: 0.35; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
@@ -15,7 +15,7 @@
 }
 
 @keyframes attendSlideUp {
-  from { opacity: 0; transform: translateY(18px); }
+  from { opacity: 0.4; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
@@ -37,7 +37,7 @@
   max-width: 1200px;
   margin: 0 auto;
   padding: 0 20px 40px;
-  animation: attendFadeIn .5s ease;
+  animation: attendFadeIn .35s ease both;
 }
 
 /* ──────────────────────────────────
@@ -96,7 +96,7 @@
    Stats Grid
    ────────────────────────────────── */
 .attendance-shell {
-  animation: attendFadeIn .55s ease .05s both;
+  animation: attendFadeIn .35s ease both;
 }
 
 .attendance-stats {
@@ -377,7 +377,7 @@ body.dark .attendance-filter-select {
   box-shadow: var(--card-shadow);
   position: relative;
   overflow: hidden;
-  animation: attendSlideUp .4s ease both;
+  animation: attendSlideUp .3s ease both;
 }
 
 .attendance-active-card:nth-child(1) { animation-delay: 0s; }
@@ -1512,7 +1512,7 @@ body.dark .room-add-card:hover .add-icon {
   justify-content: center;
   align-items: center;
   z-index: 9998;
-  animation: attendFadeIn .2s ease;
+  animation: attendFadeIn .2s ease both;
 }
 
 .attendance-modal {
@@ -1526,7 +1526,7 @@ body.dark .room-add-card:hover .add-icon {
   overflow-y: auto;
   scrollbar-width: none;
   box-shadow: 0 0 20px rgba(0,0,0,.4);
-  animation: attendSlideUp .25s ease;
+  animation: attendSlideUp .25s ease both;
 }
 .attendance-modal::-webkit-scrollbar{width:0}
 
@@ -2160,7 +2160,7 @@ body.dark .room-attendance-card-header p { color: #888; }
   background: linear-gradient(135deg, rgba(46,125,50,.08), rgba(102,187,106,.06));
   border: 1.5px solid rgba(46,125,50,.25);
   border-radius: 14px;
-  animation: attendSlideUp .4s ease;
+  animation: attendSlideUp .4s ease both;
   position: relative;
   overflow: hidden;
 }

@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
-import { useNavigate } from "react-router-dom";
-import { MdAdd, MdList, MdPerson, MdLock, MdPhone, MdWork, MdEmail, MdArrowBack, MdShield, MdEdit, MdDelete, MdVisibility, MdEditNote, MdAssignment, MdSwapHoriz, MdSchool, MdAdminPanelSettings, MdMoreVert, MdClose } from "react-icons/md";
+import { MdAdd, MdList, MdPerson, MdLock, MdPhone, MdWork, MdEmail, MdArrowBack, MdShield, MdEdit, MdDelete, MdVisibility, MdEditNote, MdAssignment, MdSwapHoriz, MdSchool, MdMoreVert, MdClose } from "react-icons/md";
 import ViewToggle from "../components/ui/ViewToggle";
 import { COURSES } from "../constants/courses";
 
@@ -30,8 +29,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [viewMode, setViewMode] = useState("list");
-  const { logout, userProfile } = useAuth();
-  const navigate = useNavigate();
+  const { userProfile } = useAuth();
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -44,7 +42,18 @@ export default function AdminPage() {
     catch (err) { setError(err.message || "Failed to load admins"); }
   };
 
-  useEffect(() => { if (view === "list") loadAdmins(); }, [view]);
+  useEffect(() => {
+    if (view !== "list") return;
+    (async () => {
+      try {
+        const data = await api.getAdmins();
+        setError("");
+        setAdmins(data);
+      } catch (err) {
+        setError(err.message || "Failed to load admins");
+      }
+    })();
+  }, [view]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {

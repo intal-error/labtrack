@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useStudentAttendance } from "../hooks/useQueries";
 import { useAuth } from "../context/AuthContext";
 import { formatDuration, formatTime, getTodayString } from "../utils/attendanceHelpers";
-import { MdSearch, MdFileDownload, MdQrCodeScanner, MdMenuBook, MdEventAvailable } from "react-icons/md";
+import { MdSearch, MdFileDownload, MdQrCodeScanner, MdMenuBook } from "react-icons/md";
 import "../styles/pages/attendance.css";
 
 export default function MyAttendancePage() {

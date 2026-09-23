@@ -1,7 +1,7 @@
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useMyNotifications } from "../../hooks/useQueries";
-import { prefetchRoute } from "../../App";
+import { prefetchRoute } from "../../utils/prefetchRoute";
 import {
   MdHome,
   MdQrCodeScanner,

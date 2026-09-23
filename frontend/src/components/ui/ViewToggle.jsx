@@ -15,9 +15,11 @@ export default function ViewToggle({ value, onChange, localStorageKey }) {
     if (localStorageKey) localStorage.setItem(localStorageKey, mode);
   }, [mode, localStorageKey]);
 
-  useEffect(() => {
-    if (value !== undefined && value !== mode) setMode(value);
-  }, [value]);
+  const [prevValue, setPrevValue] = useState(() => Symbol("init"));
+  if (prevValue !== value) {
+    setPrevValue(value);
+    if (value !== undefined) setMode(value);
+  }
 
   const toggle = (newMode) => {
     setMode(newMode);

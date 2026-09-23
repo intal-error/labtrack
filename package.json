@@ -3,15 +3,26 @@
   "version": "1.0.0",
   "description": "SLSU LabTrack v4 - React + Node.js",
   "private": true,
-  "workspaces": ["frontend", "backend"],
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
   "scripts": {
     "dev:all": "concurrently \"npm run dev -w backend\" \"npm run dev -w frontend\"",
     "dev:frontend": "npm run dev -w frontend",
     "dev:backend": "npm run dev -w backend",
     "build": "npm run build -w frontend",
-    "install:all": "npm install"
+    "install:all": "npm install",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "@eslint/js": "^9.39.5",
+    "concurrently": "^8.2.2",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "globals": "^17.12.0"
   }
 }

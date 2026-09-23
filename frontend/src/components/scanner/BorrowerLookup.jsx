@@ -1,6 +1,6 @@
 import { db } from "../../services/firebase";
 import { doc, getDoc, query, where, limit, getDocs, collection } from "firebase/firestore";
-import { normalize, readScanPayload, canUseAsDocId } from "../../utils/helpers";
+import { readScanPayload, canUseAsDocId } from "../../utils/helpers";
 import { sanitizeSearchInput } from "../../utils/search";
 
 export async function resolveUser(rawCode) {

@@ -1,13 +1,12 @@
-import { useState, useEffect, useRef, lazy, Suspense } from "react";
+import { useState, useRef, lazy, Suspense } from "react";
 import { api } from "../services/api";
-import { toDate, numOr, getAvailableQuantity, isOpenBorrow, normalize } from "../utils/helpers";
+import { toDate, numOr, getAvailableQuantity, isOpenBorrow, normalize, parseFutureDate } from "../utils/helpers";
 import { resolveUser } from "../components/scanner/BorrowerLookup";
 import { resolveItem } from "../components/scanner/ItemLookup";
 import { useAuth } from "../context/AuthContext";
 import { COURSES } from "../constants/courses";
 import toast from "react-hot-toast";
 import "../styles/pages/scanner.css";
-import { MdQrCodeScanner } from "react-icons/md";
 
 const ScannerCamera = lazy(() => import("../components/scanner/ScannerCamera"));
 
@@ -31,7 +30,7 @@ export default function ScannerPage() {
   const [email, setEmail] = useState("");
 
   const [quantity, setQuantity] = useState(1);
-  const [dueDate, setDueDate] = useState("");
+  const [dueDate, setDueDate] = useState(defaultDueDate);
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedUser, setSelectedUser] = useState(null);
   const [borrowerResult, setBorrowerResult] = useState(null);
@@ -54,17 +53,16 @@ export default function ScannerPage() {
   const borrowPhotoRef = useRef(null);
   const returnPhotoRef = useRef(null);
 
-  useEffect(() => {
-    setDueDate(defaultDueDate());
-  }, []);
-
-  useEffect(() => {
+  const [prevAction, setPrevAction] = useState(action);
+  if (prevAction !== action) {
+    setPrevAction(action);
     if (action === "returned") setDueDate("");
     else if (!dueDate) setDueDate(defaultDueDate());
-  }, [action]);
+  }
 
-  // Auto-fill borrower for student/faculty (skip for admin)
-  useEffect(() => {
+  const [prevProfile, setPrevProfile] = useState();
+  if (prevProfile !== userProfile) {
+    setPrevProfile(userProfile);
     if (userProfile && !isAdmin) {
       const d = userProfile;
       setSchoolId(d.schoolId || d.schoolID || d.studentID || d.employeeId || "");
@@ -85,7 +83,7 @@ export default function ScannerPage() {
         profileURL: d.profileURL,
       });
     }
-  }, [userProfile, isAdmin]);
+  }
 
   const scrollToStep2 = () => {
     setTimeout(() => {
@@ -148,7 +146,7 @@ export default function ScannerPage() {
       if (type === "borrow") setBorrowPhotoURL(result.url);
       else setReturnPhotoURL(result.url);
       toast.success("Photo uploaded");
-    } catch (err) {
+    } catch {
       toast.error("Failed to upload photo");
     } finally {
       setUploadingPhoto(false);
@@ -168,8 +166,7 @@ export default function ScannerPage() {
     setTxStatus(action === "borrowed" ? "Recording borrow..." : "Recording return...");
     try {
       if (action === "borrowed") {
-        const due = new Date(dueDate);
-        if (isNaN(due.getTime()) || due.getTime() <= Date.now()) throw new Error("Choose a future due date");
+        const due = parseFutureDate(dueDate);
 
         const isStudentBorrow = !isAdmin && userProfile?.role === "student";
         if (isStudentBorrow) {

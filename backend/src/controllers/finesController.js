@@ -4,12 +4,6 @@ const { parsePagination, paginatedResponse } = require("../middleware/pagination
 const { randomUUID } = require("crypto");
 const { transformKeys } = require("../utils/transformKeys");
 
-function formatDate(date) {
-  if (!date) return null;
-  const parsed = new Date(date);
-  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
-}
-
 async function enrichFines(fines) {
   if (fines.length === 0) return [];
 

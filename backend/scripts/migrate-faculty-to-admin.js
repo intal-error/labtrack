@@ -72,7 +72,7 @@ async function migrate() {
           await db.collection("admins").doc(uid).delete();
           console.log(`  Removed legacy admins collection entry.`);
         }
-      } catch (e) {
+      } catch {
         // Non-critical
       }
 

@@ -26,7 +26,17 @@ export default function BorrowedPage() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    (async () => {
+      try {
+        setItems(await api.getBorrowed());
+      } catch (err) {
+        setError(err.message || "Failed to load");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
   const filtered = filterCourse === "All" ? items : items.filter((i) => i.course === filterCourse);
 

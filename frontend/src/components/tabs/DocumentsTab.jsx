@@ -4,7 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import { filterBySearch } from "../../utils/search";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
-import { MdDescription, MdPictureAsPdf, MdTableChart, MdSearch, MdDownload, MdDelete, MdCloudUpload, MdFolderOpen } from "react-icons/md";
+import { MdDescription, MdPictureAsPdf, MdTableChart, MdSearch, MdDownload, MdDelete, MdCloudUpload } from "react-icons/md";
 
 
 export default function DocumentsTab() {
@@ -16,27 +16,27 @@ export default function DocumentsTab() {
   const [activeType, setActiveType] = useState("total");
   const fileInputRef = useRef(null);
 
-  useEffect(() => { loadDocuments(); }, []);
-
-  async function loadDocuments() {
-    try {
-      const data = await api.getDocuments();
-      setDocuments(data);
-    } catch {
-      setDocuments([
-        { id: "1", name: "Laboratory Manual 2026", category: "Manuals", type: "pdf", size: "2.4 MB", date: "Jan 15, 2026" },
-        { id: "2", name: "Student Grade Sheet Template", category: "Templates", type: "xlsx", size: "156 KB", date: "Feb 3, 2026" },
-        { id: "3", name: "Equipment Borrowing Policy", category: "Guidelines", type: "pdf", size: "890 KB", date: "Mar 10, 2026" },
-        { id: "4", name: "Faculty Evaluation Form", category: "Forms", type: "pdf", size: "320 KB", date: "Apr 5, 2026" },
-        { id: "5", name: "Semester Performance Report", category: "Reports", type: "xlsx", size: "1.1 MB", date: "May 20, 2026" },
-        { id: "6", name: "Lab Safety Guidelines", category: "Guidelines", type: "pdf", size: "560 KB", date: "Jun 1, 2026" },
-        { id: "7", name: "Inventory Checklist", category: "Templates", type: "xlsx", size: "210 KB", date: "Jul 12, 2026" },
-        { id: "8", name: "Student Registration Form", category: "Forms", type: "pdf", size: "180 KB", date: "Aug 1, 2026" },
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  }
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await api.getDocuments();
+        setDocuments(data);
+      } catch {
+        setDocuments([
+          { id: "1", name: "Laboratory Manual 2026", category: "Manuals", type: "pdf", size: "2.4 MB", date: "Jan 15, 2026" },
+          { id: "2", name: "Student Grade Sheet Template", category: "Templates", type: "xlsx", size: "156 KB", date: "Feb 3, 2026" },
+          { id: "3", name: "Equipment Borrowing Policy", category: "Guidelines", type: "pdf", size: "890 KB", date: "Mar 10, 2026" },
+          { id: "4", name: "Faculty Evaluation Form", category: "Forms", type: "pdf", size: "320 KB", date: "Apr 5, 2026" },
+          { id: "5", name: "Semester Performance Report", category: "Reports", type: "xlsx", size: "1.1 MB", date: "May 20, 2026" },
+          { id: "6", name: "Lab Safety Guidelines", category: "Guidelines", type: "pdf", size: "560 KB", date: "Jun 1, 2026" },
+          { id: "7", name: "Inventory Checklist", category: "Templates", type: "xlsx", size: "210 KB", date: "Jul 12, 2026" },
+          { id: "8", name: "Student Registration Form", category: "Forms", type: "pdf", size: "180 KB", date: "Aug 1, 2026" },
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
   const stats = useMemo(() => ({
     total: documents.length,

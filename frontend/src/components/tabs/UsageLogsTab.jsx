@@ -1,6 +1,5 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { useMyBorrowed, useMyReturned, useStudentAttendance } from "../../hooks/useQueries";
 import { filterBySearch } from "../../utils/search";
@@ -8,7 +7,7 @@ import { formatDuration, formatTime, getTodayString } from "../../utils/attendan
 import "../../styles/pages/tabs.css";
 import "../../styles/pages/attendance.css";
 import {
-  MdHistory, MdCheckCircle, MdAccessTime, MdWarning, MdSearch,
+  MdCheckCircle, MdAccessTime, MdWarning, MdSearch,
   MdEventBusy, MdInventory, MdQrCodeScanner, MdSchedule,
   MdEventAvailable, MdMenuBook, MdFileDownload
 } from "react-icons/md";

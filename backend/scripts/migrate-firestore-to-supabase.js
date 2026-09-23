@@ -49,17 +49,6 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
 });
 
 // --- Helpers ---
-function convertTimestamp(ts) {
-  if (!ts) return null;
-  if (typeof ts.toDate === "function") return ts.toDate().toISOString();
-  if (ts.seconds) return new Date(ts.seconds * 1000).toISOString();
-  if (ts instanceof Date) return ts.toISOString();
-  if (typeof ts === "string") {
-    const d = new Date(ts);
-    return Number.isNaN(d.getTime()) ? null : d.toISOString();
-  }
-  return null;
-}
 
 function flattenDoc(doc) {
   const data = doc.data();

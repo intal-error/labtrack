@@ -4,7 +4,7 @@ import { useTheme } from "../../context/ThemeContext";
 import toast from "react-hot-toast";
 import {
   MdDarkMode, MdNotifications, MdSecurity, MdPeople,
-  MdSave, MdRestartAlt, MdWarning, MdBackup, MdSettings
+  MdSave, MdRestartAlt, MdWarning, MdBackup
 } from "react-icons/md";
 import PesoIcon from "../ui/PesoIcon";
 import "../../styles/pages/tabs.css";

@@ -5,7 +5,6 @@ const register = async (req, res) => {
     const {
       role, email, password, firstName, lastName,
       schoolId, course, year, section,
-      employeeId, department, position,
       contact,
     } = req.body;
 

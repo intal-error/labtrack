@@ -5,42 +5,31 @@ import "../../styles/pages/install-prompt.css";
 export default function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showInstall, setShowInstall] = useState(false);
-  const [isInstalled, setIsInstalled] = useState(false);
-  const [isIOS, setIsIOS] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(() => window.matchMedia("(display-mode: standalone)").matches);
+  const isIOS =
+    (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
   useEffect(() => {
-    // Check if already installed
-    if (window.matchMedia("(display-mode: standalone)").matches) {
-      setIsInstalled(true);
-      return;
-    }
-
-    // Check if iOS (including iPadOS 13+)
-    const isIOSDevice = (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream)
-      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-    setIsIOS(isIOSDevice);
-
-    // Listen for beforeinstallprompt
-    const handler = (e) => {
+    function beforeInstallHandler(e) {
       e.preventDefault();
       setDeferredPrompt(e);
-      
-      // Show install prompt after 3 seconds
       setTimeout(() => {
         setShowInstall(true);
       }, 3000);
-    };
+    }
 
-    window.addEventListener("beforeinstallprompt", handler);
-
-    // Listen for app installed
-    window.addEventListener("appinstalled", () => {
+    function installedHandler() {
       setIsInstalled(true);
       setShowInstall(false);
-    });
+    }
+
+    window.addEventListener("beforeinstallprompt", beforeInstallHandler);
+    window.addEventListener("appinstalled", installedHandler);
 
     return () => {
-      window.removeEventListener("beforeinstallprompt", handler);
+      window.removeEventListener("beforeinstallprompt", beforeInstallHandler);
+      window.removeEventListener("appinstalled", installedHandler);
     };
   }, []);
 
@@ -80,7 +69,7 @@ export default function InstallPrompt() {
           </div>
           <div className="install-text">
             <h3>Install LabTrack</h3>
-            <p>Tap the Share button, then "Add to Home Screen"</p>
+            <p>Tap the Share button, then &quot;Add to Home Screen&quot;</p>
           </div>
         </div>
       </div>

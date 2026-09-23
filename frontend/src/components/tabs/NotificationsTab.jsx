@@ -2,11 +2,12 @@ import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../services/api";
+import { timeAgo } from "../../utils/helpers";
 import { useMyNotifications } from "../../hooks/useQueries";
 import Modal from "../ui/Modal";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
-import { MdWarning, MdInfo, MdCheckCircle, MdError, MdNotificationsOff, MdOpenInNew, MdNotifications } from "react-icons/md";
+import { MdWarning, MdInfo, MdCheckCircle, MdError, MdNotificationsOff, MdOpenInNew } from "react-icons/md";
 
 import Pagination from "../ui/Pagination";
 
@@ -70,20 +71,6 @@ export default function NotificationsTab() {
       invalidateNotifs();
       toast.success("All marked as read");
     } catch { /* ignore */ }
-  }
-
-  function timeAgo(date) {
-    if (!date) return "";
-    const d = typeof date?.toDate === "function" ? date.toDate() : new Date(date);
-    const seconds = Math.floor((Date.now() - d.getTime()) / 1000);
-    if (seconds < 60) return "Just now";
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    if (days < 7) return `${days}d ago`;
-    return d.toLocaleDateString();
   }
 
   const unread = notifications.filter((n) => !n.read).length;

@@ -28,8 +28,6 @@ export default function SettingsPage() {
     activeTab === "admin" ? AdminPage :
     AboutPage;
 
-  const activeTabInfo = ALL_TABS.find(t => t.id === activeTab);
-
   return (
     <div className="settings-page">
       <div className="settings-tabs-nav">

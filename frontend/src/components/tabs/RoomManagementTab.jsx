@@ -84,7 +84,7 @@ export default function RoomManagementTab() {
     try {
       const data = await api.getRoomQR(room.id);
       setQrImage(data.dataUrl);
-    } catch (err) {
+    } catch {
       toast.error("Failed to generate QR code");
     }
   }

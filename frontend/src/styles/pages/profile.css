@@ -7,7 +7,7 @@
   --primary-light: rgba(46,125,50,.08);
   --hover: rgba(0,0,0,.04);
   --text-secondary: #555;
-  animation: profFadeIn .4s ease;
+  animation: profFadeIn .3s ease both;
 }
 body.dark .profile-page {
   --hover: rgba(255,255,255,.05);
@@ -15,7 +15,7 @@ body.dark .profile-page {
 }
 
 @keyframes profFadeIn {
-  from { opacity: 0; transform: translateY(12px); }
+  from { opacity: 0.35; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
@@ -250,10 +250,10 @@ body.dark .profile-page {
 
 /* Tab content animation */
 .profile-form-anim {
-  animation: profContentIn .3s ease;
+  animation: profContentIn .3s ease both;
 }
 @keyframes profContentIn {
-  from { opacity: 0; transform: translateX(8px); }
+  from { opacity: 0.4; transform: translateX(6px); }
   to   { opacity: 1; transform: translateX(0); }
 }
 

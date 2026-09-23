@@ -58,7 +58,21 @@ export default function AttendanceScanner() {
   const step2Ref = useRef(null);
   const isTimeIn = mode === "time_in";
 
-  useEffect(() => { loadRecentLogs(); }, [schoolId]);
+  if (!schoolId && logsLoading) setLogsLoading(false);
+
+  useEffect(() => {
+    if (!schoolId) return;
+    (async () => {
+      try {
+        const data = await api.getStudentAttendance(schoolId);
+        setRecentLogs((data.records || []).slice(0, 8));
+      } catch {
+        // silent
+      } finally {
+        setLogsLoading(false);
+      }
+    })();
+  }, [schoolId]);
 
   useEffect(() => {
     if (step1Collapsed && isTimeIn) {
@@ -135,7 +149,7 @@ export default function AttendanceScanner() {
     }
   };
 
-  const handleTimeOut = async (code, room) => {
+  const handleTimeOut = async (code) => {
     if (!schoolId) {
       setTxStatus("No student ID found.");
       setTxStatusType("error");
