@@ -2,6 +2,9 @@ import { useMemo } from "react";
 import { api } from "../../services/api";
 import { useReportSummary } from "../../hooks/useQueries";
 import toast from "react-hot-toast";
+import EmptyChart from "../ui/EmptyChart";
+import LoadError from "../ui/LoadError";
+import ChartTooltip from "../ui/ChartTooltip";
 import "../../styles/pages/tabs.css";
 import {
   MdDownload, MdPeople, MdInventory, MdWarning, MdBuild, MdSchedule,
@@ -38,36 +41,15 @@ function formatDate(date) {
   return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }
 
-const ChartTooltip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 14px", boxShadow: "0 4px 12px rgba(0,0,0,.1)" }}>
-      <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: "var(--text)" }}>{label}</p>
-      {payload.map((p, i) => (
-        <p key={i} style={{ margin: "4px 0 0", fontSize: 12, color: p.color }}>{p.name}: {p.value}</p>
-      ))}
-    </div>
-  );
-};
-
-function EmptyChart({ text }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 180, color: "var(--text-muted)", fontSize: 13 }}>
-      {text}
-    </div>
-  );
-}
-
 const EMPTY_SUMMARY = {
   counts: { users: 0, students: 0, catalog: 0, borrowed: 0, returned: 0 },
   charts: { categoryData: [], conditionData: [], topBorrowedData: [], incidentData: [], requestStatusData: [] },
   stats: { openIncidents: 0, scheduledMaintenance: 0, pendingRequests: 0, pendingFines: 0, totalPendingFineAmount: 0, todaySessions: 0 },
-  borrowed: [],
-  returned: [],
+  tables: { recentBorrowed: [], recentReturned: [], overdue: [], overdueTotal: 0 },
 };
 
 export default function ReportsTab() {
-  const { data: rawData, isLoading } = useReportSummary();
+  const { data: rawData, isLoading, isError, refetch } = useReportSummary();
   const summary = useMemo(() => ({ ...EMPTY_SUMMARY, ...rawData }), [rawData]);
 
   async function downloadReport(type) {
@@ -101,20 +83,24 @@ export default function ReportsTab() {
 
   const overdueItems = useMemo(() => {
     const now = new Date();
-    return (summary.borrowed || [])
-      .filter((b) => {
-        const due = toDate(b.dueDate);
-        return due && due.getTime() < now.getTime();
-      })
+    return (summary.tables.overdue || [])
       .map((b) => ({ ...b, daysOverdue: Math.ceil((now.getTime() - toDate(b.dueDate).getTime()) / (1000 * 60 * 60 * 24)) }))
       .sort((a, b) => b.daysOverdue - a.daysOverdue)
       .slice(0, 5);
-  }, [summary.borrowed]);
+  }, [summary.tables.overdue]);
 
-  const recentBorrowed = useMemo(() => (summary.borrowed || []).slice(0, 5), [summary.borrowed]);
-  const recentReturned = useMemo(() => (summary.returned || []).slice(0, 5), [summary.returned]);
+  const recentBorrowed = summary.tables.recentBorrowed || [];
+  const recentReturned = summary.tables.recentReturned || [];
+  const overdueCount = summary.tables.overdueTotal || overdueItems.length;
 
   if (isLoading) return <div className="page-loading"><div className="spinner-lg" /></div>;
+
+  if (isError)
+    return (
+      <div className="tab-content">
+        <LoadError message="Couldn't load report data." onRetry={refetch} />
+      </div>
+    );
 
   return (
     <div className="tab-content">
@@ -192,10 +178,10 @@ export default function ReportsTab() {
       </div>
 
       {/* Overdue Alert */}
-      {overdueItems.length > 0 && (
+      {overdueCount > 0 && (
         <div className="overview-alert">
           <MdWarningAmber size={18} />
-          <span><strong>{overdueItems.length}</strong> overdue item{overdueItems.length > 1 ? "s" : ""} require attention</span>
+          <span><strong>{overdueCount}</strong> overdue item{overdueCount > 1 ? "s" : ""} require attention</span>
         </div>
       )}
 
@@ -328,7 +314,7 @@ export default function ReportsTab() {
       {/* Overdue Table */}
       {overdueItems.length > 0 && (
         <div className="report-chart-box overview-overdue-box">
-          <h4><MdWarningAmber size={16} style={{ color: "#d32f2f" }} /> Overdue Items</h4>
+          <h4><MdWarningAmber size={16} style={{ color: "#d32f2f" }} /> Overdue Items {overdueCount > 5 ? `(top 5 of ${overdueCount})` : ""}</h4>
           <div className="overview-table-wrap">
             <table className="overview-table overview-overdue-table">
               <thead>

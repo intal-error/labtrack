@@ -16,10 +16,10 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["logo.png", "Lucena.webp", "Lucena.png"],
       manifest: {
-        name: "SLSU LabTrack - Laboratory Equipment Tracking",
+        name: "SLSU LabTrack - Borrowing, Return & Logbook Attendance",
         short_name: "LabTrack",
         description:
-          "Laboratory Equipment Borrowing and Tracking System for SLSU",
+          "Laboratory Equipment Borrowing, Return & Logbook Attendance System for SLSU",
         theme_color: "#1a1a2e",
         background_color: "#0f3418",
         display: "standalone",

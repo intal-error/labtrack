@@ -20,9 +20,9 @@ export default function AboutPage() {
           <div className="about-text">
             <h2>ABOUT THIS SYSTEM</h2>
             <p>
-              The <strong>Digital Tracking System for Tool and Equipment Borrowing</strong> is a capstone project of
+              The <strong>Laboratory Equipment Borrowing, Return and Logbook Attendance System</strong> is a capstone project of
               <strong> Southern Luzon State University - Lucena Campus</strong> students.
-              It aims to digitalize the manual borrowing process to promote efficiency, accountability,
+              It aims to digitalize the manual borrowing, return, and logbook attendance process to promote efficiency, accountability,
               and sustainable management of laboratory resources.
             </p>
             <p>

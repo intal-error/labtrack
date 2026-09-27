@@ -74,11 +74,8 @@ function kioskRequest(path, options = {}) {
 }
 
 export const api = {
-  getDashboardCounts: () => request("/transactions/counts"),
-  getChartData: () => request("/transactions/chart"),
   getBorrowed: (params) => request(`/transactions/borrowed${toQuery(params)}`),
   getReturned: (params) => request(`/transactions/returned${toQuery(params)}`),
-  getRecentActivity: () => request("/transactions/recent-activity"),
   getMyBorrowed: (params) => request(`/transactions/my-borrowed${toQuery(params)}`),
   getMyReturned: (params) => request(`/transactions/my-returned${toQuery(params)}`),
   recordBorrow: (data) => request("/transactions/borrow", { method: "POST", body: JSON.stringify(data) }),
@@ -97,7 +94,7 @@ export const api = {
   updateAdmin: (id, data) => request(`/admin/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteAdmin: (id) => request(`/admin/${id}`, { method: "DELETE" }),
 
-  getReportSummary: () => request("/reports/summary"),
+  getReportSummary: (params) => request(`/reports/summary${toQuery(params)}`),
 
   downloadReport: async (type) => {
     let headers = {};

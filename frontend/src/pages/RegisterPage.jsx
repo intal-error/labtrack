@@ -115,7 +115,7 @@ export default function RegisterPage() {
           <h1 className="register-title">LAB<span className="register-title-bold">TRACK</span></h1>
           <p className="register-subtitle">Create Your Account</p>
           <p className="register-desc">
-            Join the digital tracking system for laboratory equipment borrowing.
+            Join the laboratory equipment borrowing, return, and logbook attendance system.
             Register as a student to get started.
           </p>
         </div>

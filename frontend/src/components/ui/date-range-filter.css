@@ -1,0 +1,103 @@
+.date-range-filter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.date-range-presets {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.date-range-preset {
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.date-range-preset:hover {
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.date-range-preset.active {
+  background: var(--green, #2e7d32);
+  color: #fff;
+}
+
+.date-range-custom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-range-custom input[type="date"] {
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--bg-card);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.date-range-custom input[type="date"]:focus {
+  outline: none;
+  border-color: var(--green, #2e7d32);
+  box-shadow: 0 0 0 2px rgba(184, 217, 0, 0.15);
+}
+
+.date-range-sep {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+body.dark .date-range-presets {
+  background: #111111;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+body.dark .date-range-preset:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+body.dark .date-range-custom input[type="date"] {
+  background: #111111;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+@media (max-width: 768px) {
+  .date-range-filter {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .date-range-presets {
+    overflow-x: auto;
+  }
+
+  .date-range-custom {
+    justify-content: space-between;
+  }
+
+  .date-range-custom input[type="date"] {
+    flex: 1;
+    min-width: 0;
+  }
+}

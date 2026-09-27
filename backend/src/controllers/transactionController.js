@@ -313,47 +313,6 @@ const getMyReturned = async (req, res) => {
   }
 };
 
-const getDashboardCounts = async (req, res) => {
-  try {
-    const [borrowedResult, returnedResult, studentsSnap, usersSnap] = await Promise.all([
-      supabase.from("transactions").select("id, action, status, quantity, returned_quantity").eq("action", "borrowed"),
-      supabase.from("transactions").select("id").eq("action", "returned"),
-      db.collection("users").where("role", "==", "student").get(),
-      db.collection("users").get(),
-    ]);
-    const borrowedItems = borrowedResult.data || [];
-    const activeBorrowed = borrowedItems.filter((d) => isOpenBorrow(d)).length;
-    const returnedItems = returnedResult.data || [];
-    res.json({
-      borrowed: activeBorrowed,
-      returned: returnedItems.length,
-      users: usersSnap.size,
-      students: studentsSnap.size,
-    });
-  } catch (err) {
-    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
-  }
-};
-
-const getChartData = async (req, res) => {
-  try {
-    const [borrowedResult, returnedResult, availableResult, inventoryResult] = await Promise.all([
-      supabase.from("transactions").select("id").eq("action", "borrowed"),
-      supabase.from("transactions").select("id").eq("action", "returned"),
-      supabase.from("catalog").select("id").eq("available", true),
-      supabase.from("catalog").select("id"),
-    ]);
-    res.json({
-      borrowed: (borrowedResult.data || []).length,
-      returned: (returnedResult.data || []).length,
-      available: (availableResult.data || []).length,
-      inventory: (inventoryResult.data || []).length,
-    });
-  } catch (err) {
-    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
-  }
-};
-
 const recordBorrow = async (req, res) => {
   try {
     const { itemId, borrower, quantity, dueDate, borrowPhotoURL, conditionOnBorrow } = req.body;
@@ -528,55 +487,6 @@ const recordReturn = async (req, res) => {
   }
 };
 
-const getRecentActivity = async (req, res) => {
-  try {
-    const [borrowResult, returnResult] = await Promise.all([
-      supabase.from("transactions").select("*").eq("action", "borrowed"),
-      supabase.from("transactions").select("*").eq("action", "returned"),
-    ]);
-
-    const borrows = (borrowResult.data || []).map((d) => ({
-      id: d.id,
-      action: "borrowed",
-      first_name: d.first_name || "",
-      last_name: d.last_name || "",
-      item_name: d.item_name || "",
-      quantity: numberOr(d.quantity, 1),
-      timestamp: d.timestamp || d.borrowed_at || null,
-      due_date: d.due_date || null,
-      school_id: d.school_id || "",
-      course: d.course || "",
-      equipment_course: d.equipment_course || "",
-      email: d.email || "",
-    }));
-
-    const returns = (returnResult.data || []).map((d) => ({
-      id: d.id,
-      action: "returned",
-      first_name: d.first_name || "",
-      last_name: d.last_name || "",
-      item_name: d.item_name || "",
-      quantity: numberOr(d.quantity, 1),
-      timestamp: d.timestamp || d.returned_at || null,
-      returned_at: d.returned_at || null,
-      due_date: d.due_date || null,
-      school_id: d.school_id || "",
-      course: d.course || "",
-      equipment_course: d.equipment_course || "",
-      email: d.email || "",
-    }));
-
-    const merged = [...borrows, ...returns]
-      .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))
-      .slice(0, 10);
-
-    const enriched = await enrichWithProfileURL(merged);
-    res.json(transformKeys(enriched));
-  } catch (err) {
-    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
-  }
-};
-
 const recordMyReturn = async (req, res) => {
   try {
     const uid = req.user.uid;
@@ -662,4 +572,4 @@ const recordMyReturn = async (req, res) => {
   }
 };
 
-module.exports = { getBorrowed, getReturned, getMyBorrowed, getMyReturned, getDashboardCounts, getChartData, recordBorrow, recordReturn, recordMyReturn, getRecentActivity };
+module.exports = { getBorrowed, getReturned, getMyBorrowed, getMyReturned, recordBorrow, recordReturn, recordMyReturn };

@@ -14,7 +14,7 @@ import {
   MdChevronLeft, MdChevronRight, MdExpandMore, MdExpandLess,
   MdBuild, MdWarning, MdMenuBook, MdHistory,
   MdAssignment, MdEventAvailable,
-  MdSearch, MdClose, MdCheckCircle, MdGavel, MdTune,
+  MdSearch, MdClose, MdCheckCircle, MdGavel, MdTune, MdAssessment,
 } from "react-icons/md";
 import PesoIcon from "../ui/PesoIcon";
 import { FaExchangeAlt } from "react-icons/fa";
@@ -48,6 +48,7 @@ const NAV_ITEMS = [
     label: "HOME",
     items: [
       { path: "/dashboard", label: "Dashboard", icon: MdHome, roles: ["student", "admin"] },
+      { path: "/reports", label: "Reports", icon: MdAssessment, roles: ["admin"] },
     ],
   },
   {
@@ -221,7 +222,7 @@ export default function DashboardLayout() {
             {!collapsed && (
               <div className="sidebar-brand">
                 <div className="sidebar-brand-title">LabTrack</div>
-                <div className="sidebar-brand-sub">SLSU Lab Equipment</div>
+                <div className="sidebar-brand-sub">Borrowing, Return & Attendance</div>
               </div>
             )}
           </div>

@@ -28,7 +28,7 @@ export default function SplashScreen({ onComplete }) {
           <div className="splash-pulse" />
         </div>
         <h1 className="splash-title">LabTrack</h1>
-        <p className="splash-subtitle">Laboratory Equipment Tracking</p>
+        <p className="splash-subtitle">Borrowing, Return & Logbook Attendance</p>
         <div className="splash-loader">
           <div className="splash-loader-bar" />
         </div>

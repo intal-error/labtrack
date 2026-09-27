@@ -160,10 +160,10 @@ export default function LoginPage() {
             <span className="login-brand-name">SLSU</span>
           </div>
           <h1 className="login-title">LAB<span className="login-title-bold">TRACK</span></h1>
-          <p className="login-subtitle">Digital Tracking System for Tool and Equipment Borrowing</p>
+          <p className="login-subtitle">Laboratory Equipment Borrowing, Return & Logbook Attendance System</p>
           <p className="login-desc">
             A capstone project of Southern Luzon State University - Lucena Campus,
-            digitalizing the manual borrowing process for efficiency and accountability.
+            digitalizing the borrowing, return, and logbook attendance process for efficiency and accountability.
           </p>
           <ul className="login-features">
             {FEATURES.map(({ icon: Icon, text }, i) => (

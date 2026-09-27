@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { api } from "../services/api";
 
 // ── Catalog ──
@@ -138,35 +138,13 @@ export function useMyNotifications(params) {
   });
 }
 
-// ── Dashboard ──
-export function useDashboardCounts() {
-  return useQuery({
-    queryKey: ["dashboardCounts"],
-    queryFn: () => api.getDashboardCounts(),
-    staleTime: 2 * 60 * 1000,
-  });
-}
-export function useChartData() {
-  return useQuery({
-    queryKey: ["chartData"],
-    queryFn: () => api.getChartData(),
-    staleTime: 5 * 60 * 1000,
-  });
-}
-export function useRecentActivity() {
-  return useQuery({
-    queryKey: ["recentActivity"],
-    queryFn: () => api.getRecentActivity(),
-    staleTime: 2 * 60 * 1000,
-  });
-}
-
 // ── Reports ──
-export function useReportSummary() {
+export function useReportSummary(params) {
   return useQuery({
-    queryKey: ["reportSummary"],
-    queryFn: () => api.getReportSummary(),
+    queryKey: ["reportSummary", params || null],
+    queryFn: () => api.getReportSummary(params),
     staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 }
 

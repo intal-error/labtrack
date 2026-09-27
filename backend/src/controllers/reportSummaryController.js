@@ -1,6 +1,9 @@
 const { supabase } = require("../config/supabase");
 const { db } = require("../config/firebase");
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 function isOpenBorrow(t) {
   if (t?.action !== "borrowed") return false;
   if ((t?.status || "").toLowerCase() === "returned") return false;
@@ -8,44 +11,275 @@ function isOpenBorrow(t) {
   return remaining > 0;
 }
 
+// Bare `YYYY-MM-DD` values are calendar dates in the server's local timezone —
+// the same convention attendanceController uses when writing lab_attendance.date.
+function parseDay(value) {
+  if (typeof value !== "string") return new Date(NaN);
+  const [y, m, d] = value.split("-").map(Number);
+  if (!y || !m || !d) return new Date(NaN);
+  const date = new Date(y, m - 1, d);
+  return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d
+    ? date
+    : new Date(NaN);
+}
+
+function toMs(value) {
+  if (!value) return null;
+  if (value instanceof Date) {
+    const t = value.getTime();
+    return Number.isNaN(t) ? null : t;
+  }
+  if (typeof value === "string" && DATE_RE.test(value)) {
+    const t = parseDay(value).getTime();
+    return Number.isNaN(t) ? null : t;
+  }
+  const d = new Date(value);
+  const t = d.getTime();
+  return Number.isNaN(t) ? null : t;
+}
+
+function dayKey(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function todayKey() {
+  return dayKey(new Date());
+}
+
+function parseDateParam(value) {
+  if (typeof value !== "string" || !DATE_RE.test(value)) return null;
+  const d = parseDay(value);
+  if (Number.isNaN(d.getTime()) || dayKey(d) !== value) return null;
+  return value;
+}
+
+function bucketSizeFor(fromStr, toStr) {
+  const days = Math.round((parseDay(toStr).getTime() - parseDay(fromStr).getTime()) / DAY_MS);
+  if (days > 400) return "month";
+  if (days > 120) return "week";
+  return "day";
+}
+
+function bucketKeyFor(date, size) {
+  if (size === "month") return dayKey(date).slice(0, 7);
+  if (size === "week") {
+    const backToMonday = (date.getDay() + 6) % 7;
+    return dayKey(new Date(date.getFullYear(), date.getMonth(), date.getDate() - backToMonday));
+  }
+  return dayKey(date);
+}
+
+function bucketLabelFor(key, size) {
+  const [y, m, d = 1] = key.split("-").map(Number);
+  if (size === "month") {
+    return new Date(y, m - 1, 1).toLocaleDateString("en-US", {
+      month: "short",
+      year: "2-digit",
+    });
+  }
+  return new Date(y, m - 1, d).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+/**
+ * Builds a continuous bucketed timeline (day/week/month) for the selected range.
+ * `bump(when, field)` increments a metric on the bucket that contains `when`.
+ */
+function createSeries(fromStr, toStr, capMs) {
+  const size = bucketSizeFor(fromStr, toStr);
+  const entries = [];
+  const rows = new Map();
+  const from = parseDay(fromStr);
+  const to = parseDay(toStr);
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from > to) {
+    return { entries, bump: () => {} };
+  }
+
+  let cursor = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  while (cursor.getTime() <= to.getTime()) {
+    const key = bucketKeyFor(cursor, size);
+    const next = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1);
+    const bucketEnd = Math.min(next.getTime() - 1, capMs);
+    const existing = rows.get(key);
+    if (existing) {
+      existing.endMs = bucketEnd;
+    } else {
+      const row = { key, label: bucketLabelFor(key, size), endMs: bucketEnd };
+      rows.set(key, row);
+      entries.push(row);
+    }
+    cursor = next;
+  }
+
+  const bump = (when, field, amount = 1) => {
+    const t = toMs(when);
+    if (t === null) return;
+    const row = rows.get(bucketKeyFor(new Date(t), size));
+    if (row) row[field] = (row[field] || 0) + amount;
+  };
+
+  return { entries, bump };
+}
+
+/**
+ * A borrow only counts as returned once `returned_at` says so. `last_returned_at`
+ * is a partial-return timestamp and must not be used: a `partially_returned`
+ * record still has units out and can still be overdue.
+ * Rows written before `returned_at` existed fall back to their status.
+ */
+function returnedAsOf(t, ms) {
+  const returnedAt = toMs(t.returned_at);
+  if (returnedAt !== null) return returnedAt <= ms;
+  return (t.status || "").toLowerCase() === "returned";
+}
+
+// Supabase/PostgREST silently caps a response at `max-rows` (1000 by default),
+// so every unbounded read must be paged out or the counts come back short.
+const FETCH_BATCH = 1000;
+const FETCH_MAX_BATCHES = 200;
+
+async function fetchAll(build) {
+  const first = await build().range(0, FETCH_BATCH - 1);
+  if (first.error) throw first.error;
+  const out = first.data ? [...first.data] : [];
+  // If the count header is missing, keep paging until a page comes back empty.
+  const total = typeof first.count === "number" ? first.count : Infinity;
+  let fetched = out.length;
+  for (let i = 1; fetched < total && i < FETCH_MAX_BATCHES; i++) {
+    const page = await build().range(fetched, fetched + FETCH_BATCH - 1);
+    if (page.error) throw page.error;
+    const rows = page.data || [];
+    if (rows.length === 0) break;
+    out.push(...rows);
+    fetched += rows.length;
+  }
+  return out;
+}
+
+function countOverdueAt(borrowedRows, ms) {
+  let count = 0;
+  for (const t of borrowedRows) {
+    const due = toMs(t.due_date);
+    if (due === null || due >= ms) continue;
+    if (returnedAsOf(t, ms)) continue;
+    count += 1;
+  }
+  return count;
+}
+
+function mapTableRow(t) {
+  return {
+    id: t.id,
+    userName: [t.first_name, t.last_name].filter(Boolean).join(" ") || null,
+    itemName: t.item_name || null,
+    quantity: Number(t.quantity) || 1,
+    dueDate: t.due_date || null,
+    timestamp: t.returned_at || t.timestamp || t.created_at || null,
+  };
+}
+
 const getSummary = async (req, res) => {
   try {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayKey();
+    let fromParam = parseDateParam(req.query.from);
+    let toParam = parseDateParam(req.query.to);
+    if (fromParam && toParam && fromParam > toParam) {
+      const swap = fromParam;
+      fromParam = toParam;
+      toParam = swap;
+    }
+    const toStr = toParam || today;
+
+    const attendanceRangeQuery = () => {
+      let q = supabase.from("lab_attendance").select("date", { count: "exact" }).lte("date", toStr);
+      if (fromParam) q = q.gte("date", fromParam);
+      return q.order("id", { ascending: true });
+    };
 
     const [
       usersSnap,
       studentsSnap,
-      { data: catalog, error: catalogErr },
-      { data: borrowed, error: borrowedErr },
-      { data: returned, error: returnedErr },
-      { data: incidents, error: incidentsErr },
-      { data: maintenance, error: maintenanceErr },
-      { data: fines, error: finesErr },
-      { data: requests, error: requestsErr },
-      { data: attendance, error: attendanceErr },
+      catalog,
+      borrowedRows,
+      returnedRows,
+      incidents,
+      maintenance,
+      fines,
+      requests,
+      attendance,
+      attendanceRange,
     ] = await Promise.all([
       db.collection("users").get(),
       db.collection("users").where("role", "==", "student").get(),
-      supabase.from("catalog").select("*"),
-      supabase.from("transactions").select("*").eq("action", "borrowed"),
-      supabase.from("transactions").select("*").eq("action", "returned"),
-      supabase.from("incidents").select("*"),
-      supabase.from("maintenance").select("*"),
-      supabase.from("fines").select("*").order("created_at", { ascending: false }),
-      supabase.from("borrow_requests").select("*").order("created_at", { ascending: false }),
-      supabase.from("lab_attendance").select("*").eq("date", today),
+      fetchAll(() => supabase.from("catalog").select("*", { count: "exact" }).order("id", { ascending: true })),
+      fetchAll(() =>
+        supabase
+          .from("transactions")
+          .select("*", { count: "exact" })
+          .eq("action", "borrowed")
+          .order("id", { ascending: true })
+      ),
+      fetchAll(() =>
+        supabase
+          .from("transactions")
+          .select("*", { count: "exact" })
+          .eq("action", "returned")
+          .order("id", { ascending: true })
+      ),
+      fetchAll(() => supabase.from("incidents").select("*", { count: "exact" }).order("id", { ascending: true })),
+      fetchAll(() => supabase.from("maintenance").select("*", { count: "exact" }).order("id", { ascending: true })),
+      fetchAll(() =>
+        supabase
+          .from("fines")
+          .select("*", { count: "exact" })
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+      ),
+      fetchAll(() =>
+        supabase
+          .from("borrow_requests")
+          .select("*", { count: "exact" })
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+      ),
+      fetchAll(() =>
+        supabase.from("lab_attendance").select("*", { count: "exact" }).eq("date", today).order("id", { ascending: true })
+      ),
+      fetchAll(attendanceRangeQuery),
     ]);
 
-    if (catalogErr) throw catalogErr;
-    if (borrowedErr) throw borrowedErr;
-    if (returnedErr) throw returnedErr;
-    if (incidentsErr) throw incidentsErr;
-    if (maintenanceErr) throw maintenanceErr;
-    if (finesErr) throw finesErr;
-    if (requestsErr) throw requestsErr;
-    if (attendanceErr) throw attendanceErr;
+    // Effective range start: explicit ?from, otherwise earliest data (all-time)
+    let fromStr = fromParam;
+    if (!fromStr) {
+      let minMs = null;
+      const consider = (value) => {
+        const t = toMs(value);
+        if (t !== null && (minMs === null || t < minMs)) minMs = t;
+      };
+      borrowedRows.forEach((t) => consider(t.borrowed_at || t.timestamp || t.created_at));
+      returnedRows.forEach((t) => consider(t.returned_at || t.timestamp || t.created_at));
+      (attendanceRange || []).forEach((r) => consider(r.date));
+      const to = parseDay(toStr);
+      const fallback = minMs === null ? new Date(to.getFullYear(), to.getMonth(), to.getDate() - 90) : new Date(minMs);
+      fromStr = dayKey(fallback);
+    }
+    // A ?from later than the range end would otherwise build an empty series.
+    if (fromStr > toStr) fromStr = toStr;
 
-    const activeBorrowed = (borrowed || []).filter(isOpenBorrow).length;
+    const fromMs = parseDay(fromStr).getTime();
+    const toEnd = parseDay(toStr).getTime();
+    const rangeEndMs = Math.min(toEnd + DAY_MS - 1, Date.now());
+    const inRange = (value) => {
+      const t = toMs(value);
+      return t !== null && t >= fromMs && t <= rangeEndMs;
+    };
+
+    const activeBorrowed = borrowedRows.filter(isOpenBorrow).length;
 
     const allCatalog = (catalog || []).map((d) => ({
       category: d.category || "Uncategorized",
@@ -53,8 +287,10 @@ const getSummary = async (req, res) => {
       status: d.status || "Available",
     }));
 
+    // Top borrowed (units moved in range) — borrows only, never double-count returns
     const topItems = {};
-    [...(returned || []), ...(borrowed || [])].forEach((t) => {
+    borrowedRows.forEach((t) => {
+      if (!inRange(t.borrowed_at || t.timestamp || t.created_at)) return;
       const name = t.item_name || "Unknown";
       topItems[name] = (topItems[name] || 0) + (Number(t.quantity) || 1);
     });
@@ -92,13 +328,81 @@ const getSummary = async (req, res) => {
     const maintenanceData = (maintenance || []).map((d) => ({ status: d.status || "unknown" }));
     const scheduledMaintenance = maintenanceData.filter((m) => m.status === "scheduled").length;
 
+    // ── Period metrics + trends (respect ?from / ?to) ──
+    const series = createSeries(fromStr, toStr, rangeEndMs);
+    let periodBorrows = 0;
+    let periodReturns = 0;
+    let periodSessions = 0;
+
+    borrowedRows.forEach((t) => {
+      const when = t.borrowed_at || t.timestamp || t.created_at;
+      if (!inRange(when)) return;
+      periodBorrows += 1;
+      series.bump(when, "borrowed");
+    });
+
+    returnedRows.forEach((t) => {
+      const when = t.returned_at || t.timestamp || t.created_at;
+      if (!inRange(when)) return;
+      periodReturns += 1;
+      series.bump(when, "returned");
+    });
+
+    (attendanceRange || []).forEach((r) => {
+      if (!inRange(r.date)) return;
+      periodSessions += 1;
+      series.bump(r.date, "sessions");
+    });
+
+    series.entries.forEach((row) => {
+      row.overdue = countOverdueAt(borrowedRows, Math.min(row.endMs, rangeEndMs));
+    });
+    const periodOverdue = countOverdueAt(borrowedRows, rangeEndMs);
+
+    const trendBorrowReturn = series.entries.map((row) => ({
+      date: row.label,
+      borrowed: row.borrowed || 0,
+      returned: row.returned || 0,
+    }));
+    const trendAttendance = series.entries.map((row) => ({
+      date: row.label,
+      sessions: row.sessions || 0,
+    }));
+    const trendOverdue = series.entries.map((row) => ({
+      date: row.label,
+      overdue: row.overdue || 0,
+    }));
+
+    // ── Detail tables for the Reports page (always all-time) ──
+    const byNewest = (a, b) => (toMs(b) || 0) - (toMs(a) || 0);
+    const recentBorrowed = borrowedRows
+      .filter(isOpenBorrow)
+      .sort((a, b) => byNewest(a.borrowed_at || a.timestamp || a.created_at, b.borrowed_at || b.timestamp || b.created_at))
+      .slice(0, 5)
+      .map(mapTableRow);
+    const recentReturned = returnedRows
+      .slice()
+      .sort((a, b) => byNewest(a.returned_at || a.timestamp || a.created_at, b.returned_at || b.timestamp || b.created_at))
+      .slice(0, 5)
+      .map(mapTableRow);
+    const nowMs = Date.now();
+    const overdueList = borrowedRows.filter((t) => {
+      const due = toMs(t.due_date);
+      return due !== null && due < nowMs && !returnedAsOf(t, nowMs);
+    });
+    const overdueTable = overdueList
+      .slice()
+      .sort((a, b) => (toMs(a.due_date) || 0) - (toMs(b.due_date) || 0))
+      .slice(0, 5)
+      .map(mapTableRow);
+
     res.json({
       counts: {
         users: usersSnap.size,
         students: studentsSnap.size,
-        catalog: (catalog || []).length,
+        catalog: catalog.length,
         borrowed: activeBorrowed,
-        returned: (returned || []).length,
+        returned: returnedRows.length,
       },
       charts: {
         categoryData: Object.entries(categoryData).map(([name, value]) => ({ name, value })),
@@ -112,6 +416,9 @@ const getSummary = async (req, res) => {
           name: name.charAt(0).toUpperCase() + name.slice(1),
           value,
         })),
+        trendBorrowReturn,
+        trendAttendance,
+        trendOverdue,
       },
       stats: {
         openIncidents: (incidents || []).filter((i) => i.status === "open").length,
@@ -120,6 +427,20 @@ const getSummary = async (req, res) => {
         pendingFines: pendingFines.length,
         totalPendingFineAmount,
         todaySessions: (attendance || []).length,
+      },
+      period: {
+        from: fromStr,
+        to: toStr,
+        borrows: periodBorrows,
+        returns: periodReturns,
+        sessions: periodSessions,
+        overdue: periodOverdue,
+      },
+      tables: {
+        recentBorrowed,
+        recentReturned,
+        overdue: overdueTable,
+        overdueTotal: overdueList.length,
       },
     });
   } catch (err) {
