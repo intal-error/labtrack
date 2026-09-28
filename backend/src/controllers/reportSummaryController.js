@@ -202,8 +202,8 @@ const getSummary = async (req, res) => {
     };
 
     const [
-      usersSnap,
-      studentsSnap,
+      usersAgg,
+      studentsAgg,
       catalog,
       borrowedRows,
       returnedRows,
@@ -214,8 +214,8 @@ const getSummary = async (req, res) => {
       attendance,
       attendanceRange,
     ] = await Promise.all([
-      db.collection("users").get(),
-      db.collection("users").where("role", "==", "student").get(),
+      db.collection("users").count().get(),
+      db.collection("users").where("role", "==", "student").count().get(),
       fetchAll(() => supabase.from("catalog").select("*", { count: "exact" }).order("id", { ascending: true })),
       fetchAll(() =>
         supabase
@@ -398,8 +398,8 @@ const getSummary = async (req, res) => {
 
     res.json({
       counts: {
-        users: usersSnap.size,
-        students: studentsSnap.size,
+        users: usersAgg.data().count,
+        students: studentsAgg.data().count,
         catalog: catalog.length,
         borrowed: activeBorrowed,
         returned: returnedRows.length,

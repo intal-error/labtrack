@@ -91,18 +91,20 @@ export function useMyBorrowRequests() {
 }
 
 // ── Fines ──
-export function useFines(params) {
+export function useFines(params, { enabled } = {}) {
   return useQuery({
     queryKey: ["fines", params],
     queryFn: () => api.getFines(params),
     staleTime: 60 * 1000,
+    enabled,
   });
 }
-export function useMyFines(params) {
+export function useMyFines(params, { enabled } = {}) {
   return useQuery({
     queryKey: ["myFines", params],
     queryFn: () => api.getMyFines(params),
     staleTime: 60 * 1000,
+    enabled,
   });
 }
 export function useOverdueCount() {

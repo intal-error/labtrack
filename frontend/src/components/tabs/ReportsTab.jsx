@@ -7,10 +7,8 @@ import LoadError from "../ui/LoadError";
 import ChartTooltip from "../ui/ChartTooltip";
 import "../../styles/pages/tabs.css";
 import {
-  MdDownload, MdPeople, MdInventory, MdWarning, MdBuild, MdSchedule,
-  MdAssignment, MdEventAvailable, MdWarningAmber
+  MdDownload, MdWarningAmber
 } from "react-icons/md";
-import PesoIcon from "../ui/PesoIcon";
 
 import {
   BarChart, Bar, PieChart, Pie, Cell,
@@ -22,7 +20,6 @@ const CONDITION_COLORS = {
   Damaged: "#ef6c00", "For Repair": "#7b1fa2", Missing: "#c62828", Unknown: "#888"
 };
 const INCIDENT_COLORS = { open: "#d32f2f", investigating: "#f57c00", resolved: "#43A047" };
-const CATEGORY_COLORS = ["#1976d2", "#2E7D32", "#f57c00", "#7b1fa2", "#c62828", "#00838f"];
 const REQUEST_STATUS_COLORS = { pending: "#f9a825", approved: "#2E7D32", rejected: "#d32f2f", cancelled: "#888" };
 
 function toDate(value) {
@@ -61,23 +58,7 @@ export default function ReportsTab() {
     }
   }
 
-  const stats = useMemo(() => ({
-    users: summary.counts.users || 0,
-    students: summary.counts.students || 0,
-    catalog: summary.counts.catalog || 0,
-    borrowed: summary.counts.borrowed || 0,
-    returned: summary.counts.returned || 0,
-    openIncidents: summary.stats.openIncidents || 0,
-    scheduledMaintenance: summary.stats.scheduledMaintenance || 0,
-    pendingRequests: summary.stats.pendingRequests || 0,
-    pendingFines: summary.stats.pendingFines || 0,
-    totalPendingFineAmount: summary.stats.totalPendingFineAmount || 0,
-    todaySessions: summary.stats.todaySessions || 0,
-  }), [summary]);
-
-  const categoryData = summary.charts.categoryData || [];
   const conditionData = summary.charts.conditionData || [];
-  const topBorrowedData = summary.charts.topBorrowedData || [];
   const incidentData = summary.charts.incidentData || [];
   const requestStatusData = summary.charts.requestStatusData || [];
 
@@ -114,69 +95,6 @@ export default function ReportsTab() {
         <MdDownload size={16} /> Catalog
       </button>
 
-      {/* Key Metrics */}
-      <div className="overview-metrics">
-        <div className="overview-metric-card">
-          <div className="overview-metric-icon" style={{ background: "rgba(25,118,210,.1)", color: "#1976d2" }}><MdPeople size={20} /></div>
-          <div className="overview-metric-body">
-            <div className="overview-metric-value">{stats.users}</div>
-            <div className="overview-metric-label">Total Users</div>
-            <div className="overview-metric-detail">{stats.students} students</div>
-          </div>
-        </div>
-        <div className="overview-metric-card">
-          <div className="overview-metric-icon" style={{ background: "rgba(46,125,50,.1)", color: "#2E7D32" }}><MdInventory size={20} /></div>
-          <div className="overview-metric-body">
-            <div className="overview-metric-value">{stats.catalog}</div>
-            <div className="overview-metric-label">Catalog Items</div>
-          </div>
-        </div>
-        <div className="overview-metric-card">
-          <div className="overview-metric-icon" style={{ background: "rgba(2,119,189,.1)", color: "#0277bd" }}><MdSchedule size={20} /></div>
-          <div className="overview-metric-body">
-            <div className="overview-metric-value">{stats.borrowed}</div>
-            <div className="overview-metric-label">Active Borrows</div>
-            <div className="overview-metric-detail">{stats.returned} returned</div>
-          </div>
-        </div>
-        <div className="overview-metric-card">
-          <div className="overview-metric-icon" style={{ background: "rgba(249,168,37,.1)", color: "#f9a825" }}><MdAssignment size={20} /></div>
-          <div className="overview-metric-body">
-            <div className="overview-metric-value">{stats.pendingRequests}</div>
-            <div className="overview-metric-label">Pending Requests</div>
-          </div>
-        </div>
-        <div className="overview-metric-card">
-          <div className="overview-metric-icon" style={{ background: "rgba(229,57,53,.1)", color: "#e53935" }}><PesoIcon size={20} /></div>
-          <div className="overview-metric-body">
-            <div className="overview-metric-value">₱{stats.totalPendingFineAmount.toLocaleString()}</div>
-            <div className="overview-metric-label">Pending Fines</div>
-            <div className="overview-metric-detail">{stats.pendingFines} unpaid</div>
-          </div>
-        </div>
-        <div className="overview-metric-card">
-          <div className="overview-metric-icon" style={{ background: "rgba(0,137,123,.1)", color: "#00897b" }}><MdEventAvailable size={20} /></div>
-          <div className="overview-metric-body">
-            <div className="overview-metric-value">{stats.todaySessions}</div>
-            <div className="overview-metric-label">Today&apos;s Sessions</div>
-          </div>
-        </div>
-        <div className="overview-metric-card">
-          <div className="overview-metric-icon" style={{ background: "rgba(245,124,0,.1)", color: "#f57c00" }}><MdWarning size={20} /></div>
-          <div className="overview-metric-body">
-            <div className="overview-metric-value">{stats.openIncidents}</div>
-            <div className="overview-metric-label">Open Incidents</div>
-          </div>
-        </div>
-        <div className="overview-metric-card">
-          <div className="overview-metric-icon" style={{ background: "rgba(123,31,162,.1)", color: "#7b1fa2" }}><MdBuild size={20} /></div>
-          <div className="overview-metric-body">
-            <div className="overview-metric-value">{stats.scheduledMaintenance}</div>
-            <div className="overview-metric-label">Scheduled Maintenance</div>
-          </div>
-        </div>
-      </div>
-
       {/* Overdue Alert */}
       {overdueCount > 0 && (
         <div className="overview-alert">
@@ -185,22 +103,7 @@ export default function ReportsTab() {
         </div>
       )}
 
-      {/* Categories Chart */}
-      <div className="report-chart-box">
-        <h4>Categories</h4>
-        {categoryData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={260}>
-            <PieChart>
-              <Pie data={categoryData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={3} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                {categoryData.map((_, i) => <Cell key={i} fill={CATEGORY_COLORS[i % CATEGORY_COLORS.length]} />)}
-              </Pie>
-              <Tooltip content={<ChartTooltip />} />
-            </PieChart>
-          </ResponsiveContainer>
-        ) : <EmptyChart text="No catalog data" />}
-      </div>
-
-      {/* Charts Row 2 */}
+      {/* Charts */}
       <div className="reports-charts-grid">
         <div className="report-chart-box">
           <h4>Item Condition</h4>
@@ -218,24 +121,6 @@ export default function ReportsTab() {
             </ResponsiveContainer>
           ) : <EmptyChart text="No condition data" />}
         </div>
-        <div className="report-chart-box">
-          <h4>Top Borrowed</h4>
-          {topBorrowedData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={topBorrowedData} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 11, fill: "var(--text-muted)" }} allowDecimals={false} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "var(--text-muted)" }} width={100} />
-                <Tooltip content={<ChartTooltip />} />
-                <Bar dataKey="value" name="Borrows" fill="#2E7D32" radius={[0, 6, 6, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : <EmptyChart text="No borrowing history" />}
-        </div>
-      </div>
-
-      {/* Charts Row 3 */}
-      <div className="reports-charts-grid">
         <div className="report-chart-box">
           <h4>Request Status</h4>
           {requestStatusData.length > 0 ? (

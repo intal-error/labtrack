@@ -1,15 +1,12 @@
-import { useState, useCallback, useMemo } from "react";
-import { api } from "../services/api";
-import { useBorrowed, useReturned } from "../hooks/useQueries";
-import { COURSES } from "../constants/courses";
-import { toDate, formatDate, getRemainingQuantity, computeTransactionStats, timeAgo } from "../utils/helpers";
-import LoadingSpinner from "../components/ui/LoadingSpinner";
-import Modal from "../components/ui/Modal";
-import Pagination from "../components/ui/Pagination";
-import LoadError from "../components/ui/LoadError";
-import toast from "react-hot-toast";
-import "../styles/pages/tables.css";
-import ViewToggle from "../components/ui/ViewToggle";
+import { useState, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
+import { useMyBorrowed, useMyReturned } from "../../hooks/useQueries";
+import { toDate, formatDate, getRemainingQuantity, computeTransactionStats, timeAgo } from "../../utils/helpers";
+import Modal from "../../components/ui/Modal";
+import Pagination from "../../components/ui/Pagination";
+import LoadError from "../../components/ui/LoadError";
+import ViewToggle from "../../components/ui/ViewToggle";
+import "../../styles/pages/tables.css";
 
 const PAGE_LIMIT = 25;
 
@@ -38,26 +35,6 @@ function getOverdueInfo(dueDate) {
   };
 }
 
-function getDateParams(range) {
-  if (!range || range === "all") return {};
-  const now = new Date();
-  if (range === "today") {
-    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    return { dateFrom: start.toISOString() };
-  }
-  if (range === "week") {
-    const start = new Date(now);
-    start.setDate(start.getDate() - 7);
-    return { dateFrom: start.toISOString() };
-  }
-  if (range === "month") {
-    const start = new Date(now);
-    start.setMonth(start.getMonth() - 1);
-    return { dateFrom: start.toISOString() };
-  }
-  return {};
-}
-
 const SORT_OPTIONS = [
   { value: "date-desc", label: "Newest First" },
   { value: "date-asc", label: "Oldest First" },
@@ -65,13 +42,6 @@ const SORT_OPTIONS = [
   { value: "name-desc", label: "Name Z-A" },
   { value: "qty-desc", label: "Qty High-Low" },
   { value: "qty-asc", label: "Qty Low-High" },
-];
-
-const DATE_RANGES = [
-  { value: "all", label: "All Time" },
-  { value: "today", label: "Today" },
-  { value: "week", label: "This Week" },
-  { value: "month", label: "This Month" },
 ];
 
 function sortItems(items, sortBy) {
@@ -88,48 +58,46 @@ function sortItems(items, sortBy) {
       const nb = `${b.firstName || ""} ${b.lastName || ""}`.trim().toLowerCase();
       return na.localeCompare(nb) * mult;
     }
-    if (key === "qty") {
-      return ((a.quantity || 0) - (b.quantity || 0)) * mult;
-    }
+    if (key === "qty") return ((a.quantity || 0) - (b.quantity || 0)) * mult;
     return 0;
   });
 }
 
-export default function TransactionsPage() {
-  const [activeTab, setActiveTab] = useState("borrowed");
-  const [search, setSearch] = useState("");
-  const [filterCourse, setFilterCourse] = useState("All");
+export default function TransactionsPanel({ mode = "borrowed" }) {
+  const [searchParams] = useSearchParams();
+  // Keep local search in sync with the ?search= param driven by the header search bar.
+  const urlSearch = searchParams.get("search") || "";
+  const [search, setSearch] = useState(urlSearch);
   const [sortBy, setSortBy] = useState("date-desc");
-  const [dateRange, setDateRange] = useState("all");
   const [viewMode, setViewMode] = useState("list");
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [page, setPage] = useState(1);
 
-  const [prevResetKeys, setPrevResetKeys] = useState([activeTab, search, filterCourse, dateRange]);
-  if (
-    prevResetKeys[0] !== activeTab ||
-    prevResetKeys[1] !== search ||
-    prevResetKeys[2] !== filterCourse ||
-    prevResetKeys[3] !== dateRange
-  ) {
-    setPrevResetKeys([activeTab, search, filterCourse, dateRange]);
+  const [prevUrlSearch, setPrevUrlSearch] = useState(urlSearch);
+  if (prevUrlSearch !== urlSearch) {
+    setPrevUrlSearch(urlSearch);
+    setSearch(urlSearch);
+  }
+
+  const isBorrowed = mode === "borrowed";
+
+  const [prevResetKeys, setPrevResetKeys] = useState([mode, search]);
+  if (prevResetKeys[0] !== mode || prevResetKeys[1] !== search) {
+    setPrevResetKeys([mode, search]);
     setPage(1);
   }
 
   const params = useMemo(() => {
-    const dateParams = getDateParams(dateRange);
     const p = {
       page: String(page),
       limit: String(PAGE_LIMIT),
       search: search || "",
-      course: filterCourse !== "All" ? filterCourse : "",
-      ...dateParams,
     };
     return "?" + Object.entries(p)
       .filter(([, v]) => v !== "")
       .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
       .join("&");
-  }, [page, search, filterCourse, dateRange]);
+  }, [page, search]);
 
   const {
     data: borrowedData,
@@ -137,85 +105,60 @@ export default function TransactionsPage() {
     isError: borrowedFailed,
     error: borrowedError,
     refetch: refetchBorrowed,
-  } = useBorrowed(params);
+  } = useMyBorrowed(params);
   const {
     data: returnedData,
     isLoading: returnedLoading,
     isError: returnedFailed,
     error: returnedError,
     refetch: refetchReturned,
-  } = useReturned(params);
+  } = useMyReturned(params);
 
-  const borrowed = useMemo(() => {
-    if (!borrowedData) return [];
-    return Array.isArray(borrowedData) ? borrowedData : (borrowedData.data || []);
-  }, [borrowedData]);
+  const normalize = (src) => (!src ? [] : Array.isArray(src) ? src : src.data || []);
 
-  const returned = useMemo(() => {
-    if (!returnedData) return [];
-    return Array.isArray(returnedData) ? returnedData : (returnedData.data || []);
-  }, [returnedData]);
+  const borrowed = useMemo(() => normalize(borrowedData), [borrowedData]);
+  const returned = useMemo(() => normalize(returnedData), [returnedData]);
 
-  const paginationData = useMemo(() => {
-    const src = activeTab === "borrowed" ? borrowedData : returnedData;
-    if (!src || Array.isArray(src)) return null;
-    return src.pagination || null;
-  }, [activeTab, borrowedData, returnedData]);
+  const toPagination = (src) => (!src || Array.isArray(src) ? null : src.pagination || null);
+  const borrowedPagination = useMemo(() => toPagination(borrowedData), [borrowedData]);
+  const returnedPagination = useMemo(() => toPagination(returnedData), [returnedData]);
+  const paginationData = isBorrowed ? borrowedPagination : returnedPagination;
 
   const loading = borrowedLoading || returnedLoading;
-
-  const load = useCallback(() => {
-    refetchBorrowed();
-    refetchReturned();
-  }, [refetchBorrowed, refetchReturned]);
-
   const stats = useMemo(() => computeTransactionStats(borrowed, returned), [borrowed, returned]);
 
-  const activeItems = useMemo(() =>
-    activeTab === "borrowed" ? borrowed : returned,
-  [activeTab, borrowed, returned]);
-
+  const activeItems = isBorrowed ? borrowed : returned;
   const displayItems = useMemo(() => sortItems(activeItems, sortBy), [activeItems, sortBy]);
-
   const paginationTotal = paginationData?.total ?? activeItems.length;
 
+  const load = () => {
+    refetchBorrowed();
+    refetchReturned();
+  };
+
+  if (loading) return <div className="page-loading"><div className="spinner-lg" /></div>;
+
   const activeError =
-    activeTab === "borrowed"
+    isBorrowed
       ? (borrowedFailed ? borrowedError : null)
       : (returnedFailed ? returnedError : null);
 
-  const downloadReport = async () => {
-    try {
-      await api.downloadReport(activeTab);
-      toast.success("Report downloaded!");
-    } catch (err) {
-      toast.error(err.message || "Download failed");
-    }
-  };
-
-  function handleViewInfo(item) {
-    setSelectedTransaction(item);
-  }
-
-  if (loading) return <LoadingSpinner />;
-
   if (activeError && activeItems.length === 0) {
     return (
-      <section className="transactions-page">
-        <LoadError message={activeError?.message || "Couldn't load transactions."} onRetry={load} />
+      <section className="transactions-page activity-panel">
+        <LoadError
+          message={activeError?.message || `Couldn't load your ${mode} transactions.`}
+          onRetry={load}
+        />
       </section>
     );
   }
 
   return (
-    <section className="transactions-page">
+    <section className="transactions-page activity-panel">
       <button className="hero-action-btn ghost" onClick={load}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
         Refresh
-      </button>
-      <button className="hero-action-btn primary" onClick={downloadReport}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Download Report
       </button>
 
       <div className="transactions-stats">
@@ -224,8 +167,8 @@ export default function TransactionsPage() {
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           </div>
           <div className="stat-info">
-            <span className="stat-number">{stats.active}</span>
-            <span className="stat-label">Active Borrows</span>
+            <span className="stat-number">{borrowedPagination?.total ?? stats.active}</span>
+            <span className="stat-label">My Active Borrows</span>
           </div>
         </div>
         <div className="stat-card stat-borrowed-total">
@@ -233,8 +176,8 @@ export default function TransactionsPage() {
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
           </div>
           <div className="stat-info">
-            <span className="stat-number">{paginationData?.total ?? stats.totalBorrowed}</span>
-            <span className="stat-label">Total Borrowed</span>
+            <span className="stat-number">{borrowedPagination?.total ?? stats.totalBorrowed}</span>
+            <span className="stat-label">My Total Borrowed</span>
           </div>
         </div>
         <div className="stat-card stat-returned-total">
@@ -242,8 +185,8 @@ export default function TransactionsPage() {
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20,6 9,17 4,12"/></svg>
           </div>
           <div className="stat-info">
-            <span className="stat-number">{stats.totalReturned}</span>
-            <span className="stat-label">Total Returned</span>
+            <span className="stat-number">{returnedPagination?.total ?? stats.totalReturned}</span>
+            <span className="stat-label">My Total Returned</span>
           </div>
         </div>
         <div className="stat-card stat-week">
@@ -251,26 +194,14 @@ export default function TransactionsPage() {
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
           </div>
           <div className="stat-info">
-            <span className="stat-number">{stats.thisWeek}</span>
-            <span className="stat-label">This Week</span>
+            <span className="stat-number">{stats.dueSoon}</span>
+            <span className="stat-label">Due Soon</span>
           </div>
         </div>
       </div>
 
       <div className="transactions-toolbar">
         <div className="transactions-toolbar-left">
-          <div className="transactions-tabs">
-            <button className={`tab-btn ${activeTab === "borrowed" ? "active" : ""}`} onClick={() => setActiveTab("borrowed")}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-              Borrowed
-              <span className="tab-count">{borrowed.length}</span>
-            </button>
-            <button className={`tab-btn ${activeTab === "returned" ? "active" : ""}`} onClick={() => setActiveTab("returned")}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20,6 9,17 4,12"/></svg>
-              Returned
-              <span className="tab-count">{returned.length}</span>
-            </button>
-          </div>
           <div className="transactions-result-count">
             Showing {displayItems.length} of {paginationTotal}
           </div>
@@ -280,16 +211,9 @@ export default function TransactionsPage() {
           <select className="transactions-sort-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
             {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-          <select className="transactions-date-filter" value={dateRange} onChange={(e) => setDateRange(e.target.value)}>
-            {DATE_RANGES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-          </select>
-          <select className="transactions-course-filter" value={filterCourse} onChange={(e) => setFilterCourse(e.target.value)}>
-            <option value="All">All Courses</option>
-            {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
           <div className="transactions-search">
             <svg className="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            <input placeholder="Search name, ID, item..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input placeholder="Search item, course..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
         </div>
       </div>
@@ -297,7 +221,7 @@ export default function TransactionsPage() {
       {displayItems.length === 0 ? (
         <div className="transactions-empty">
           <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            {activeTab === "borrowed" ? (
+            {isBorrowed ? (
               <>
                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
                 <circle cx="9" cy="7" r="4"/>
@@ -311,14 +235,13 @@ export default function TransactionsPage() {
               </>
             )}
           </svg>
-          <h3>No {activeTab} records found</h3>
-          <p>{search || filterCourse !== "All" || dateRange !== "all" ? "Try adjusting your filters" : `No ${activeTab} transactions yet`}</p>
+          <h3>No {mode} records found</h3>
+          <p>{search ? "Try adjusting your search" : `No ${mode} transactions yet`}</p>
         </div>
       ) : viewMode === "grid" ? (
         <div className="transactions-grid">
           {displayItems.map((item) => {
             const date = toDate(item.timestamp);
-            const isBorrowed = activeTab === "borrowed";
             const remaining = isBorrowed ? getRemainingQuantity(item) : null;
             const fullName = `${item.firstName || ""} ${item.lastName || ""}`.trim();
             const color = getAvatarColor(fullName);
@@ -326,7 +249,7 @@ export default function TransactionsPage() {
             const returnDate = !isBorrowed ? toDate(item.returnedAt || item.timestamp) : null;
 
             return (
-              <div className={`transaction-card ${overdue?.className || ""}`} key={item.id} onClick={() => handleViewInfo(item)} style={{cursor:"pointer"}}>
+              <div className={`transaction-card ${overdue?.className || ""}`} key={item.id} onClick={() => setSelectedTransaction(item)} style={{ cursor: "pointer" }}>
                 <div className={`transaction-card-accent ${isBorrowed ? "accent-borrowed" : "accent-returned"}`} />
                 <div className="transaction-card-body">
                   <div className="transaction-card-top">
@@ -386,7 +309,7 @@ export default function TransactionsPage() {
                   {isBorrowed && item.quantity > 0 && remaining >= 0 && (
                     <div className="transaction-progress">
                       <div className="progress-bar">
-                        <div className="progress-fill" style={{ width: `${item.quantity > 0 ? Math.max(0, ((item.quantity - remaining) / item.quantity) * 100) : 0}%` }} />
+                        <div className="progress-fill" style={{ width: `${Math.max(0, ((item.quantity - remaining) / item.quantity) * 100)}%` }} />
                       </div>
                       <span className="progress-label">{Math.max(0, item.quantity - remaining)} of {item.quantity} returned</span>
                     </div>
@@ -406,23 +329,22 @@ export default function TransactionsPage() {
                 <th>Item</th>
                 <th>Qty</th>
                 <th>Equipment Course</th>
-                <th>{activeTab === "returned" ? "Borrowed" : "Date"}</th>
-                {activeTab === "borrowed" && <th>Due Date</th>}
-                {activeTab === "returned" && <th>Returned</th>}
+                <th>{!isBorrowed ? "Borrowed" : "Date"}</th>
+                {isBorrowed && <th>Due Date</th>}
+                {!isBorrowed && <th>Returned</th>}
                 <th>Status</th>
               </tr>
             </thead>
             <tbody>
               {displayItems.map((item) => {
                 const date = toDate(item.timestamp);
-                const isBorrowed = activeTab === "borrowed";
                 const remaining = isBorrowed ? getRemainingQuantity(item) : null;
                 const fullName = `${item.firstName || ""} ${item.lastName || ""}`.trim();
                 const overdue = isBorrowed ? getOverdueInfo(toDate(item.dueDate)) : null;
                 const returnDate = !isBorrowed ? toDate(item.returnedAt || item.timestamp) : null;
 
                 return (
-                  <tr key={item.id} className={overdue?.className || ""} onClick={() => handleViewInfo(item)} style={{cursor:"pointer"}}>
+                  <tr key={item.id} className={overdue?.className || ""} onClick={() => setSelectedTransaction(item)} style={{ cursor: "pointer" }}>
                     <td className="table-name-cell">
                       <div className="table-user">
                         <div className="transaction-avatar-sm" style={item.profileURL ? { background: "transparent" } : { background: getAvatarColor(fullName) }}>
@@ -451,9 +373,7 @@ export default function TransactionsPage() {
                         {item.dueDate ? formatDate(toDate(item.dueDate)) : "-"}
                       </td>
                     )}
-                    {!isBorrowed && (
-                      <td>{returnDate ? formatDate(returnDate) : "-"}</td>
-                    )}
+                    {!isBorrowed && <td>{returnDate ? formatDate(returnDate) : "-"}</td>}
                     <td>
                       <div className="table-status-cell">
                         {overdue && <span className={`overdue-badge-sm ${overdue.className}`}>{overdue.text}</span>}
@@ -481,121 +401,118 @@ export default function TransactionsPage() {
       )}
 
       {selectedTransaction && (
-        <Modal title="Borrower Details" onClose={() => setSelectedTransaction(null)}>
-          {(() => {
-            const item = selectedTransaction;
-            const isBorrowed = item.action === "borrowed" || item.status === "borrowed";
-            const fullName = `${item.firstName || ""} ${item.lastName || ""}`.trim();
-            const color = getAvatarColor(fullName);
-            const borrowDate = isBorrowed
-              ? toDate(item.timestamp || item.borrowedAt)
-              : toDate(item.borrowedAt);
-            const dueDate = toDate(item.dueDate);
-            const returnDate = toDate(item.returnedAt || item.lastReturnedAt || (!isBorrowed ? item.timestamp : null));
-            const remaining = isBorrowed ? getRemainingQuantity(item) : null;
-
-            return (
-              <div className="txn-detail-modal">
-                <div className="txn-detail-borrower">
-                  <div className="txn-detail-avatar" style={item.profileURL ? { background: "transparent" } : { background: color }}>
-                    {item.profileURL ? (
-                      <img src={item.profileURL} alt={fullName} loading="lazy" width="40" height="40" decoding="async" />
-                    ) : (
-                      getInitials(item.firstName, item.lastName)
-                    )}
-                  </div>
-                  <div className="txn-detail-borrower-info">
-                    <h4>{fullName || "-"}</h4>
-                    <p>{item.schoolId || "-"}</p>
-                    {item.course && <span className="txn-detail-course">{item.course}{item.year ? ` - ${item.year}` : ""}</span>}
-                    {item.email && <span className="txn-detail-email">{item.email}</span>}
-                    {item.role && <span className={`txn-detail-role ${item.role}`}>{item.role}</span>}
-                  </div>
-                </div>
-
-                <div className="txn-detail-section">
-                  <h5>Transaction Details</h5>
-                  <div className="txn-detail-grid">
-                    <div className="txn-detail-row">
-                      <span className="txn-detail-label">Item</span>
-                      <span className="txn-detail-value">{item.itemName || "-"}</span>
-                    </div>
-                    {item.equipment_course && (
-                      <div className="txn-detail-row">
-                        <span className="txn-detail-label">Equipment Course</span>
-                        <span className="txn-detail-value">
-                          {item.equipment_course}
-                          {item.equipment_course !== item.course && (
-                            <span style={{ color: "#f57c00", fontSize: 11, marginLeft: 6 }}>(Cross-course)</span>
-                          )}
-                        </span>
-                      </div>
-                    )}
-                    <div className="txn-detail-row">
-                      <span className="txn-detail-label">Quantity</span>
-                      <span className="txn-detail-value">
-                        {isBorrowed && remaining !== null
-                          ? `${remaining} / ${item.quantity || 0}`
-                          : (item.quantity || 0)}
-                      </span>
-                    </div>
-                    <div className="txn-detail-row">
-                      <span className="txn-detail-label">Status</span>
-                      <span className={`txn-detail-value status-${isBorrowed ? "borrowed" : "returned"}`}>
-                        {isBorrowed ? "Borrowed" : (item.status || "Returned")}
-                      </span>
-                    </div>
-                    <div className="txn-detail-row">
-                      <span className="txn-detail-label">Borrowed</span>
-                      <span className="txn-detail-value">{borrowDate ? formatDate(borrowDate) : "-"}</span>
-                    </div>
-                    <div className="txn-detail-row">
-                      <span className="txn-detail-label">Due Date</span>
-                      <span className="txn-detail-value">{dueDate ? formatDate(dueDate) : "-"}</span>
-                    </div>
-                    <div className="txn-detail-row">
-                      <span className="txn-detail-label">Returned</span>
-                      <span className="txn-detail-value">{returnDate ? formatDate(returnDate) : "-"}</span>
-                    </div>
-                    {item.conditionOnBorrow && (
-                      <div className="txn-detail-row">
-                        <span className="txn-detail-label">Condition (Borrow)</span>
-                        <span className="txn-detail-value">{item.conditionOnBorrow}</span>
-                      </div>
-                    )}
-                    {item.conditionOnReturn && (
-                      <div className="txn-detail-row">
-                        <span className="txn-detail-label">Condition (Return)</span>
-                        <span className="txn-detail-value">{item.conditionOnReturn}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {(item.borrowPhotoURL || item.returnPhotoURL) && (
-                  <div className="txn-detail-section">
-                    <h5>Condition Photos</h5>
-                    <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                      {item.borrowPhotoURL && (
-                        <div style={{ textAlign: "center" }}>
-                          <img src={item.borrowPhotoURL} alt="Borrow condition" loading="lazy" width="200" height="200" decoding="async" style={{ maxWidth: 200, borderRadius: 8, border: "1px solid var(--border)" }} />
-                          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>At Borrow</div>
-                        </div>
-                      )}
-                      {item.returnPhotoURL && (
-                        <div style={{ textAlign: "center" }}>
-                          <img src={item.returnPhotoURL} alt="Return condition" loading="lazy" width="200" height="200" decoding="async" style={{ maxWidth: 200, borderRadius: 8, border: "1px solid var(--border)" }} />
-                          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>At Return</div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
+        <Modal title="Transaction Details" onClose={() => setSelectedTransaction(null)}>
+          <TransactionDetail item={selectedTransaction} />
         </Modal>
       )}
     </section>
+  );
+}
+
+function TransactionDetail({ item }) {
+  const modalIsBorrowed = item.action === "borrowed" || item.status === "borrowed";
+  const fullName = `${item.firstName || ""} ${item.lastName || ""}`.trim();
+  const color = getAvatarColor(fullName);
+  const borrowDate = modalIsBorrowed ? toDate(item.timestamp || item.borrowedAt) : toDate(item.borrowedAt);
+  const dueDate = toDate(item.dueDate);
+  const returnDate = toDate(item.returnedAt || item.lastReturnedAt || (!modalIsBorrowed ? item.timestamp : null));
+  const remaining = modalIsBorrowed ? getRemainingQuantity(item) : null;
+
+  return (
+    <div className="txn-detail-modal">
+      <div className="txn-detail-borrower">
+        <div className="txn-detail-avatar" style={item.profileURL ? { background: "transparent" } : { background: color }}>
+          {item.profileURL ? (
+            <img src={item.profileURL} alt={fullName} loading="lazy" width="40" height="40" decoding="async" />
+          ) : (
+            getInitials(item.firstName, item.lastName)
+          )}
+        </div>
+        <div className="txn-detail-borrower-info">
+          <h4>{fullName || "-"}</h4>
+          <p>{item.schoolId || "-"}</p>
+          {item.course && <span className="txn-detail-course">{item.course}{item.year ? ` - ${item.year}` : ""}</span>}
+          {item.email && <span className="txn-detail-email">{item.email}</span>}
+          {item.role && <span className={`txn-detail-role ${item.role}`}>{item.role}</span>}
+        </div>
+      </div>
+
+      <div className="txn-detail-section">
+        <h5>Transaction Details</h5>
+        <div className="txn-detail-grid">
+          <div className="txn-detail-row">
+            <span className="txn-detail-label">Item</span>
+            <span className="txn-detail-value">{item.itemName || "-"}</span>
+          </div>
+          {item.equipment_course && (
+            <div className="txn-detail-row">
+              <span className="txn-detail-label">Equipment Course</span>
+              <span className="txn-detail-value">
+                {item.equipment_course}
+                {item.equipment_course !== item.course && (
+                  <span style={{ color: "#f57c00", fontSize: 11, marginLeft: 6 }}>(Cross-course)</span>
+                )}
+              </span>
+            </div>
+          )}
+          <div className="txn-detail-row">
+            <span className="txn-detail-label">Quantity</span>
+            <span className="txn-detail-value">
+              {modalIsBorrowed && remaining !== null ? `${remaining} / ${item.quantity || 0}` : (item.quantity || 0)}
+            </span>
+          </div>
+          <div className="txn-detail-row">
+            <span className="txn-detail-label">Status</span>
+            <span className={`txn-detail-value status-${modalIsBorrowed ? "borrowed" : "returned"}`}>
+              {modalIsBorrowed ? "Borrowed" : (item.status || "Returned")}
+            </span>
+          </div>
+          <div className="txn-detail-row">
+            <span className="txn-detail-label">Borrowed</span>
+            <span className="txn-detail-value">{borrowDate ? formatDate(borrowDate) : "-"}</span>
+          </div>
+          <div className="txn-detail-row">
+            <span className="txn-detail-label">Due Date</span>
+            <span className="txn-detail-value">{dueDate ? formatDate(dueDate) : "-"}</span>
+          </div>
+          <div className="txn-detail-row">
+            <span className="txn-detail-label">Returned</span>
+            <span className="txn-detail-value">{returnDate ? formatDate(returnDate) : "-"}</span>
+          </div>
+          {item.conditionOnBorrow && (
+            <div className="txn-detail-row">
+              <span className="txn-detail-label">Condition (Borrow)</span>
+              <span className="txn-detail-value">{item.conditionOnBorrow}</span>
+            </div>
+          )}
+          {item.conditionOnReturn && (
+            <div className="txn-detail-row">
+              <span className="txn-detail-label">Condition (Return)</span>
+              <span className="txn-detail-value">{item.conditionOnReturn}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {(item.borrowPhotoURL || item.returnPhotoURL) && (
+        <div className="txn-detail-section">
+          <h5>Condition Photos</h5>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            {item.borrowPhotoURL && (
+              <div style={{ textAlign: "center" }}>
+                <img src={item.borrowPhotoURL} alt="Borrow condition" loading="lazy" width="200" height="200" decoding="async" style={{ maxWidth: 200, borderRadius: 8, border: "1px solid var(--border)" }} />
+                <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>At Borrow</div>
+              </div>
+            )}
+            {item.returnPhotoURL && (
+              <div style={{ textAlign: "center" }}>
+                <img src={item.returnPhotoURL} alt="Return condition" loading="lazy" width="200" height="200" decoding="async" style={{ maxWidth: 200, borderRadius: 8, border: "1px solid var(--border)" }} />
+                <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>At Return</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

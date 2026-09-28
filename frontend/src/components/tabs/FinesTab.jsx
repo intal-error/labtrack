@@ -69,8 +69,8 @@ export default function FinesTab() {
     return p;
   }, [page, search, filter]);
 
-  const finesResult = useFines(params);
-  const myFinesResult = useMyFines(params);
+  const finesResult = useFines(params, { enabled: isAdmin });
+  const myFinesResult = useMyFines(params, { enabled: !isAdmin });
   const { data: finesData, isLoading, error: queryError } = isAdmin ? finesResult : myFinesResult;
 
   const { data: overdueData } = useOverdueCount();

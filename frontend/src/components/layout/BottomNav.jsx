@@ -22,7 +22,7 @@ const getNavItems = (role) => {
       roles: ["student", "admin"],
     },
     {
-      path: "/transactions",
+      path: role === "admin" ? "/transactions" : "/my-activity",
       label: "Activity",
       icon: MdHistory,
       roles: ["student", "admin"],

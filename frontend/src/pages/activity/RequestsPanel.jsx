@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
-import { api } from "../services/api";
-import Modal from "../components/ui/Modal";
+import { api } from "../../services/api";
+import Modal from "../../components/ui/Modal";
 import toast from "react-hot-toast";
-import "../styles/pages/tables.css";
-import "../styles/pages/catalog.css";
-import ViewToggle from "../components/ui/ViewToggle";
+import ViewToggle from "../../components/ui/ViewToggle";
+import "../../styles/pages/tables.css";
+import "../../styles/pages/catalog.css";
 
 const STATUS_COLORS = {
   pending: "#f57c00",
@@ -20,50 +20,51 @@ const STATUS_LABELS = {
   cancelled: "Cancelled",
 };
 
+const FILTERS = ["all", "pending", "approved", "rejected", "cancelled"];
+
 function timeAgo(date) {
   if (!date) return "";
-  const now = new Date();
-  const d = new Date(date);
-  const diff = now - d;
+  const diff = Date.now() - new Date(date).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "Just now";
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
 }
 
-export default function MyRequestsPage() {
+export default function RequestsPanel() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [filter, setFilter] = useState("all");
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [viewMode, setViewMode] = useState("list");
-
-  async function load() {
-    try {
-      const data = await api.getMyBorrowRequests();
-      setRequests(data || []);
-    } catch {
-      toast.error("Failed to load requests");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         const data = await api.getMyBorrowRequests();
+        if (cancelled) return;
         setRequests(data || []);
-      } catch {
-        toast.error("Failed to load requests");
+        setError(null);
+      } catch (err) {
+        if (cancelled) return;
+        setError(err?.message || "Failed to load requests");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
-  }, []);
+    return () => { cancelled = true; };
+  }, [reloadKey]);
+
+  function reload() {
+    setError(null);
+    setLoading(true);
+    setReloadKey((k) => k + 1);
+  }
 
   async function handleCancel(id) {
     if (!confirm("Cancel this request?")) return;
@@ -71,16 +72,16 @@ export default function MyRequestsPage() {
       await api.cancelBorrowRequest(id);
       toast.success("Request cancelled");
       setSelectedRequest(null);
-      load();
+      reload();
     } catch (err) {
       toast.error(err.message || "Failed to cancel");
     }
   }
 
-  const filtered = useMemo(() => {
-    if (filter === "all") return requests;
-    return requests.filter((r) => r.status === filter);
-  }, [requests, filter]);
+  const filtered = useMemo(
+    () => (filter === "all" ? requests : requests.filter((r) => r.status === filter)),
+    [requests, filter]
+  );
 
   const stats = useMemo(() => ({
     total: requests.length,
@@ -91,8 +92,18 @@ export default function MyRequestsPage() {
 
   if (loading) return <div className="page-loading"><div className="spinner-lg" /></div>;
 
+  if (error) return (
+    <div className="tab-content">
+      <div className="transactions-empty">
+        <h3>Couldn&apos;t load your requests</h3>
+        <p>{error}</p>
+        <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={reload}>Retry</button>
+      </div>
+    </div>
+  );
+
   return (
-    <section className="transactions-page">
+    <section className="transactions-page activity-panel">
       <div className="transactions-stats">
         <div className="stat-card stat-active">
           <div className="stat-info">
@@ -117,7 +128,7 @@ export default function MyRequestsPage() {
       <div className="transactions-toolbar">
         <div className="transactions-toolbar-left">
           <div className="transactions-tabs">
-            {["all", "pending", "approved", "rejected", "cancelled"].map((f) => (
+            {FILTERS.map((f) => (
               <button key={f} className={`tab-btn ${filter === f ? "active" : ""}`} onClick={() => setFilter(f)}>
                 {f.charAt(0).toUpperCase() + f.slice(1)}
               </button>
@@ -129,14 +140,14 @@ export default function MyRequestsPage() {
             onChange={(e) => setFilter(e.target.value)}
             aria-label="Filter requests"
           >
-            {["all", "pending", "approved", "rejected", "cancelled"].map((f) => (
-              <option key={f} value={f}>
-                {f.charAt(0).toUpperCase() + f.slice(1)}
-              </option>
+            {FILTERS.map((f) => (
+              <option key={f} value={f}>{f.charAt(0).toUpperCase() + f.slice(1)}</option>
             ))}
           </select>
         </div>
-        <ViewToggle value={viewMode} onChange={setViewMode} localStorageKey="labtrack-myrequests-view" />
+        <div className="transactions-toolbar-right">
+          <ViewToggle value={viewMode} onChange={setViewMode} localStorageKey="labtrack-myrequests-view" />
+        </div>
       </div>
 
       {filtered.length === 0 ? (
@@ -160,7 +171,7 @@ export default function MyRequestsPage() {
                     <p className="transaction-school-id">Qty: {req.quantity}</p>
                   </div>
                   <div className="transaction-card-badges">
-                    <span className={`transaction-status-badge`} style={{ background: `${STATUS_COLORS[req.status]}20`, color: STATUS_COLORS[req.status] }}>
+                    <span className="transaction-status-badge" style={{ background: `${STATUS_COLORS[req.status]}20`, color: STATUS_COLORS[req.status] }}>
                       {STATUS_LABELS[req.status]}
                     </span>
                   </div>

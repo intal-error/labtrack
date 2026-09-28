@@ -1,12 +1,12 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { useStudentAttendance } from "../hooks/useQueries";
-import { useAuth } from "../context/AuthContext";
-import { formatDuration, formatTime, getTodayString } from "../utils/attendanceHelpers";
-import { MdSearch, MdFileDownload, MdQrCodeScanner, MdMenuBook } from "react-icons/md";
-import "../styles/pages/attendance.css";
+import { useStudentAttendance } from "../../hooks/useQueries";
+import { useAuth } from "../../context/AuthContext";
+import { formatDuration, formatTime, getTodayString } from "../../utils/attendanceHelpers";
+import { MdSearch, MdFileDownload, MdQrCodeScanner, MdMenuBook, MdRefresh } from "react-icons/md";
+import "../../styles/pages/attendance.css";
 
-export default function MyAttendancePage() {
+export default function AttendancePanel() {
   const { userProfile } = useAuth();
   const navigate = useNavigate();
 
@@ -15,7 +15,7 @@ export default function MyAttendancePage() {
   const [searchQuery, setSearchQuery] = useState("");
 
   const schoolId = userProfile?.schoolId || userProfile?.schoolID;
-  const { data, isLoading } = useStudentAttendance(schoolId);
+  const { data, isLoading, isError, error, refetch } = useStudentAttendance(schoolId);
   const records = useMemo(() => data?.records || [], [data]);
 
   const subjects = useMemo(() => {
@@ -40,38 +40,32 @@ export default function MyAttendancePage() {
   }, [records, filterSubject, filterDate, searchQuery]);
 
   const todayStr = getTodayString();
+  const hasFilters = Boolean(searchQuery || filterSubject || filterDate);
 
   const exportCSV = () => {
     if (!filteredRecords.length) return;
     const headers = ["Date", "Time-In", "Time-Out", "Subject", "Professor", "Room", "Duration (min)", "Status"];
     const rows = filteredRecords.map((r) => [
       r.date, formatTime(r.timeIn), formatTime(r.timeOut), r.subject, r.professor, r.labRoom,
-      r.totalDuration != null ? r.totalDuration : "", r.status === "active" ? "Inside" : "Timed Out",
+      r.totalDuration != null ? r.totalDuration : "", r.status === "active" ? "Inside" : "Signed Out",
     ]);
     const csv = [headers, ...rows].map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `my-logs-${todayStr}.csv`;
+    a.download = `my-attendance-${todayStr}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
   return (
-    <div className="attendance-page">
+    <div className="attendance-page activity-panel">
       <button className="hero-action-btn ghost" onClick={() => navigate("/scanner?tab=attendance")}>
         <MdQrCodeScanner size={16} /> Scan Attendance
       </button>
 
       <div className="attendance-shell">
-        {/* Quick Scan */}
-        <button className="logbook-quick-scan" onClick={() => navigate("/scanner?tab=attendance")}>
-          <MdQrCodeScanner size={18} />
-          Scan Attendance
-        </button>
-
-        {/* Toolbar */}
         <div className="attendance-toolbar">
           <div className="attendance-toolbar-left">
             <div className="attendance-search">
@@ -99,7 +93,7 @@ export default function MyAttendancePage() {
               value={filterDate}
               onChange={(e) => setFilterDate(e.target.value)}
             />
-            {(searchQuery || filterSubject || filterDate) && (
+            {hasFilters && (
               <button className="btn btn-secondary btn-sm" onClick={() => { setSearchQuery(""); setFilterSubject(""); setFilterDate(""); }}>
                 Clear
               </button>
@@ -115,8 +109,18 @@ export default function MyAttendancePage() {
           </div>
         </div>
 
-        {/* Logbook Table */}
-        {isLoading ? (
+        {isError ? (
+          <div className="attendance-empty">
+            <div className="attendance-empty-icon">
+              <MdRefresh size={28} />
+            </div>
+            <h3>Couldn&apos;t Load Attendance</h3>
+            <p>{error?.message || "Something went wrong while loading your logs."}</p>
+            <button className="scan-attendance-btn" onClick={() => refetch()} style={{ marginTop: 8 }}>
+              <MdRefresh size={16} /> Try Again
+            </button>
+          </div>
+        ) : isLoading ? (
           <div className="attendance-loading"><div className="spinner-lg" /></div>
         ) : records.length === 0 ? (
           <div className="attendance-empty">
@@ -139,7 +143,6 @@ export default function MyAttendancePage() {
           </div>
         ) : (
           <>
-            {/* Desktop Table */}
             <div className="attendance-table-wrap desktop-only">
               <div className="attendance-table-scroll">
                 <table className="attendance-table">
@@ -181,7 +184,6 @@ export default function MyAttendancePage() {
               </div>
             </div>
 
-            {/* Mobile Cards */}
             <div className="mobile-cards mobile-only">
               {filteredRecords.map((r, i) => (
                 <div key={r.id || i} className="mobile-record-card">

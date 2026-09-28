@@ -22,22 +22,20 @@ const CatalogPage = lazy(() => import("./pages/CatalogPage"));
 const PersonaPage = lazy(() => import("./pages/PersonaPage"));
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const MyActivityPage = lazy(() => import("./pages/MyActivityPage"));
 const NotificationsTab = lazy(() => import("./components/tabs/NotificationsTab"));
 const SettingsPage = lazy(() => import("./components/tabs/SettingsPage"));
 const DocumentsTab = lazy(() => import("./components/tabs/DocumentsTab"));
 const MaintenanceTab = lazy(() => import("./components/tabs/MaintenanceTab"));
 const IncidentTab = lazy(() => import("./components/tabs/IncidentTab"));
 const ManualsTab = lazy(() => import("./components/tabs/ManualsTab"));
-const UsageLogsTab = lazy(() => import("./components/tabs/UsageLogsTab"));
 const ReportsTab = lazy(() => import("./components/tabs/ReportsTab"));
 const FinesTab = lazy(() => import("./components/tabs/FinesTab"));
 const BorrowRequestsTab = lazy(() => import("./components/tabs/BorrowRequestsTab"));
-const MyRequestsPage = lazy(() => import("./pages/MyRequestsPage"));
 const AttendanceKioskPage = lazy(() => import("./pages/AttendanceKioskPage"));
 
 const AttendanceLogsPage = lazy(() => import("./pages/AttendanceLogsPage"));
 const RoomAttendancePage = lazy(() => import("./pages/RoomAttendancePage"));
-const MyAttendancePage = lazy(() => import("./pages/MyAttendancePage"));
 const InventoryPage = lazy(() => import("./pages/InventoryPage"));
 
 function ProtectedRoute({ children }) {
@@ -47,15 +45,22 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
-function RoleRoute({ children, allowed }) {
+function RoleRoute({ children, allowed, fallback = "/dashboard" }) {
   const { role, loading } = useAuth();
   if (loading) return <div className="loading-screen"><div className="spinner-lg" /></div>;
-  if (!allowed.includes(role)) return <Navigate to="/dashboard" replace />;
+  if (!allowed.includes(role)) return <Navigate to={fallback} replace />;
   return children;
 }
 
 function IndexRedirect() {
   return <Navigate to="/dashboard" replace />;
+}
+
+function LegacyTransactionRedirect({ tab }) {
+  const { role, loading } = useAuth();
+  if (loading) return <div className="loading-screen"><div className="spinner-lg" /></div>;
+  if (role === "admin") return <Navigate to="/transactions" replace />;
+  return <Navigate to={`/my-activity?tab=${tab}`} replace />;
 }
 
 function GuestRoute({ children }) {
@@ -119,26 +124,27 @@ function App() {
               <Route path="notifications" element={<NotificationsTab />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route path="documents" element={<RoleRoute allowed={["admin"]}><DocumentsTab /></RoleRoute>} />
-              <Route path="scanner" element={<RoleRoute allowed={["student"]}><ScannerHubPage /></RoleRoute>} />
-              <Route path="transactions" element={<TransactionsPage />} />
-              <Route path="borrowed" element={<Navigate to="/transactions" replace />} />
-              <Route path="returned" element={<Navigate to="/transactions" replace />} />
-              <Route path="catalog" element={<RoleRoute allowed={["admin"]}><CatalogPage /></RoleRoute>} />
-              <Route path="inventory" element={<RoleRoute allowed={["student"]}><InventoryPage /></RoleRoute>} />
+              <Route path="scanner" element={<RoleRoute allowed={["student"]} fallback="/my-activity"><ScannerHubPage /></RoleRoute>} />
+              <Route path="my-activity" element={<RoleRoute allowed={["student"]}><MyActivityPage /></RoleRoute>} />
+              <Route path="transactions" element={<RoleRoute allowed={["admin"]} fallback="/my-activity"><TransactionsPage /></RoleRoute>} />
+              <Route path="borrowed" element={<LegacyTransactionRedirect tab="borrowed" />} />
+              <Route path="returned" element={<LegacyTransactionRedirect tab="returned" />} />
+              <Route path="catalog" element={<RoleRoute allowed={["admin"]} fallback="/inventory"><CatalogPage /></RoleRoute>} />
+              <Route path="inventory" element={<RoleRoute allowed={["student"]} fallback="/catalog"><InventoryPage /></RoleRoute>} />
               <Route path="persona" element={<RoleRoute allowed={["admin"]}><PersonaPage /></RoleRoute>} />
               <Route path="admin" element={<Navigate to="/settings" replace />} />
               <Route path="maintenance" element={<RoleRoute allowed={["admin"]}><MaintenanceTab /></RoleRoute>} />
               <Route path="incidents" element={<IncidentTab />} />
               <Route path="manuals" element={<ManualsTab />} />
-              <Route path="usage-logs" element={<RoleRoute allowed={["student"]}><UsageLogsTab /></RoleRoute>} />
+              <Route path="usage-logs" element={<Navigate to="/my-activity" replace />} />
               <Route path="reports" element={<RoleRoute allowed={["admin"]}><ReportsTab /></RoleRoute>} />
-              <Route path="fines" element={<FinesTab />} />
-              <Route path="borrow-requests" element={<RoleRoute allowed={["admin"]}><BorrowRequestsTab /></RoleRoute>} />
+              <Route path="fines" element={<RoleRoute allowed={["admin"]} fallback="/my-activity?tab=fines"><FinesTab /></RoleRoute>} />
+              <Route path="borrow-requests" element={<RoleRoute allowed={["admin"]} fallback="/my-activity?tab=requests"><BorrowRequestsTab /></RoleRoute>} />
               <Route path="attendance" element={<RoleRoute allowed={["admin"]}><AttendanceLogsPage /></RoleRoute>} />
               <Route path="attendance/room/:roomId" element={<RoleRoute allowed={["admin"]}><RoomAttendancePage /></RoleRoute>} />
-              <Route path="my-attendance" element={<RoleRoute allowed={["student"]}><MyAttendancePage /></RoleRoute>} />
+              <Route path="my-attendance" element={<Navigate to="/my-activity?tab=attendance" replace />} />
               <Route path="attendance-scan" element={<Navigate to="/scanner?tab=attendance" replace />} />
-              <Route path="my-requests" element={<MyRequestsPage />} />
+              <Route path="my-requests" element={<Navigate to="/my-activity?tab=requests" replace />} />
               <Route path="profile" element={<Navigate to="/settings" replace />} />
 
               <Route path="about" element={<Navigate to="/settings" replace />} />

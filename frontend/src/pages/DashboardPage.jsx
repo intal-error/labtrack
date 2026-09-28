@@ -106,7 +106,7 @@ function StudentDashboard() {
   );
 
   const unpaidFines = useMemo(
-    () => fines.filter((f) => f.status === "unpaid"),
+    () => fines.filter((f) => f.status === "pending"),
     [fines]
   );
 
@@ -156,13 +156,13 @@ function StudentDashboard() {
       label: "My Requests",
       desc: "Track borrow requests",
       icon: MdAssignment,
-      path: "/my-requests",
+      path: "/my-activity?tab=requests",
     },
     {
       label: "My Activity",
       desc: "Borrowing history",
       icon: MdHistory,
-      path: "/usage-logs",
+      path: "/my-activity",
     },
     {
       label: "Lab Manuals",

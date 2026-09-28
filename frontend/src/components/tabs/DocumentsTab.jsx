@@ -3,6 +3,7 @@ import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { filterBySearch } from "../../utils/search";
 import toast from "react-hot-toast";
+import LoadError from "../ui/LoadError";
 import "../../styles/pages/tabs.css";
 import { MdDescription, MdPictureAsPdf, MdTableChart, MdSearch, MdDownload, MdDelete, MdCloudUpload } from "react-icons/md";
 
@@ -11,32 +12,37 @@ export default function DocumentsTab() {
   const { role } = useAuth();
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("All");
   const [activeType, setActiveType] = useState("total");
   const fileInputRef = useRef(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         const data = await api.getDocuments();
-        setDocuments(data);
-      } catch {
-        setDocuments([
-          { id: "1", name: "Laboratory Manual 2026", category: "Manuals", type: "pdf", size: "2.4 MB", date: "Jan 15, 2026" },
-          { id: "2", name: "Student Grade Sheet Template", category: "Templates", type: "xlsx", size: "156 KB", date: "Feb 3, 2026" },
-          { id: "3", name: "Equipment Borrowing Policy", category: "Guidelines", type: "pdf", size: "890 KB", date: "Mar 10, 2026" },
-          { id: "4", name: "Faculty Evaluation Form", category: "Forms", type: "pdf", size: "320 KB", date: "Apr 5, 2026" },
-          { id: "5", name: "Semester Performance Report", category: "Reports", type: "xlsx", size: "1.1 MB", date: "May 20, 2026" },
-          { id: "6", name: "Lab Safety Guidelines", category: "Guidelines", type: "pdf", size: "560 KB", date: "Jun 1, 2026" },
-          { id: "7", name: "Inventory Checklist", category: "Templates", type: "xlsx", size: "210 KB", date: "Jul 12, 2026" },
-          { id: "8", name: "Student Registration Form", category: "Forms", type: "pdf", size: "180 KB", date: "Aug 1, 2026" },
-        ]);
+        if (cancelled) return;
+        setDocuments(data || []);
+        setError(null);
+      } catch (err) {
+        if (cancelled) return;
+        setDocuments([]);
+        setError(err?.message || "Couldn't load documents.");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
-  }, []);
+    return () => { cancelled = true; };
+  }, [reloadKey]);
+
+  function retry() {
+    setError(null);
+    setLoading(true);
+    setReloadKey((k) => k + 1);
+  }
 
   const stats = useMemo(() => ({
     total: documents.length,
@@ -119,6 +125,13 @@ export default function DocumentsTab() {
   }
 
   if (loading) return <div className="page-loading"><div className="spinner-lg" /></div>;
+
+  if (error)
+    return (
+      <div className="tab-content">
+        <LoadError message={error} onRetry={retry} />
+      </div>
+    );
 
   return (
     <div className="tab-content">

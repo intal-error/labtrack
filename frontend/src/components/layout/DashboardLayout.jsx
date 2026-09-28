@@ -23,14 +23,14 @@ import "../../styles/pages/layout.css";
 
 const ROUTE_NAMES = {
   "/dashboard": "Dashboard",
+  "/my-activity": "My Activity",
   "/settings": "Settings",
   "/notifications": "Notifications",
   "/transactions": "Transactions",
   "/catalog": "Catalog",
-  "/inventory": "Inventory",
+  "/inventory": "Catalog",
   "/scanner": "Scanner",
   "/borrow-requests": "Borrow Requests",
-  "/my-requests": "My Requests",
   "/maintenance": "Maintenance",
   "/incidents": "Incidents",
   "/fines": "Fines",
@@ -38,46 +38,44 @@ const ROUTE_NAMES = {
   "/documents": "Documents",
   "/persona": "Persona",
   "/attendance": "Attendance Logs",
-  "/my-attendance": "My Activity",
-  "/usage-logs": "My Activity",
   "/reports": "Reports",
 };
+
+function resolvePageTitle(pathname) {
+  if (ROUTE_NAMES[pathname]) return ROUTE_NAMES[pathname];
+  if (pathname.startsWith("/attendance/room/")) return "Room Attendance";
+  return "Dashboard";
+}
 
 const NAV_ITEMS = [
   {
     label: "HOME",
     items: [
       { path: "/dashboard", label: "Dashboard", icon: MdHome, roles: ["student", "admin"] },
+      { path: "/my-activity", label: "My Activity", icon: MdHistory, roles: ["student"] },
       { path: "/reports", label: "Reports", icon: MdAssessment, roles: ["admin"] },
-    ],
-  },
-  {
-    label: "ATTENDANCE",
-    items: [
-      { path: "/usage-logs", label: "My Activity", icon: MdHistory, roles: ["student"] },
-      { path: "/attendance", label: "Attendance Logs", icon: MdEventAvailable, roles: ["admin"] },
+      { path: "/notifications", label: "Notifications", icon: MdNotifications, roles: ["student", "admin"] },
     ],
   },
   {
     label: "TOOLS",
     items: [
       { path: "/scanner", label: "Scanner", icon: MdQrCodeScanner, roles: ["student"] },
-      { path: "/transactions", label: "Transactions", icon: FaExchangeAlt, roles: ["student", "admin"] },
+      { path: "/transactions", label: "Transactions", icon: FaExchangeAlt, roles: ["admin"] },
       { path: "/borrow-requests", label: "Borrow Requests", icon: MdAssignment, roles: ["admin"] },
-      { path: "/my-requests", label: "My Requests", icon: MdAssignment, roles: ["student"] },
       { path: "/inventory", label: "Catalog", icon: MdInventory, roles: ["student"] },
       { path: "/catalog", label: "Catalog", icon: MdInventory, roles: ["admin"] },
       { path: "/maintenance", label: "Maintenance", icon: MdBuild, roles: ["admin"] },
+      { path: "/attendance", label: "Attendance Logs", icon: MdEventAvailable, roles: ["admin"] },
     ],
   },
   {
     label: "SYSTEM",
     items: [
-      { path: "/notifications", label: "Notifications", icon: MdNotifications, roles: ["student", "admin"] },
       { path: "/incidents", label: "Incidents", icon: MdWarning, roles: ["admin", "student"] },
-      { path: "/fines", label: "Fines", icon: PesoIcon, roles: ["student", "admin"] },
       { path: "/manuals", label: "Lab Manuals", icon: MdMenuBook, roles: ["student", "admin"] },
       { path: "/documents", label: "Documents", icon: MdFolderOpen, roles: ["admin"] },
+      { path: "/fines", label: "Fines", icon: PesoIcon, roles: ["admin"] },
       { path: "/persona", label: "Persona", icon: MdPerson, roles: ["admin"] },
       { path: "/settings", label: "Settings", icon: MdSettings, roles: ["student", "admin"] },
     ],
@@ -119,7 +117,7 @@ export default function DashboardLayout() {
   const unreadNotifications = notifications.filter((n) => !n?.read);
   const unreadCount = unreadNotifications.length;
 
-  const pageTitle = ROUTE_NAMES[location.pathname] || "Dashboard";
+  const pageTitle = resolvePageTitle(location.pathname);
 
   const firstName = (userProfile?.name || userProfile?.firstName || "User").split(" ")[0];
   const initials = userProfile?.name
@@ -158,7 +156,7 @@ export default function DashboardLayout() {
   const handleSearch = (e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      const path = role === "admin" ? "/catalog" : "/my-requests";
+      const path = role === "admin" ? "/catalog" : "/my-activity";
       navigate(`${path}?search=${encodeURIComponent(searchQuery.trim())}`);
     }
   };
