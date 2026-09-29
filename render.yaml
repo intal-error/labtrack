@@ -19,6 +19,9 @@ services:
         sync: false
       - key: FIREBASE_PRIVATE_KEY
         sync: false
+      - key: FIREBASE_API_KEY
+        sync: false
+        description: "Firebase Web API key (change-password verification)"
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_KEY
@@ -31,10 +34,13 @@ services:
       - key: SMTP_HOST
         value: smtp.gmail.com
       - key: SMTP_PORT
-        value: 587
+        value: "587"
       - key: SMTP_USER
         sync: false
       - key: SMTP_PASS
         sync: false
       - key: EMAIL_FROM
         sync: false
+      - key: KIOSK_SECRET
+        sync: false
+        description: "Shared secret for kiosk attendance endpoints - must match VITE_KIOSK_SECRET"
