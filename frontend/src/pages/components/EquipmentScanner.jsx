@@ -30,6 +30,7 @@ export default function EquipmentScanner() {
 
   const [quantity, setQuantity] = useState(1);
   const [dueDate, setDueDate] = useState(defaultDueDate);
+  const [dueShortcut, setDueShortcut] = useState(7);
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedUser, setSelectedUser] = useState(null);
   const [borrowerResult, setBorrowerResult] = useState(null);
@@ -56,7 +57,7 @@ export default function EquipmentScanner() {
   if (prevAction !== action) {
     setPrevAction(action);
     if (action === "returned") setDueDate("");
-    else if (!dueDate) setDueDate(defaultDueDate());
+    else if (!dueDate) { setDueDate(defaultDueDate()); setDueShortcut(7); }
   }
 
   const [prevProfile, setPrevProfile] = useState();
@@ -223,6 +224,7 @@ export default function EquipmentScanner() {
     setTxStatus(""); setTxStatusType("");
     setStep2Collapsed(false);
     setDueDate(defaultDueDate());
+    setDueShortcut(7);
     setPurpose("");
     setBorrowPhotoURL(""); setReturnPhotoURL("");
     setConditionOnBorrow("Good"); setConditionOnReturn("Good");
@@ -437,9 +439,7 @@ export default function EquipmentScanner() {
                   {itemResult.available} of {itemResult.total} available
                 </span>
                 {itemResult.course && (
-                  <span className="scanner-collapsed-course" style={{ fontSize: 11, color: "#f57c00", fontWeight: 600, marginLeft: 8 }}>
-                    {itemResult.course}
-                  </span>
+                  <span className="scanner-collapsed-course">{itemResult.course}</span>
                 )}
               </div>
             </div>
@@ -474,11 +474,11 @@ export default function EquipmentScanner() {
                     {itemResult.condition && <span>{itemResult.condition}</span>}
                     {itemResult.category && <span>{itemResult.category}</span>}
                     {itemResult.course && (
-                      <span style={{ color: "#f57c00", fontWeight: 600 }}>{itemResult.course}</span>
+                      <span className="scanner-meta-course">{itemResult.course}</span>
                     )}
                   </div>
                   {borrowerResult?.course && itemResult.course && borrowerResult.course !== itemResult.course && (
-                    <div style={{ fontSize: 11, color: "#f57c00", marginTop: 4, fontWeight: 600 }}>
+                    <div className="scanner-cross-note">
                       Cross-course: Student ({borrowerResult.course}) borrowing from {itemResult.course}
                     </div>
                   )}
@@ -496,120 +496,144 @@ export default function EquipmentScanner() {
           </Suspense>
         )}
 
-        <div className="scanner-transaction-card">
-          <div className="scanner-transaction-header">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10,9 9,9 8,9"/></svg>
-            <span>Transaction Details</span>
-          </div>
-          <div className="scanner-transaction-grid">
-            <div className="scanner-field">
-              <label>Quantity</label>
-              <input type="number" min="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} required />
+        {selectedItem && (
+          <div className="scanner-transaction-card scanner-reveal">
+            <div className="scanner-transaction-header">
+              <span className="scanner-transaction-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              </span>
+              <div className="scanner-transaction-heading">
+                <span className="scanner-transaction-title">Transaction Details</span>
+                <span className="scanner-transaction-sub">{itemResult?.name || "Scanned item"}</span>
+              </div>
             </div>
-            {isBorrow && (
-              <div className="scanner-field">
-                <label>Due Date & Time</label>
-                <input type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+
+            <div className="scanner-tx-section">
+              <div className="scanner-transaction-grid">
+                <div className="scanner-field">
+                  <label>Quantity</label>
+                  <input type="number" min="1" inputMode="numeric" value={quantity} onChange={(e) => setQuantity(e.target.value)} required />
+                  {itemResult && (
+                    <span className="scanner-field-hint">{itemResult.available} of {itemResult.total} available</span>
+                  )}
+                </div>
+                {isBorrow ? (
+                  <div className="scanner-field">
+                    <label>Due Date &amp; Time</label>
+                    <input type="datetime-local" value={dueDate} onChange={(e) => { setDueDate(e.target.value); setDueShortcut(null); }} />
+                  </div>
+                ) : (
+                  <div className="scanner-field">
+                    <label>Condition on Return</label>
+                    <select value={conditionOnReturn} onChange={(e) => setConditionOnReturn(e.target.value)}>
+                      <option value="Excellent">Excellent</option>
+                      <option value="Good">Good</option>
+                      <option value="Fair">Fair</option>
+                      <option value="Damaged">Damaged</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+              {isBorrow && (
+                <div className="scanner-due-shortcuts">
+                  <span className="due-shortcut-label">Quick due date</span>
+                  <div className="due-shortcut-btns">
+                    {[{ label: "1 day", days: 1 }, { label: "3 days", days: 3 }, { label: "7 days", days: 7 }, { label: "2 weeks", days: 14 }].map(({ label, days }) => (
+                      <button key={days} type="button" className={`due-shortcut-btn ${dueShortcut === days ? "active" : ""}`} onClick={() => {
+                        const d = new Date();
+                        d.setDate(d.getDate() + days);
+                        d.setHours(17, 0, 0, 0);
+                        const offset = d.getTimezoneOffset() * 60000;
+                        setDueDate(new Date(d.getTime() - offset).toISOString().slice(0, 16));
+                        setDueShortcut(days);
+                      }}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {isBorrow && !isAdmin && userProfile?.role === "student" && (
+              <div className="scanner-tx-section">
+                <div className="scanner-tx-section-title">Borrowing info</div>
+                <div className="scanner-tx-fields">
+                  <div className="scanner-field">
+                    <label>Purpose of Borrowing</label>
+                    <input type="text" value={purpose} onChange={(e) => setPurpose(e.target.value)} />
+                  </div>
+                  <div className="scanner-field">
+                    <label>Target Course</label>
+                    <select value={targetCourse} onChange={(e) => setTargetCourse(e.target.value)}>
+                      <option value="">Select course...</option>
+                      {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <span className="scanner-field-hint">Equipment will be routed to the admin(s) assigned to this course</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {isBorrow && isAdmin && (
+              <div className="scanner-tx-section">
+                <div className="scanner-tx-section-title">Item condition</div>
+                <div className="scanner-transaction-grid">
+                  <div className="scanner-field">
+                    <label>Condition on Borrow</label>
+                    <select value={conditionOnBorrow} onChange={(e) => setConditionOnBorrow(e.target.value)}>
+                      <option value="Excellent">Excellent</option>
+                      <option value="Good">Good</option>
+                      <option value="Fair">Fair</option>
+                      <option value="Damaged">Damaged</option>
+                    </select>
+                  </div>
+                  <div className="scanner-field">
+                    <label>Condition Photo</label>
+                    <input type="file" accept="image/*" capture="environment" ref={borrowPhotoRef} onChange={(e) => handlePhotoUpload(e, "borrow")} className="scanner-file-input" />
+                    <button type="button" className="btn btn-outline btn-sm scanner-photo-btn" onClick={() => borrowPhotoRef.current?.click()} disabled={uploadingPhoto}>
+                      {uploadingPhoto ? "Uploading..." : borrowPhotoURL ? "Photo captured" : "Capture photo"}
+                    </button>
+                    {borrowPhotoURL && <img src={borrowPhotoURL} alt="Borrow condition" className="scanner-photo-preview" />}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!isBorrow && (
+              <div className="scanner-tx-section">
+                <div className="scanner-tx-section-title">Condition photo</div>
+                <div className="scanner-field">
+                  <input type="file" accept="image/*" capture="environment" ref={returnPhotoRef} onChange={(e) => handlePhotoUpload(e, "return")} className="scanner-file-input" />
+                  <button type="button" className="btn btn-outline btn-sm scanner-photo-btn" onClick={() => returnPhotoRef.current?.click()} disabled={uploadingPhoto}>
+                    {uploadingPhoto ? "Uploading..." : returnPhotoURL ? "Photo captured" : "Capture photo"}
+                  </button>
+                  {returnPhotoURL && <img src={returnPhotoURL} alt="Return condition" className="scanner-photo-preview" />}
+                </div>
               </div>
             )}
           </div>
-          {isBorrow && (
-            <>
-              <div className="scanner-due-shortcuts">
-                <span className="due-shortcut-label">Quick due date:</span>
-                <div className="due-shortcut-btns">
-                  {[{ label: "1 day", days: 1 }, { label: "3 days", days: 3 }, { label: "7 days", days: 7 }, { label: "2 weeks", days: 14 }].map(({ label, days }) => (
-                    <button key={days} type="button" className="due-shortcut-btn" onClick={() => {
-                      const d = new Date();
-                      d.setDate(d.getDate() + days);
-                      d.setHours(17, 0, 0, 0);
-                      const offset = d.getTimezoneOffset() * 60000;
-                      setDueDate(new Date(d.getTime() - offset).toISOString().slice(0, 16));
-                    }}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {!isAdmin && userProfile?.role === "student" && (
-                <div className="scanner-field" style={{ marginTop: 12 }}>
-                  <label>Purpose of Borrowing</label>
-                  <input type="text" placeholder="e.g. Lab experiment, thesis project..." value={purpose} onChange={(e) => setPurpose(e.target.value)} />
-                </div>
-              )}
-              {!isAdmin && userProfile?.role === "student" && (
-                <div className="scanner-field" style={{ marginTop: 12 }}>
-                  <label>Target Course</label>
-                  <select value={targetCourse} onChange={(e) => setTargetCourse(e.target.value)}>
-                    <option value="">Select course...</option>
-                    {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                  <span className="scanner-field-hint">Equipment will be routed to the admin(s) assigned to this course</span>
-                </div>
-              )}
-            </>
-          )}
-          {isBorrow && isAdmin && (
-            <div className="scanner-field" style={{ marginTop: 12 }}>
-              <label>Condition on Borrow</label>
-              <select value={conditionOnBorrow} onChange={(e) => setConditionOnBorrow(e.target.value)}>
-                <option value="Excellent">Excellent</option>
-                <option value="Good">Good</option>
-                <option value="Fair">Fair</option>
-                <option value="Damaged">Damaged</option>
-              </select>
-            </div>
-          )}
-          {isBorrow && isAdmin && (
-            <div className="scanner-field" style={{ marginTop: 12 }}>
-              <label>Condition Photo (Borrow)</label>
-              <input type="file" accept="image/*" capture="environment" ref={borrowPhotoRef} onChange={(e) => handlePhotoUpload(e, "borrow")} style={{ display: "none" }} />
-              <button type="button" className="btn btn-outline btn-sm" onClick={() => borrowPhotoRef.current?.click()} disabled={uploadingPhoto}>
-                {uploadingPhoto ? "Uploading..." : borrowPhotoURL ? "Photo Captured ✓" : "Capture Photo"}
-              </button>
-              {borrowPhotoURL && <img src={borrowPhotoURL} alt="Borrow condition" style={{ marginTop: 8, maxWidth: 200, borderRadius: 8 }} />}
-            </div>
-          )}
-          {!isBorrow && (
-            <>
-              <div className="scanner-field" style={{ marginTop: 12 }}>
-                <label>Condition on Return</label>
-                <select value={conditionOnReturn} onChange={(e) => setConditionOnReturn(e.target.value)}>
-                  <option value="Excellent">Excellent</option>
-                  <option value="Good">Good</option>
-                  <option value="Fair">Fair</option>
-                  <option value="Damaged">Damaged</option>
-                </select>
-              </div>
-              <div className="scanner-field" style={{ marginTop: 12 }}>
-                <label>Condition Photo (Return)</label>
-                <input type="file" accept="image/*" capture="environment" ref={returnPhotoRef} onChange={(e) => handlePhotoUpload(e, "return")} style={{ display: "none" }} />
-                <button type="button" className="btn btn-outline btn-sm" onClick={() => returnPhotoRef.current?.click()} disabled={uploadingPhoto}>
-                  {uploadingPhoto ? "Uploading..." : returnPhotoURL ? "Photo Captured ✓" : "Capture Photo"}
-                </button>
-                {returnPhotoURL && <img src={returnPhotoURL} alt="Return condition" style={{ marginTop: 8, maxWidth: 200, borderRadius: 8 }} />}
-              </div>
-            </>
-          )}
-        </div>
+        )}
 
-        <button type="submit" className={`scanner-submit-btn ${action}`} disabled={submitting}>
-          {submitting ? (
-            <>
-              <div className="scanner-spinner" />
-              Recording...
-            </>
-          ) : (
-            <>
-              {isBorrow ? (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-              ) : (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20,6 9,17 4,12"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-              )}
-              {isBorrow ? ((!isAdmin && userProfile?.role === "student") ? "Submit Request" : "Record Borrow") : "Record Return"}
-            </>
-          )}
-        </button>
+        {selectedItem && (
+          <button type="submit" className={`scanner-submit-btn ${action} scanner-reveal`} disabled={submitting}>
+            {submitting ? (
+              <>
+                <div className="scanner-spinner" />
+                Recording...
+              </>
+            ) : (
+              <>
+                {isBorrow ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20,6 9,17 4,12"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                )}
+                {isBorrow ? ((!isAdmin && userProfile?.role === "student") ? "Submit Request" : "Record Borrow") : "Record Return"}
+              </>
+            )}
+          </button>
+        )}
       </form>
     </>
   );

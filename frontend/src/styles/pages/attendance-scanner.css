@@ -11,11 +11,11 @@
 }
 .logbook-entry-card.active {
   border-color: rgba(46,125,50,.3);
-  background: linear-gradient(135deg, rgba(46,125,50,.04), transparent);
+  background: rgba(46,125,50,.04);
 }
 .logbook-entry-card.completed {
   border-color: rgba(25,118,210,.3);
-  background: linear-gradient(135deg, rgba(25,118,210,.04), transparent);
+  background: rgba(25,118,210,.04);
 }
 .logbook-entry-header {
   display: flex;
@@ -145,7 +145,7 @@
   flex-shrink: 0;
 }
 .logbook-recent-dot.active {
-  background: #2E7D32;
+  background: var(--green);
   box-shadow: 0 0 0 2px rgba(46,125,50,.2);
 }
 .logbook-recent-dot.completed {
@@ -189,7 +189,7 @@
 }
 .logbook-recent-badge.active {
   background: rgba(46,125,50,.12);
-  color: #2E7D32;
+  color: var(--green);
 }
 .logbook-recent-badge.out {
   background: rgba(0,0,0,.06);

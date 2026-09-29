@@ -327,7 +327,6 @@ export default function AttendanceScanner() {
                   </svg>
                   <input
                     type="text"
-                    placeholder="Room code (e.g. computer-lab-1)"
                     value={roomCode}
                     onChange={(e) => { setRoomCode(e.target.value); setRoomResult(null); }}
                   />
@@ -352,9 +351,9 @@ export default function AttendanceScanner() {
           </Suspense>
         )}
 
-        {/* Step 2: Details (Time-In only) */}
-        {isTimeIn && (
-          <div className="scanner-step-card" ref={step2Ref}>
+        {/* Step 2: Details (Time-In only, shown after room scan) */}
+        {isTimeIn && roomResult && (
+          <div className="scanner-step-card scanner-reveal" ref={step2Ref}>
             <div className="scanner-step-header">
               <div className={`scanner-step-badge ${step2Collapsed && subject && professor ? "completed" : ""}`}>
                 {step2Collapsed && subject && professor ? (
@@ -374,7 +373,6 @@ export default function AttendanceScanner() {
                     type="text"
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
-                    placeholder="e.g. Computer Programming 1"
                     required
                   />
                 </div>
@@ -382,7 +380,6 @@ export default function AttendanceScanner() {
                   <label>Professor *</label>
                   <input
                     type="text"
-                    placeholder="Enter professor name"
                     value={professor}
                     onChange={(e) => setProfessor(e.target.value)}
                     required
@@ -395,22 +392,24 @@ export default function AttendanceScanner() {
 
         {/* Submit Button — uses shared scanner-submit-btn with time-in/time-out variants */}
         {isTimeIn ? (
-          <button type="submit" className="scanner-submit-btn time-in" disabled={submitting || !roomResult || !subject || !professor}>
-            {submitting ? (
-              <>
-                <div className="scanner-spinner" />
-                Recording...
-              </>
-            ) : (
-              <>
-                <MdCheckCircle size={18} />
-                Confirm Sign In
-              </>
-            )}
-          </button>
+          roomResult && !resultData && (
+            <button type="submit" className="scanner-submit-btn time-in scanner-reveal" disabled={submitting || !subject || !professor}>
+              {submitting ? (
+                <>
+                  <div className="scanner-spinner" />
+                  Recording...
+                </>
+              ) : (
+                <>
+                  <MdCheckCircle size={18} />
+                  Confirm Sign In
+                </>
+              )}
+            </button>
+          )
         ) : (
-          !resultData && (
-            <button type="button" className="scanner-submit-btn time-out" disabled={submitting || !roomResult} onClick={() => handleTimeOut(roomCode, labRoom)}>
+          roomResult && !resultData && (
+            <button type="button" className="scanner-submit-btn time-out scanner-reveal" disabled={submitting} onClick={() => handleTimeOut(roomCode, labRoom)}>
               {submitting ? (
                 <>
                   <div className="scanner-spinner" />
@@ -428,7 +427,7 @@ export default function AttendanceScanner() {
 
         {/* Reset Button */}
         {resultData && (
-          <button type="button" className="scanner-btn-find" style={{ width: "100%", justifyContent: "center", marginTop: 12, minHeight: 44 }} onClick={resetForm}>
+          <button type="button" className="scanner-btn-find scanner-btn-block" onClick={resetForm}>
             <MdQrCodeScanner size={16} />
             New Entry
           </button>
