@@ -313,6 +313,77 @@ const getMyReturned = async (req, res) => {
   }
 };
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function categorizeOpenBorrows(open) {
+  const now = Date.now();
+  let dueSoon = 0;
+  let overdue = 0;
+  for (const t of open) {
+    const due = new Date(t.due_date);
+    if (isNaN(due.getTime())) continue;
+    const daysLeft = Math.ceil((due.getTime() - now) / DAY_MS);
+    if (daysLeft < 0) overdue += 1;
+    else if (daysLeft <= 3) dueSoon += 1;
+  }
+  return { dueSoon, overdue };
+}
+
+const getMyStats = async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const [{ data: borrowedRows, error: borrowedError }, { data: returnedRows, error: returnedError }] =
+      await Promise.all([
+        supabase.from("transactions").select("*").eq("action", "borrowed").eq("user_id", uid),
+        supabase.from("transactions").select("*").eq("action", "returned").eq("user_id", uid),
+      ]);
+    if (borrowedError) throw new Error(borrowedError.message);
+    if (returnedError) throw new Error(returnedError.message);
+
+    const borrowed = borrowedRows || [];
+    const open = borrowed.filter(isOpenBorrow);
+    const { dueSoon, overdue } = categorizeOpenBorrows(open);
+
+    res.json({
+      totalBorrowed: borrowed.length,
+      activeBorrows: open.length,
+      totalReturned: (returnedRows || []).length,
+      dueSoon,
+      overdue,
+    });
+  } catch (err) {
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
+  }
+};
+
+const getStats = async (req, res) => {
+  try {
+    const [{ data: borrowedRows, error: borrowedError }, { data: returnedRows, error: returnedError }] =
+      await Promise.all([
+        supabase.from("transactions").select("*").eq("action", "borrowed"),
+        supabase.from("transactions").select("*").eq("action", "returned"),
+      ]);
+    if (borrowedError) throw new Error(borrowedError.message);
+    if (returnedError) throw new Error(returnedError.message);
+
+    const borrowed = borrowedRows || [];
+    const weekAgo = Date.now() - 7 * DAY_MS;
+    const thisWeek = borrowed.filter((t) => {
+      const d = new Date(t.timestamp);
+      return !isNaN(d.getTime()) && d.getTime() >= weekAgo;
+    }).length;
+
+    res.json({
+      totalBorrowed: borrowed.length,
+      active: borrowed.filter(isOpenBorrow).length,
+      totalReturned: (returnedRows || []).length,
+      thisWeek,
+    });
+  } catch (err) {
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
+  }
+};
+
 const recordBorrow = async (req, res) => {
   try {
     const { itemId, borrower, quantity, dueDate, borrowPhotoURL, conditionOnBorrow } = req.body;
@@ -572,4 +643,4 @@ const recordMyReturn = async (req, res) => {
   }
 };
 
-module.exports = { getBorrowed, getReturned, getMyBorrowed, getMyReturned, recordBorrow, recordReturn, recordMyReturn };
+module.exports = { getBorrowed, getReturned, getMyBorrowed, getMyReturned, getStats, getMyStats, recordBorrow, recordReturn, recordMyReturn };

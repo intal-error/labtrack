@@ -30,18 +30,6 @@ body.dark .btn-report{background:#1a1a1a;color:#FFFFFF;border-color:#2a2a2a}
 .transactions-header-actions{display:flex;gap:10px;align-items:center}
 .transactions-header .btn{display:flex;align-items:center;gap:6px}
 
-.transactions-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
-.transactions-stats .stat-card{background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;padding:18px 20px;display:flex;align-items:center;gap:14px;transition:all .25s;box-shadow:var(--card-shadow)}
-.transactions-stats .stat-card:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,.1)}
-.transactions-stats .stat-icon{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.transactions-stats .stat-active .stat-icon{background:linear-gradient(135deg,#e3f2fd,#bbdefb);color:#1565c0}
-.transactions-stats .stat-borrowed-total .stat-icon{background:linear-gradient(135deg,#fff3e0,#ffe0b2);color:#ef6c00}
-.transactions-stats .stat-returned-total .stat-icon{background:linear-gradient(135deg,#e8f5e9,#c8e6c9);color:#2e7d32}
-.transactions-stats .stat-week .stat-icon{background:linear-gradient(135deg,#f3e5f5,#e1bee7);color:#6a1b9a}
-.transactions-stats .stat-info{display:flex;flex-direction:column}
-.transactions-stats .stat-number{font-size:1.5rem;font-weight:700;color:var(--text);line-height:1.2}
-.transactions-stats .stat-label{font-size:12px;color:var(--text-muted);font-weight:500}
-
 .transactions-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px}
 .transactions-toolbar-left{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .transactions-toolbar-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -162,13 +150,11 @@ body.dark .btn-report{background:#1a1a1a;color:#FFFFFF;border-color:#2a2a2a}
 .transactions-empty p{font-size:13px;color:var(--text-muted);margin:0}
 
 @media(max-width:900px){
-  .transactions-stats{grid-template-columns:repeat(2,1fr)}
   .transactions-grid{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
   .transactions-toolbar{flex-direction:column;align-items:stretch}
   .transactions-toolbar-left,.transactions-toolbar-right{justify-content:center}
 }
 @media(max-width:600px){
-  .transactions-stats{grid-template-columns:1fr}
   .transactions-grid{grid-template-columns:1fr}
   .transactions-header{flex-direction:column;align-items:stretch}
   .transactions-header-actions{justify-content:center}
@@ -188,12 +174,6 @@ body.dark .btn-report{background:#1a1a1a;color:#FFFFFF;border-color:#2a2a2a}
 
 body.dark .transactions-header h1{color:#FFFFFF}
 body.dark .transactions-subtitle{color:#888}
-body.dark .transactions-stats .stat-card{border-color:rgba(255,255,255,.1);background:#131313}
-body.dark .transactions-stats .stat-active .stat-icon{background:linear-gradient(135deg,#1b2a3a,#263550);color:#64b5f6}
-body.dark .transactions-stats .stat-borrowed-total .stat-icon{background:linear-gradient(135deg,#3a2a1b,#4d3526);color:#ffb74d}
-body.dark .transactions-stats .stat-returned-total .stat-icon{background:linear-gradient(135deg,#1b3a2a,#264d35);color:var(--green-light)}
-body.dark .transactions-stats .stat-week .stat-icon{background:linear-gradient(135deg,#2d1b3a,#3d2650);color:#ce93d8}
-body.dark .transactions-stats .stat-number{color:#FFFFFF}
 body.dark .transactions-tabs{background:#131313;border-color:#264d35}
 body.dark .transactions-tabs .tab-btn{color:#aaa}
 body.dark .transactions-tabs .tab-btn:hover{color:#FFFFFF;background:#1a1a1a}

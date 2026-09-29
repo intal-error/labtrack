@@ -1,12 +1,13 @@
 import { useState, useCallback, useMemo } from "react";
 import { api } from "../services/api";
-import { useBorrowed, useReturned } from "../hooks/useQueries";
+import { useBorrowed, useReturned, useTransactionStats } from "../hooks/useQueries";
 import { COURSES } from "../constants/courses";
-import { toDate, formatDate, getRemainingQuantity, computeTransactionStats, timeAgo, getInitials, getAvatarColor, getOverdueInfo, sortTransactions as sortItems } from "../utils/helpers";
+import { toDate, formatDate, getRemainingQuantity, timeAgo, getInitials, getAvatarColor, getOverdueInfo, sortTransactions as sortItems } from "../utils/helpers";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Modal from "../components/ui/Modal";
 import Pagination from "../components/ui/Pagination";
 import LoadError from "../components/ui/LoadError";
+import StatStrip from "../components/ui/StatStrip";
 import toast from "react-hot-toast";
 import "../styles/pages/tables.css";
 import ViewToggle from "../components/ui/ViewToggle";
@@ -118,12 +119,13 @@ export default function TransactionsPage() {
 
   const loading = borrowedLoading || returnedLoading;
 
+  const { data: transactionStats, refetch: refetchTransactionStats } = useTransactionStats();
+
   const load = useCallback(() => {
     refetchBorrowed();
     refetchReturned();
-  }, [refetchBorrowed, refetchReturned]);
-
-  const stats = useMemo(() => computeTransactionStats(borrowed, returned), [borrowed, returned]);
+    refetchTransactionStats();
+  }, [refetchBorrowed, refetchReturned, refetchTransactionStats]);
 
   const activeItems = useMemo(() =>
     activeTab === "borrowed" ? borrowed : returned,
@@ -172,44 +174,30 @@ export default function TransactionsPage() {
         Download Report
       </button>
 
-      <div className="transactions-stats">
-        <div className="stat-card stat-active">
-          <div className="stat-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          </div>
-          <div className="stat-info">
-            <span className="stat-number">{stats.active}</span>
-            <span className="stat-label">Active Borrows</span>
-          </div>
-        </div>
-        <div className="stat-card stat-borrowed-total">
-          <div className="stat-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-          </div>
-          <div className="stat-info">
-            <span className="stat-number">{paginationData?.total ?? stats.totalBorrowed}</span>
-            <span className="stat-label">Total Borrowed</span>
-          </div>
-        </div>
-        <div className="stat-card stat-returned-total">
-          <div className="stat-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20,6 9,17 4,12"/></svg>
-          </div>
-          <div className="stat-info">
-            <span className="stat-number">{stats.totalReturned}</span>
-            <span className="stat-label">Total Returned</span>
-          </div>
-        </div>
-        <div className="stat-card stat-week">
-          <div className="stat-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
-          </div>
-          <div className="stat-info">
-            <span className="stat-number">{stats.thisWeek}</span>
-            <span className="stat-label">This Week</span>
-          </div>
-        </div>
-      </div>
+      <StatStrip
+        items={[
+          {
+            label: "Active Borrows",
+            value: transactionStats?.active ?? 0,
+            icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+          },
+          {
+            label: "Total Borrowed",
+            value: transactionStats?.totalBorrowed ?? 0,
+            icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>,
+          },
+          {
+            label: "Total Returned",
+            value: transactionStats?.totalReturned ?? 0,
+            icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20,6 9,17 4,12"/></svg>,
+          },
+          {
+            label: "This Week",
+            value: transactionStats?.thisWeek ?? 0,
+            icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>,
+          },
+        ]}
+      />
 
       <div className="transactions-toolbar">
         <div className="transactions-toolbar-left">

@@ -1,12 +1,12 @@
 import { useState, useMemo } from "react";
-import { useCatalog } from "../hooks/useQueries";
+import { useCatalog, useCatalogStats } from "../hooks/useQueries";
 import { COURSES } from "../constants/courses";
 import { numOr, getAvailableQuantity, conditionClass } from "../utils/helpers";
-import { filterBySearch } from "../utils/search";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Pagination from "../components/ui/Pagination";
 import "../styles/pages/catalog.css";
 import ViewToggle from "../components/ui/ViewToggle";
+import StatStrip from "../components/ui/StatStrip";
 
 export default function InventoryPage() {
   const [filter, setFilter] = useState("All");
@@ -30,6 +30,7 @@ export default function InventoryPage() {
 
   const params = `?page=${page}&limit=25&search=${search}&status=${filter !== "All" ? filter : ""}&course=${filterCourse !== "All" ? filterCourse : ""}&sort=${sort}`;
   const { data: response, isLoading } = useCatalog(params);
+  const { data: statsData } = useCatalogStats();
 
   const allItems = useMemo(() => {
     if (!response) return [];
@@ -41,66 +42,20 @@ export default function InventoryPage() {
     return response.pagination || null;
   }, [response]);
 
-  const filteredItems = useMemo(() => {
-    let result = [...allItems];
-    if (filter !== "All") result = result.filter((i) => i.status === filter);
-    if (filterCourse !== "All") result = result.filter((i) => i.course === filterCourse);
-    if (search) result = filterBySearch(result, search, ["itemName"]);
-    if (sort === "name") result.sort((a, b) => (a.itemName || "").localeCompare(b.itemName || ""));
-    else if (sort === "number") result.sort((a, b) => (parseFloat(a.itemName) || 0) - (parseFloat(b.itemName) || 0));
-    else if (sort === "date") result.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-    return result;
-  }, [allItems, filter, filterCourse, search, sort]);
-
-  const stats = {
-    total: allItems.length,
-    available: allItems.filter((i) => i.status === "Available").length,
-    borrowed: allItems.filter((i) => i.status === "Borrowed").length,
-    categories: new Set(allItems.map((i) => i.category).filter(Boolean)).size,
-  };
+  const filteredItems = allItems;
 
   if (isLoading) return <LoadingSpinner />;
 
   return (
     <section className="catalog-page">
-      <div className="catalog-stats">
-        <div className="stat-card stat-total">
-          <div className="stat-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-          </div>
-          <div className="stat-info">
-            <span className="stat-number">{stats.total}</span>
-            <span className="stat-label">Total Items</span>
-          </div>
-        </div>
-        <div className="stat-card stat-available">
-          <div className="stat-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>
-          </div>
-          <div className="stat-info">
-            <span className="stat-number">{stats.available}</span>
-            <span className="stat-label">Available</span>
-          </div>
-        </div>
-        <div className="stat-card stat-borrowed">
-          <div className="stat-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
-          </div>
-          <div className="stat-info">
-            <span className="stat-number">{stats.borrowed}</span>
-            <span className="stat-label">Borrowed</span>
-          </div>
-        </div>
-        <div className="stat-card stat-categories">
-          <div className="stat-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-          </div>
-          <div className="stat-info">
-            <span className="stat-number">{stats.categories}</span>
-            <span className="stat-label">Categories</span>
-          </div>
-        </div>
-      </div>
+      <StatStrip
+        items={[
+          { label: "Total Items", value: statsData?.total ?? 0, icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>},
+          { label: "Available", value: statsData?.available ?? 0, icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>},
+          { label: "Borrowed", value: statsData?.borrowed ?? 0, icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>},
+          { label: "Categories", value: statsData?.categories ?? 0, icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>},
+        ]}
+      />
 
       <div className="catalog-toolbar">
         <div className="catalog-filter-pills">

@@ -146,23 +146,3 @@ export function parseFutureDate(dueDateStr) {
   return due;
 }
 
-export function computeTransactionStats(borrowed, returned) {
-  const dueSoon = borrowed.filter((b) => {
-    if (!b.dueDate) return false;
-    const due = toDate(b.dueDate);
-    if (!due) return false;
-    const daysLeft = Math.ceil((due.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-    return daysLeft >= 0 && daysLeft <= 3;
-  }).length;
-  return {
-    totalBorrowed: borrowed.length,
-    totalReturned: returned.length,
-    active: borrowed.filter((b) => getRemainingQuantity(b) > 0).length,
-    thisWeek: borrowed.filter((b) => {
-      const d = toDate(b.timestamp);
-      if (!d) return false;
-      return (Date.now() - d.getTime()) < 7 * 24 * 60 * 60 * 1000;
-    }).length,
-    dueSoon,
-  };
-}

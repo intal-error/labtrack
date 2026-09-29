@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../services/api";
 import { formatDuration, formatTime, getTodayString } from "../utils/attendanceHelpers";
 import RoomManagementTab from "../components/tabs/RoomManagementTab";
+import StatStrip from "../components/ui/StatStrip";
 import toast from "react-hot-toast";
 import "../styles/pages/attendance.css";
 
@@ -149,44 +150,14 @@ export default function AttendanceLogsPage() {
       <div className="attendance-shell">
         {/* Stats */}
         {stats && (
-          <div className="attendance-stats">
-            <div className="attendance-stat">
-              <div className="attendance-stat-icon green">
-                <MdPeople size={20} />
-              </div>
-              <div className="attendance-stat-info">
-                <span className="attendance-stat-value">{stats.currentlyInside}</span>
-                <span className="attendance-stat-label">Currently Inside</span>
-              </div>
-            </div>
-            <div className="attendance-stat">
-              <div className="attendance-stat-icon blue">
-                <MdEventNote size={20} />
-              </div>
-              <div className="attendance-stat-info">
-                <span className="attendance-stat-value">{stats.totalToday}</span>
-                <span className="attendance-stat-label">Today&apos;s Sessions</span>
-              </div>
-            </div>
-            <div className="attendance-stat">
-              <div className="attendance-stat-icon orange">
-                <MdAccessTime size={20} />
-              </div>
-              <div className="attendance-stat-info">
-                <span className="attendance-stat-value">{formatDuration(stats.totalMinutesToday)}</span>
-                <span className="attendance-stat-label">Total Hours Today</span>
-              </div>
-            </div>
-            <div className="attendance-stat">
-              <div className="attendance-stat-icon purple">
-                <MdGroup size={20} />
-              </div>
-              <div className="attendance-stat-info">
-                <span className="attendance-stat-value">{stats.uniqueStudentsThisWeek}</span>
-                <span className="attendance-stat-label">Students This Week</span>
-              </div>
-            </div>
-          </div>
+          <StatStrip
+            items={[
+              { label: "Currently Inside", value: stats.currentlyInside, icon: <MdPeople size={20} /> },
+              { label: "Today's Sessions", value: stats.totalToday, icon: <MdEventNote size={20} /> },
+              { label: "Total Hours Today", value: formatDuration(stats.totalMinutesToday), icon: <MdAccessTime size={20} /> },
+              { label: "Students This Week", value: stats.uniqueStudentsThisWeek, icon: <MdGroup size={20} /> },
+            ]}
+          />
         )}
 
         {/* Tabs */}

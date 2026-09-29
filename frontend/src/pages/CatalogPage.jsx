@@ -2,13 +2,13 @@ import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../services/api";
-import { useCatalog } from "../hooks/useQueries";
+import { useCatalog, useCatalogStats } from "../hooks/useQueries";
 import { COURSES } from "../constants/courses";
 import { numOr, getAvailableQuantity, conditionClass } from "../utils/helpers";
-import { filterBySearch } from "../utils/search";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Modal from "../components/ui/Modal";
 import Pagination from "../components/ui/Pagination";
+import StatStrip from "../components/ui/StatStrip";
 import toast from "react-hot-toast";
 import "../styles/pages/catalog.css";
 import "../styles/pages/scanner.css";
@@ -68,6 +68,7 @@ export default function CatalogPage() {
 
   const params = `?page=${page}&limit=25&search=${search}&status=${filter !== "All" ? filter : ""}&course=${filterCourse !== "All" ? filterCourse : ""}&sort=${sort}`;
   const { data: response, isLoading } = useCatalog(params);
+  const { data: statsData } = useCatalogStats();
 
   const allItems = useMemo(() => {
     if (!response) return [];
@@ -81,22 +82,23 @@ export default function CatalogPage() {
 
   const invalidateCatalog = () => queryClient.invalidateQueries({ queryKey: ["catalog"] });
 
-  const filteredItems = useMemo(() => {
-    let result = [...allItems];
-    if (filter !== "All") result = result.filter((i) => i.status === filter);
-    if (filterCourse !== "All") result = result.filter((i) => i.course === filterCourse);
-    if (search) result = filterBySearch(result, search, ["itemName"]);
-    if (sort === "name") result.sort((a, b) => (a.itemName || "").localeCompare(b.itemName || ""));
-    else if (sort === "number") result.sort((a, b) => (parseFloat(a.itemName) || 0) - (parseFloat(b.itemName) || 0));
-    else if (sort === "date") result.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-    return result;
-  }, [allItems, filter, filterCourse, search, sort]);
+  const filteredItems = allItems;
+
+  const courseTabs = useMemo(() => {
+    const map = new Map();
+    COURSES.forEach((c) => map.set(c, { course: c, total: 0 }));
+    (statsData?.byCourse || []).forEach((e) => {
+      const key = e.course || "Unassigned";
+      map.set(key, { course: key, total: e.total });
+    });
+    return [...map.values()];
+  }, [statsData]);
 
   const stats = {
-    total: allItems.length,
-    available: allItems.filter((i) => i.status === "Available").length,
-    borrowed: allItems.filter((i) => i.status === "Borrowed").length,
-    categories: new Set(allItems.map((i) => i.category).filter(Boolean)).size,
+    total: statsData?.total ?? 0,
+    available: statsData?.available ?? 0,
+    borrowed: statsData?.borrowed ?? 0,
+    categories: statsData?.categories ?? 0,
   };
 
   const handleUpload = async (e) => {
@@ -170,43 +172,31 @@ export default function CatalogPage() {
         </div>
       )}
 
-      <div className="catalog-stats">
-        <div className="stat-card stat-total">
-          <div className="stat-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-          </div>
-          <div className="stat-info">
-            <span className="stat-number">{stats.total}</span>
-            <span className="stat-label">Total Items</span>
-          </div>
-        </div>
-        <div className="stat-card stat-available">
-          <div className="stat-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>
-          </div>
-          <div className="stat-info">
-            <span className="stat-number">{stats.available}</span>
-            <span className="stat-label">Available</span>
-          </div>
-        </div>
-        <div className="stat-card stat-borrowed">
-          <div className="stat-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
-          </div>
-          <div className="stat-info">
-            <span className="stat-number">{stats.borrowed}</span>
-            <span className="stat-label">Borrowed</span>
-          </div>
-        </div>
-        <div className="stat-card stat-categories">
-          <div className="stat-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-          </div>
-          <div className="stat-info">
-            <span className="stat-number">{stats.categories}</span>
-            <span className="stat-label">Categories</span>
-          </div>
-        </div>
+      <StatStrip
+        items={[
+          { label: "Total Items", value: stats.total, icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>},
+          { label: "Available", value: stats.available, icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>},
+          { label: "Borrowed", value: stats.borrowed, icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>},
+          { label: "Categories", value: stats.categories, icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>},
+        ]}
+      />
+
+      <div className="catalog-course-tabs">
+        <button
+          className={`course-tab ${filterCourse === "All" ? "active" : ""}`}
+          onClick={() => setFilterCourse("All")}
+        >
+          All Courses <span className="course-tab-count">{stats.total}</span>
+        </button>
+        {courseTabs.map((c) => (
+          <button
+            key={c.course}
+            className={`course-tab ${filterCourse === c.course ? "active" : ""}`}
+            onClick={() => setFilterCourse(c.course)}
+          >
+            {c.course} <span className="course-tab-count">{c.total}</span>
+          </button>
+        ))}
       </div>
 
       <div className="catalog-toolbar">
@@ -227,10 +217,6 @@ export default function CatalogPage() {
               {f}
             </button>
           ))}
-          <select className="catalog-course-filter" value={filterCourse} onChange={(e) => setFilterCourse(e.target.value)}>
-            <option value="All">All Courses</option>
-            {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
         </div>
         <div className="catalog-sort">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="4" y1="6" x2="16" y2="6"/><line x1="4" y1="12" x2="12" y2="12"/><line x1="4" y1="18" x2="8" y2="18"/></svg>

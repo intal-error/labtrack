@@ -9,6 +9,13 @@ export function useCatalog(params) {
     staleTime: 5 * 60 * 1000,
   });
 }
+export function useCatalogStats() {
+  return useQuery({
+    queryKey: ["catalog", "stats"],
+    queryFn: () => api.getCatalogStats(),
+    staleTime: 5 * 60 * 1000,
+  });
+}
 
 // ── Transactions ──
 export function useBorrowed(params, { enabled } = {}) {
@@ -41,6 +48,20 @@ export function useMyReturned(params, { enabled } = {}) {
     queryFn: () => api.getMyReturned(params),
     staleTime: 2 * 60 * 1000,
     enabled,
+  });
+}
+export function useTransactionStats() {
+  return useQuery({
+    queryKey: ["transactionStats"],
+    queryFn: () => api.getTransactionStats(),
+    staleTime: 2 * 60 * 1000,
+  });
+}
+export function useMyTransactionStats() {
+  return useQuery({
+    queryKey: ["myTransactionStats"],
+    queryFn: () => api.getMyTransactionStats(),
+    staleTime: 2 * 60 * 1000,
   });
 }
 

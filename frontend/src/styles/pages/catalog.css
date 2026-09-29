@@ -10,18 +10,6 @@
 .catalog-header-actions{display:flex;gap:10px;flex-wrap:wrap}
 .catalog-header-actions .btn{display:flex;align-items:center;gap:6px}
 
-.catalog-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;flex-shrink:0}
-.stat-card{background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;padding:18px 20px;display:flex;align-items:center;gap:14px;transition:all .25s;box-shadow:var(--card-shadow)}
-.stat-card:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,.1)}
-.stat-icon{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.stat-total .stat-icon{background:linear-gradient(135deg,#e3f2fd,#bbdefb);color:#1565c0}
-.stat-available .stat-icon{background:linear-gradient(135deg,#e8f5e9,#c8e6c9);color:#2e7d32}
-.stat-borrowed .stat-icon{background:linear-gradient(135deg,#fff3e0,#ffe0b2);color:#ef6c00}
-.stat-categories .stat-icon{background:linear-gradient(135deg,#f3e5f5,#e1bee7);color:#6a1b9a}
-.stat-info{display:flex;flex-direction:column}
-.stat-number{font-size:1.5rem;font-weight:700;color:var(--text);line-height:1.2}
-.stat-label{font-size:12px;color:var(--text-muted);font-weight:500}
-
 .catalog-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;flex-shrink:0}
 .catalog-filter-pills{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .catalog-search-box{position:relative;display:flex;align-items:center;min-width:200px}
@@ -35,6 +23,12 @@
 .filter-pill.active svg{stroke:#000}
 .catalog-course-filter{padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg-card);color:var(--text);cursor:pointer;min-width:160px}
 .catalog-course-filter:focus{outline:none;border-color:var(--green);box-shadow:0 0 3px rgba(46,125,50,.3)}
+.catalog-course-tabs{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px;flex-shrink:0}
+.course-tab{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:1px solid var(--border);border-radius:20px;background:var(--bg-card);color:var(--text);font-size:13px;font-weight:500;cursor:pointer;transition:all .2s;white-space:nowrap}
+.course-tab:hover{border-color:var(--green);color:var(--green)}
+.course-tab.active{background:var(--green);color:#000;border-color:var(--green)}
+.course-tab-count{display:inline-flex;align-items:center;justify-content:center;min-width:22px;padding:1px 7px;border-radius:10px;background:var(--bg);color:var(--text-muted);font-size:11px;font-weight:600}
+.course-tab.active .course-tab-count{background:rgba(0,0,0,.15);color:#000}
 .catalog-sort{display:flex;align-items:center;gap:8px;color:var(--text-muted)}
 .catalog-sort select{padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg-card);color:var(--text);cursor:pointer}
 .catalog-sort select:focus{outline:none;border-color:var(--green);box-shadow:0 0 3px rgba(46,125,50,.3)}
@@ -115,21 +109,14 @@
 @keyframes fadeInScale{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
 
 @media(max-width:768px){
-  .catalog-stats{grid-template-columns:repeat(2,1fr)}
   .catalog-grid{grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}
   .catalog-table-wrapper{overflow-x:auto}
   .catalog-table{min-width:640px}
   .catalog-header{margin-bottom:14px}
-  .catalog-stats{margin-bottom:14px}
   .catalog-toolbar{margin-bottom:12px}
 }
 @media(max-width:600px){
   .catalog-page{height:auto;min-height:calc(100dvh - 120px)}
-  .catalog-stats{grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
-  .stat-card{padding:12px 14px;gap:10px}
-  .stat-icon{width:36px;height:36px;border-radius:8px}
-  .stat-number{font-size:1.2rem}
-  .stat-label{font-size:11px}
   .catalog-header{flex-direction:column;align-items:stretch;margin-bottom:10px;gap:10px}
   .catalog-header-left h1{font-size:1.3rem}
   .catalog-header-actions{flex-direction:row;gap:8px}
@@ -139,6 +126,9 @@
   .catalog-filter-pills .filter-pill{padding:6px 12px;font-size:11px}
   .catalog-search-box{min-width:0;width:100%}
   .catalog-course-filter{min-width:0;width:100%}
+  .catalog-course-tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-bottom:12px}
+  .catalog-course-tabs::-webkit-scrollbar{display:none}
+  .course-tab{padding:6px 12px;font-size:12px}
   .catalog-sort{justify-content:center}
   .catalog-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
   .catalog-card-body{padding:8px}
@@ -149,22 +139,20 @@
   .catalog-empty{padding:40px 16px}
 }
 @media(max-width:480px){
-  .catalog-stats{grid-template-columns:1fr}
   .catalog-grid{grid-template-columns:1fr}
   .catalog-header-actions{flex-direction:column}
 }
 
 body.dark .catalog-page h1{color:#FFFFFF}
 body.dark .catalog-subtitle{color:#888}
-body.dark .stat-card{border-color:rgba(255,255,255,.1);background:#131313}
-body.dark .stat-total .stat-icon{background:linear-gradient(135deg,#1b2a3a,#1a1a1a);color:#aaa}
-body.dark .stat-available .stat-icon{background:linear-gradient(135deg,#1a1a1a,#2a2a2a);color:var(--green-light)}
-body.dark .stat-borrowed .stat-icon{background:linear-gradient(135deg,#1a1a1a,#1a1a1a);color:#ccc}
-body.dark .stat-categories .stat-icon{background:linear-gradient(135deg,#1a1a1a,#1a1a1a);color:#aaa}
-body.dark .stat-number{color:#FFFFFF}
 body.dark .filter-pill{background:#131313;border-color:#2a2a2a;color:#FFFFFF}
 body.dark .filter-pill:hover{border-color:var(--green);color:var(--green)}
 body.dark .filter-pill.active{background:var(--green);color:#fff;border-color:var(--green)}
+body.dark .course-tab{background:#131313;border-color:#2a2a2a;color:#FFFFFF}
+body.dark .course-tab:hover{border-color:var(--green);color:var(--green)}
+body.dark .course-tab.active{background:var(--green);color:#fff;border-color:var(--green)}
+body.dark .course-tab-count{background:#1e1e1e;color:#999}
+body.dark .course-tab.active .course-tab-count{background:rgba(255,255,255,.2);color:#fff}
 body.dark .catalog-search-box input{background:#0f0f0f;border-color:#2a2a2a;color:#FFFFFF}
 body.dark .catalog-search-box input:focus{border-color:var(--green);box-shadow:0 0 3px rgba(76,175,80,.3)}
 body.dark .catalog-search-box svg{color:#888}

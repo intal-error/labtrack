@@ -900,12 +900,6 @@ body.dark .btn-doc-delete{background:#1a1a1a;color:#aaa;border-color:#1a1a1a}
 body.dark .btn-doc-delete:hover{background:#1a1a1a;border-color:#aaa}
 body.dark .docs-empty{border-color:rgba(255,255,255,.1);background:#131313}
 body.dark .records-header h2{color:#FFFFFF}
-body.dark .stat-card{border-color:rgba(255,255,255,.1);background:#131313}
-body.dark .stat-total .stat-icon{background:linear-gradient(135deg,#1a1a1a,#2a2a2a);color:#43A047}
-body.dark .stat-admin .stat-icon{background:linear-gradient(135deg,#1a1a1a,#1a1a1a);color:#aaa}
-body.dark .stat-faculty .stat-icon{background:linear-gradient(135deg,#1a1a1a,#1a1a1a);color:#aaa}
-body.dark .stat-staff .stat-icon{background:linear-gradient(135deg,#1a1a1a,#1a1a1a);color:#aaa}
-body.dark .stat-number{color:#FFFFFF}
 body.dark .member-card{border-color:rgba(255,255,255,.1);background:#131313}
 body.dark .member-card:hover{box-shadow:0 12px 28px rgba(0,0,0,.3)}
 body.dark .member-card-details{background:#0a0a0a}

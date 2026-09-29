@@ -73,11 +73,12 @@ export default function RequestsPanel() {
     [requests, filter]
   );
 
-  const stats = useMemo(() => ({
-    total: requests.length,
+  const counts = useMemo(() => ({
+    all: requests.length,
     pending: requests.filter((r) => r.status === "pending").length,
     approved: requests.filter((r) => r.status === "approved").length,
     rejected: requests.filter((r) => r.status === "rejected").length,
+    cancelled: requests.filter((r) => r.status === "cancelled").length,
   }), [requests]);
 
   if (loading) return <div className="page-loading"><div className="spinner-lg" /></div>;
@@ -94,33 +95,13 @@ export default function RequestsPanel() {
 
   return (
     <section className="transactions-page activity-panel">
-      <div className="transactions-stats">
-        <div className="stat-card stat-active">
-          <div className="stat-info">
-            <span className="stat-number">{stats.pending}</span>
-            <span className="stat-label">Pending</span>
-          </div>
-        </div>
-        <div className="stat-card stat-borrowed-total">
-          <div className="stat-info">
-            <span className="stat-number">{stats.approved}</span>
-            <span className="stat-label">Approved</span>
-          </div>
-        </div>
-        <div className="stat-card stat-returned-total">
-          <div className="stat-info">
-            <span className="stat-number">{stats.rejected}</span>
-            <span className="stat-label">Rejected</span>
-          </div>
-        </div>
-      </div>
-
       <div className="transactions-toolbar">
         <div className="transactions-toolbar-left">
           <div className="transactions-tabs">
             {FILTERS.map((f) => (
               <button key={f} className={`tab-btn ${filter === f ? "active" : ""}`} onClick={() => setFilter(f)}>
                 {f.charAt(0).toUpperCase() + f.slice(1)}
+                <span className="tab-count">{counts[f] ?? 0}</span>
               </button>
             ))}
           </div>

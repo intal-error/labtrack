@@ -1,11 +1,12 @@
 import { useState, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useMyBorrowed, useMyReturned } from "../../hooks/useQueries";
-import { toDate, formatDate, getRemainingQuantity, computeTransactionStats, timeAgo, getInitials, getAvatarColor, getOverdueInfo, sortTransactions as sortItems } from "../../utils/helpers";
+import { useMyBorrowed, useMyReturned, useMyTransactionStats } from "../../hooks/useQueries";
+import { toDate, formatDate, getRemainingQuantity, timeAgo, getInitials, getAvatarColor, getOverdueInfo, sortTransactions as sortItems } from "../../utils/helpers";
 import Modal from "../../components/ui/Modal";
 import Pagination from "../../components/ui/Pagination";
 import LoadError from "../../components/ui/LoadError";
 import ViewToggle from "../../components/ui/ViewToggle";
+import StatStrip from "../../components/ui/StatStrip";
 import "../../styles/pages/tables.css";
 
 const PAGE_LIMIT = 25;
@@ -81,7 +82,7 @@ export default function TransactionsPanel({ mode = "borrowed" }) {
   const paginationData = isBorrowed ? borrowedPagination : returnedPagination;
 
   const loading = borrowedLoading || returnedLoading;
-  const stats = useMemo(() => computeTransactionStats(borrowed, returned), [borrowed, returned]);
+  const { data: myStats, refetch: refetchMyStats } = useMyTransactionStats();
 
   const activeItems = isBorrowed ? borrowed : returned;
   const displayItems = useMemo(() => sortItems(activeItems, sortBy), [activeItems, sortBy]);
@@ -90,6 +91,7 @@ export default function TransactionsPanel({ mode = "borrowed" }) {
   const load = () => {
     refetchBorrowed();
     refetchReturned();
+    refetchMyStats();
   };
 
   if (loading) return <div className="page-loading"><div className="spinner-lg" /></div>;
@@ -117,44 +119,32 @@ export default function TransactionsPanel({ mode = "borrowed" }) {
         Refresh
       </button>
 
-      <div className="transactions-stats">
-        <div className="stat-card stat-active">
-          <div className="stat-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          </div>
-          <div className="stat-info">
-            <span className="stat-number">{borrowedPagination?.total ?? stats.active}</span>
-            <span className="stat-label">My Active Borrows</span>
-          </div>
-        </div>
-        <div className="stat-card stat-borrowed-total">
-          <div className="stat-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-          </div>
-          <div className="stat-info">
-            <span className="stat-number">{borrowedPagination?.total ?? stats.totalBorrowed}</span>
-            <span className="stat-label">My Total Borrowed</span>
-          </div>
-        </div>
-        <div className="stat-card stat-returned-total">
-          <div className="stat-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20,6 9,17 4,12"/></svg>
-          </div>
-          <div className="stat-info">
-            <span className="stat-number">{returnedPagination?.total ?? stats.totalReturned}</span>
-            <span className="stat-label">My Total Returned</span>
-          </div>
-        </div>
-        <div className="stat-card stat-week">
-          <div className="stat-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
-          </div>
-          <div className="stat-info">
-            <span className="stat-number">{stats.dueSoon}</span>
-            <span className="stat-label">Due Soon</span>
-          </div>
-        </div>
-      </div>
+      <StatStrip
+        items={[
+          {
+            label: "Active Borrows",
+            value: myStats?.activeBorrows ?? 0,
+            icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+          },
+          {
+            label: "Due Soon",
+            value: myStats?.dueSoon ?? 0,
+            tone: (myStats?.dueSoon ?? 0) > 0 ? "warn" : "default",
+            icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>,
+          },
+          {
+            label: "Overdue",
+            value: myStats?.overdue ?? 0,
+            tone: (myStats?.overdue ?? 0) > 0 ? "alert" : "default",
+            icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+          },
+          {
+            label: "Total Returned",
+            value: myStats?.totalReturned ?? 0,
+            icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20,6 9,17 4,12"/></svg>,
+          },
+        ]}
+      />
 
       <div className="transactions-toolbar">
         <div className="transactions-toolbar-left">

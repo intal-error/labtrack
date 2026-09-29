@@ -13,7 +13,10 @@ const getAll = async (req, res) => {
 
     if (req.query.search) {
       const q = req.query.search.toLowerCase();
-      result = result.filter((item) => item.item_name && item.item_name.toLowerCase().includes(q));
+      const fields = ["item_name", "category", "course", "barcode", "asset_tag"];
+      result = result.filter((item) =>
+        fields.some((f) => item[f] && String(item[f]).toLowerCase().includes(q))
+      );
     }
 
     if (req.query.status && req.query.status !== "All") {
@@ -21,7 +24,11 @@ const getAll = async (req, res) => {
     }
 
     if (req.query.course && req.query.course !== "All") {
-      result = result.filter((item) => item.course === req.query.course);
+      if (req.query.course === "Unassigned") {
+        result = result.filter((item) => !item.course);
+      } else {
+        result = result.filter((item) => item.course === req.query.course);
+      }
     }
 
     if (req.query.sort) {
@@ -44,6 +51,43 @@ const getAll = async (req, res) => {
     }
 
     res.json(transformKeys(result));
+  } catch (err) {
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
+  }
+};
+
+const getStats = async (req, res) => {
+  try {
+    const { data: items, error } = await supabase
+      .from("catalog")
+      .select("course, status, category");
+    if (error) throw error;
+
+    const rows = items || [];
+    const byCourseMap = new Map();
+    const categories = new Set();
+
+    for (const item of rows) {
+      const course = item.course || "Unassigned";
+      const available = item.status === "Available";
+
+      if (!byCourseMap.has(course)) {
+        byCourseMap.set(course, { course, total: 0, available: 0 });
+      }
+      const entry = byCourseMap.get(course);
+      entry.total += 1;
+      if (available) entry.available += 1;
+
+      if (item.category) categories.add(item.category);
+    }
+
+    res.json({
+      total: rows.length,
+      available: rows.filter((i) => i.status === "Available").length,
+      borrowed: rows.filter((i) => i.status === "Borrowed").length,
+      categories: categories.size,
+      byCourse: [...byCourseMap.values()].sort((a, b) => a.course.localeCompare(b.course)),
+    });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -250,4 +294,4 @@ const lookupByBarcode = async (req, res) => {
   }
 };
 
-module.exports = { getAll, getById, create, update, remove, lookupByBarcode };
+module.exports = { getAll, getStats, getById, create, update, remove, lookupByBarcode };
