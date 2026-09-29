@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { useMaintenance, useCatalog } from "../../hooks/useQueries";
+import { fmtDate, fmtDateTime } from "../../utils/helpers";
 import Modal from "../ui/Modal";
 import toast from "react-hot-toast";
 import { filterBySearch } from "../../utils/search";
@@ -40,18 +41,6 @@ function getDateBorderStyle(item) {
   if (rel.className === "date-overdue") return "card-overdue";
   if (rel.className === "date-today" || rel.className === "date-urgent") return "card-urgent";
   return "";
-}
-
-function fmtDateTime(date) {
-  if (!date) return "-";
-  const d = date?.toDate ? date.toDate() : new Date(date);
-  return isNaN(d.getTime()) ? "-" : d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
-}
-
-function fmtDate(date) {
-  if (!date) return "-";
-  const d = date?.toDate ? date.toDate() : new Date(date);
-  return isNaN(d.getTime()) ? "-" : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 function toLocalDateTime(date) {

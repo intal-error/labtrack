@@ -23,13 +23,11 @@ const PersonaPage = lazy(() => import("./pages/PersonaPage"));
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const MyActivityPage = lazy(() => import("./pages/MyActivityPage"));
+const ResourcesPage = lazy(() => import("./pages/ResourcesPage"));
 const NotificationsTab = lazy(() => import("./components/tabs/NotificationsTab"));
 const SettingsPage = lazy(() => import("./components/tabs/SettingsPage"));
-const DocumentsTab = lazy(() => import("./components/tabs/DocumentsTab"));
-const MaintenanceTab = lazy(() => import("./components/tabs/MaintenanceTab"));
-const IncidentTab = lazy(() => import("./components/tabs/IncidentTab"));
-const ManualsTab = lazy(() => import("./components/tabs/ManualsTab"));
 const ReportsTab = lazy(() => import("./components/tabs/ReportsTab"));
+const MaintenanceTab = lazy(() => import("./components/tabs/MaintenanceTab"));
 const FinesTab = lazy(() => import("./components/tabs/FinesTab"));
 const BorrowRequestsTab = lazy(() => import("./components/tabs/BorrowRequestsTab"));
 const AttendanceKioskPage = lazy(() => import("./pages/AttendanceKioskPage"));
@@ -123,7 +121,8 @@ function App() {
 
               <Route path="notifications" element={<NotificationsTab />} />
               <Route path="settings" element={<SettingsPage />} />
-              <Route path="documents" element={<RoleRoute allowed={["admin"]}><DocumentsTab /></RoleRoute>} />
+              <Route path="resources" element={<ResourcesPage />} />
+              <Route path="documents" element={<Navigate to="/resources?tab=documents" replace />} />
               <Route path="scanner" element={<RoleRoute allowed={["student"]} fallback="/my-activity"><ScannerHubPage /></RoleRoute>} />
               <Route path="my-activity" element={<RoleRoute allowed={["student"]}><MyActivityPage /></RoleRoute>} />
               <Route path="transactions" element={<RoleRoute allowed={["admin"]} fallback="/my-activity"><TransactionsPage /></RoleRoute>} />
@@ -134,8 +133,8 @@ function App() {
               <Route path="persona" element={<RoleRoute allowed={["admin"]}><PersonaPage /></RoleRoute>} />
               <Route path="admin" element={<Navigate to="/settings" replace />} />
               <Route path="maintenance" element={<RoleRoute allowed={["admin"]}><MaintenanceTab /></RoleRoute>} />
-              <Route path="incidents" element={<IncidentTab />} />
-              <Route path="manuals" element={<ManualsTab />} />
+              <Route path="incidents" element={<Navigate to="/resources?tab=incidents" replace />} />
+              <Route path="manuals" element={<Navigate to="/resources?tab=manuals" replace />} />
               <Route path="usage-logs" element={<Navigate to="/my-activity" replace />} />
               <Route path="reports" element={<RoleRoute allowed={["admin"]}><ReportsTab /></RoleRoute>} />
               <Route path="fines" element={<RoleRoute allowed={["admin"]} fallback="/my-activity?tab=fines"><FinesTab /></RoleRoute>} />

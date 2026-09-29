@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { useCatalog } from "../../hooks/useQueries";
+import { timeAgo } from "../../utils/helpers";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
 import "../../styles/pages/shared-form-panel.css";
@@ -16,28 +17,6 @@ const STATUS_COLORS = { open: "#d32f2f", investigating: "#f57c00", resolved: "#4
 const TYPE_LABELS = { damage: "Damage", accident: "Accident", irregularity: "Irregularity", other: "Other" };
 const STATUS_TABS = ["All", "Open", "Investigating", "Resolved"];
 
-function timeAgo(date) {
-  if (!date) return "";
-  let d;
-  if (date?.toDate) d = date.toDate();
-  else if (typeof date === "string" || typeof date === "number") d = new Date(date);
-  else if (date instanceof Date) d = date;
-  else return "";
-  if (isNaN(d.getTime())) return "";
-  const now = new Date();
-  const diff = now - d;
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  if (days < 7) return `${days}d ago`;
-  const weeks = Math.floor(days / 7);
-  if (weeks < 4) return `${weeks}w ago`;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
 const EMPTY_FORM = { catalogId: "", title: "", description: "", type: "irregularity", severity: "medium", photos: [] };
 
 export default function IncidentTab() {
@@ -50,7 +29,8 @@ export default function IncidentTab() {
   const [filterSeverity, setFilterSeverity] = useState("All");
   const [form, setForm] = useState(EMPTY_FORM);
   const [selectedIncident, setSelectedIncident] = useState(null);
-  const [filterMy, setFilterMy] = useState(false);
+  const [filterMy, setFilterMy] = useState(role !== "admin");
+  const isAdmin = role === "admin";
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -82,11 +62,10 @@ export default function IncidentTab() {
     if (search) params.set("search", search);
     if (filterStatus !== "All") params.set("status", filterStatus.toLowerCase());
     if (filterSeverity !== "All") params.set("severity", filterSeverity.toLowerCase());
-    if (filterMy) params.set("mine", "true");
     if (dateFrom) params.set("dateFrom", dateFrom);
     if (dateTo) params.set("dateTo", dateTo);
     return params.toString();
-  }, [page, search, filterStatus, filterSeverity, filterMy, dateFrom, dateTo]);
+  }, [page, search, filterStatus, filterSeverity, dateFrom, dateTo]);
 
   const { data: incidentsData, isLoading } = useQuery({
     queryKey: filterMy ? ["myIncidents", incidentParams] : ["incidents", incidentParams],
@@ -245,6 +224,7 @@ export default function IncidentTab() {
         <button className="hero-action-btn ghost" onClick={openAdd}><MdAdd size={16} /> Report Incident</button>
       )}
 
+      {isAdmin && (
       <div className="incident-stats">
         <div className={`incident-stat-card ${filterStatus === "All" ? "active" : ""}`} onClick={() => setFilterStatus("All")}>
           <div className="incident-stat-icon total"><MdWarning size={20} /></div>
@@ -276,6 +256,7 @@ export default function IncidentTab() {
           </div>
         </div>
       </div>
+      )}
 
       <div className="incident-toolbar">
         <div className="incident-filter-tabs">
@@ -284,9 +265,11 @@ export default function IncidentTab() {
               {s} {statusCounts[s] > 0 && <span className="filter-count">{statusCounts[s]}</span>}
             </button>
           ))}
-          <button className={`incident-filter-btn incident-my-btn ${filterMy ? "active" : ""}`} onClick={() => setFilterMy(!filterMy)}>
-            <MdFilterList size={14} /> My Reports
-          </button>
+          {isAdmin && (
+            <button className={`incident-filter-btn incident-my-btn ${filterMy ? "active" : ""}`} onClick={() => setFilterMy(!filterMy)}>
+              <MdFilterList size={14} /> My Reports
+            </button>
+          )}
           <div className="incident-filter-divider" />
           <div className="incident-date-range">
             <input type="date" className="incident-date-filter" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
@@ -425,8 +408,8 @@ export default function IncidentTab() {
         {filtered.length === 0 ? (
             <div className="incident-empty">
               <div className="incident-empty-icon"><MdWarning size={56} /></div>
-              <h3>{search || filterStatus !== "All" || filterSeverity !== "All" ? "No matching incidents" : "No incidents reported"}</h3>
-              <p>{search || filterStatus !== "All" || filterSeverity !== "All" ? "Try adjusting your search or filters" : canCreate ? "Click 'Report Incident' to submit your first report" : "No incidents have been reported yet"}</p>
+              <h3>{search || filterStatus !== "All" || filterSeverity !== "All" ? "No matching incidents" : isAdmin ? "No incidents reported" : "No reports from you yet"}</h3>
+              <p>{search || filterStatus !== "All" || filterSeverity !== "All" ? "Try adjusting your search or filters" : isAdmin ? "No incidents have been reported yet" : "Report a damaged, missing or malfunctioning item and it will show up here."}</p>
             </div>
           ) : (
             <div className="incident-list-grid">

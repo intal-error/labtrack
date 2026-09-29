@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo } from "react";
 import { api } from "../services/api";
 import { useBorrowed, useReturned } from "../hooks/useQueries";
 import { COURSES } from "../constants/courses";
-import { toDate, formatDate, getRemainingQuantity, computeTransactionStats, timeAgo } from "../utils/helpers";
+import { toDate, formatDate, getRemainingQuantity, computeTransactionStats, timeAgo, getInitials, getAvatarColor, getOverdueInfo, sortTransactions as sortItems } from "../utils/helpers";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Modal from "../components/ui/Modal";
 import Pagination from "../components/ui/Pagination";
@@ -12,31 +12,6 @@ import "../styles/pages/tables.css";
 import ViewToggle from "../components/ui/ViewToggle";
 
 const PAGE_LIMIT = 25;
-
-const AVATAR_COLORS = ["#2E7D32", "#1565c0", "#6a1b9a", "#c62828", "#ef6c00", "#00838f", "#4e342e", "#37474f"];
-
-function getAvatarColor(name) {
-  let hash = 0;
-  for (let i = 0; i < (name || "").length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
-}
-
-function getInitials(first, last) {
-  return `${(first || "")[0] || ""}${(last || "")[0] || ""}`.toUpperCase() || "?";
-}
-
-function getOverdueInfo(dueDate) {
-  if (!dueDate) return null;
-  const diff = Date.now() - dueDate.getTime();
-  if (diff <= 0) return null;
-  const days = diff / (1000 * 60 * 60 * 24);
-  if (days < 1) return { text: "Overdue", className: "overdue-warning" };
-  const wholeDays = Math.floor(days);
-  return {
-    text: `${wholeDays}d overdue`,
-    className: days >= 7 ? "overdue-critical" : "overdue-warning",
-  };
-}
 
 function getDateParams(range) {
   if (!range || range === "all") return {};
@@ -73,27 +48,6 @@ const DATE_RANGES = [
   { value: "week", label: "This Week" },
   { value: "month", label: "This Month" },
 ];
-
-function sortItems(items, sortBy) {
-  const [key, dir] = sortBy.split("-");
-  const mult = dir === "asc" ? 1 : -1;
-  return [...items].sort((a, b) => {
-    if (key === "date") {
-      const da = toDate(a.timestamp)?.getTime() || 0;
-      const db = toDate(b.timestamp)?.getTime() || 0;
-      return (da - db) * mult;
-    }
-    if (key === "name") {
-      const na = `${a.firstName || ""} ${a.lastName || ""}`.trim().toLowerCase();
-      const nb = `${b.firstName || ""} ${b.lastName || ""}`.trim().toLowerCase();
-      return na.localeCompare(nb) * mult;
-    }
-    if (key === "qty") {
-      return ((a.quantity || 0) - (b.quantity || 0)) * mult;
-    }
-    return 0;
-  });
-}
 
 export default function TransactionsPage() {
   const [activeTab, setActiveTab] = useState("borrowed");

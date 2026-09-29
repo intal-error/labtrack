@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../services/api";
 import { timeAgo } from "../../utils/helpers";
-import { useMyNotifications } from "../../hooks/useQueries";
+import { useMyNotifications, countUnread } from "../../hooks/useQueries";
 import Modal from "../ui/Modal";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
@@ -73,7 +73,7 @@ export default function NotificationsTab() {
     } catch { /* ignore */ }
   }
 
-  const unread = notifications.filter((n) => !n.read).length;
+  const unread = countUnread(notifications);
 
   if (isLoading) return <div className="page-loading"><div className="spinner-lg" /></div>;
 

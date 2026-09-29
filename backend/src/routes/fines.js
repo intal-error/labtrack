@@ -1,11 +1,11 @@
 const router = require("express").Router();
-const { authorize } = require("../middleware/auth");
+const { attachRole, authorize } = require("../middleware/auth");
 const { getAllFines, getMyFines, checkRestriction, getOverdueCount, payFine, waiveFine } = require("../controllers/finesController");
 
 router.get("/", authorize("admin"), getAllFines);
 router.get("/my", getMyFines);
 router.get("/overdue-count", getOverdueCount);
-router.get("/check-restriction/:userId", (req, res, next) => {
+router.get("/check-restriction/:userId", attachRole, (req, res, next) => {
   if (req.user.uid !== req.params.userId && req.user.role !== "admin") {
     return res.status(403).json({ error: "Not authorized" });
   }

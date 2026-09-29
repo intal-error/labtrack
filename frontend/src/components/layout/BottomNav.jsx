@@ -1,56 +1,34 @@
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { useMyNotifications } from "../../hooks/useQueries";
+import { useUnreadCount } from "../../hooks/useQueries";
 import { prefetchRoute } from "../../utils/prefetchRoute";
 import {
   MdHome,
   MdQrCodeScanner,
-  MdInventory,
-  MdNotifications,
   MdHistory,
-  MdPerson,
+  MdMenuBook,
+  MdNotifications,
+  MdAssignment,
+  MdAssessment,
 } from "react-icons/md";
+import { FaExchangeAlt } from "react-icons/fa";
 import "../../styles/pages/bottomnav.css";
 
-const getNavItems = (role) => {
-  const baseItems = [
-    { path: "/dashboard", label: "Dashboard", icon: MdHome, roles: ["student", "admin"] },
-    {
-      path: role === "admin" ? "/catalog" : "/scanner",
-      label: role === "admin" ? "Catalog" : "Scan",
-      icon: role === "admin" ? MdInventory : MdQrCodeScanner,
-      roles: ["student", "admin"],
-    },
-    {
-      path: role === "admin" ? "/transactions" : "/my-activity",
-      label: "Activity",
-      icon: MdHistory,
-      roles: ["student", "admin"],
-    },
-    {
-      path: "/notifications",
-      label: "Alerts",
-      icon: MdNotifications,
-      roles: ["student", "admin"],
-    },
-    {
-      path: "/settings",
-      label: "Profile",
-      icon: MdPerson,
-      roles: ["student", "admin"],
-    },
-  ];
-  return baseItems.filter((item) => item.roles.includes(role));
-};
+const NAV_ITEMS = [
+  { path: "/dashboard", label: "Dashboard", icon: MdHome, roles: ["student", "admin"] },
+  { path: "/scanner", label: "Scanner", icon: MdQrCodeScanner, roles: ["student"] },
+  { path: "/my-activity", label: "My Activity", icon: MdHistory, roles: ["student"] },
+  { path: "/transactions", label: "Transactions", icon: FaExchangeAlt, roles: ["admin"] },
+  { path: "/borrow-requests", label: "Borrow Requests", icon: MdAssignment, roles: ["admin"] },
+  { path: "/resources", label: "Resources", icon: MdMenuBook, roles: ["student", "admin"] },
+  { path: "/notifications", label: "Notifications", icon: MdNotifications, roles: ["student"] },
+  { path: "/reports", label: "Reports", icon: MdAssessment, roles: ["admin"] },
+];
 
 export default function BottomNav() {
   const { role } = useAuth();
-  const items = getNavItems(role);
-
-  const notifResult = useMyNotifications();
-  const rawNotifs = notifResult?.data;
-  const notifs = Array.isArray(rawNotifs) ? rawNotifs : Array.isArray(rawNotifs?.data) ? rawNotifs.data : [];
-  const unreadCount = notifs.filter((n) => !n?.read).length;
+  const unreadCount = useUnreadCount();
+  const items = NAV_ITEMS.filter((item) => item.roles.includes(role));
 
   return (
     <nav className="bottom-nav">

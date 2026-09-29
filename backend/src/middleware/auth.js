@@ -16,28 +16,42 @@ const verifyToken = async (req, res, next) => {
   }
 };
 
+async function resolveRole(req) {
+  if (!req.user?.uid) return null;
+
+  const userDoc = await db.collection("users").doc(req.user.uid).get();
+  if (userDoc.exists) return userDoc.data().role;
+
+  const adminDoc = await db.collection("admins").doc(req.user.uid).get();
+  if (adminDoc.exists) return "admin";
+
+  return null;
+}
+
+const attachRole = async (req, res, next) => {
+  try {
+    if (req.user?.uid && !req.user.role) {
+      req.user.role = await resolveRole(req);
+    }
+    next();
+  } catch (err) {
+    console.error("Failed to look up user role:", err.message);
+    res.status(403).json({ error: "Unable to verify permissions" });
+  }
+};
+
 const authorize = (...allowedRoles) => {
   return async (req, res, next) => {
-    let role = req.user?.role;
-
-    if (!role && req.user?.uid) {
+    if (!req.user?.role && req.user?.uid) {
       try {
-        const userDoc = await db.collection("users").doc(req.user.uid).get();
-        if (userDoc.exists) {
-          role = userDoc.data().role;
-        } else {
-          const adminDoc = await db.collection("admins").doc(req.user.uid).get();
-          if (adminDoc.exists) {
-            role = "admin";
-          }
-        }
-        if (role) req.user.role = role;
+        req.user.role = await resolveRole(req);
       } catch (err) {
         console.error("Failed to look up user role:", err.message);
         return res.status(403).json({ error: "Unable to verify permissions" });
       }
     }
 
+    const role = req.user?.role;
     if (!role || !allowedRoles.includes(role)) {
       return res.status(403).json({ error: "Insufficient permissions" });
     }
@@ -53,4 +67,4 @@ const errorHandler = (err, req, res, _next) => {
   });
 };
 
-module.exports = { verifyToken, authorize, errorHandler };
+module.exports = { verifyToken, attachRole, authorize, errorHandler };

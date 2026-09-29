@@ -4,14 +4,12 @@
   bottom: 0;
   left: 0;
   right: 0;
-  background: rgba(15, 52, 24, 0.98);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: #0f3418;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   padding: 6px 0;
   padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
   z-index: 1000;
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
 }
 
 .bottom-nav-item {
@@ -21,18 +19,19 @@
   justify-content: center;
   gap: 2px;
   flex: 1;
-  padding: 8px 4px;
+  min-width: 0;
+  padding: 8px 2px;
   color: rgba(255, 255, 255, 0.45);
   text-decoration: none;
   font-size: 10px;
   font-weight: 500;
-  transition: all 0.2s ease;
+  transition: color 0.15s ease;
   position: relative;
   -webkit-tap-highlight-color: transparent;
 }
 
 .bottom-nav-item:active {
-  transform: scale(0.92);
+  transform: scale(0.96);
 }
 
 .bottom-nav-item.active {
@@ -47,17 +46,15 @@
   transform: translateX(-50%);
   width: 24px;
   height: 3px;
-  background: linear-gradient(90deg, #43A047, #66BB6A);
+  background: #43A047;
   border-radius: 0 0 4px 4px;
 }
 
-.bottom-nav-item svg {
-  transition: transform 0.2s ease;
-}
-
-.bottom-nav-item.active svg {
-  transform: scale(1.1);
-  filter: drop-shadow(0 2px 6px rgba(102, 187, 106, 0.4));
+.bottom-nav-item > span:last-child {
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .bottom-nav-icon-wrap {
@@ -70,7 +67,7 @@
 .bottom-nav-badge {
   position: absolute;
   top: -6px;
-  right: -10px;
+  right: -8px;
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
@@ -79,6 +76,7 @@
   color: #fff;
   font-size: 9px;
   font-weight: 700;
+  white-space: nowrap;
   display: flex;
   align-items: center;
   justify-content: center;

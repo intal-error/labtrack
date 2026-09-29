@@ -17,17 +17,6 @@ export function formatTime(timestamp) {
   return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
 }
 
-export function formatDateShort(timestamp) {
-  if (!timestamp) return "-";
-  let date;
-  if (typeof timestamp?.toDate === "function") date = timestamp.toDate();
-  else if (timestamp?.seconds) date = new Date(timestamp.seconds * 1000);
-  else if (timestamp instanceof Date) date = timestamp;
-  else date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-}
-
 export function getTodayString() {
   const now = new Date();
   const y = now.getFullYear();

@@ -52,7 +52,7 @@ const cache = new NodeCache({ stdTTL: 30, checkperiod: 60, useClones: false });
 function cacheMiddleware(ttl = 30) {
   return (req, res, next) => {
     if (req.method !== "GET") return next();
-    const key = `__cache__${req.originalUrl}`;
+    const key = `__cache__${req.user?.uid || "anon"}::${req.originalUrl}`;
     const cached = cache.get(key);
     if (cached) {
       res.set("X-Cache", "HIT");

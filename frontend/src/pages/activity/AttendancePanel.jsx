@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useStudentAttendance } from "../../hooks/useQueries";
 import { useAuth } from "../../context/AuthContext";
 import { formatDuration, formatTime, getTodayString } from "../../utils/attendanceHelpers";
+import { filterBySearch } from "../../utils/search";
 import { MdSearch, MdFileDownload, MdQrCodeScanner, MdMenuBook, MdRefresh } from "react-icons/md";
 import "../../styles/pages/attendance.css";
 
@@ -24,18 +25,9 @@ export default function AttendancePanel() {
   }, [records]);
 
   const filteredRecords = useMemo(() => {
-    let result = records;
+    let result = filterBySearch(records, searchQuery, ["subject", "professor", "labRoom", "date"]);
     if (filterSubject) result = result.filter((r) => r.subject === filterSubject);
     if (filterDate) result = result.filter((r) => r.date === filterDate);
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter((r) =>
-        (r.subject || "").toLowerCase().includes(q) ||
-        (r.professor || "").toLowerCase().includes(q) ||
-        (r.labRoom || "").toLowerCase().includes(q) ||
-        (r.date || "").toLowerCase().includes(q)
-      );
-    }
     return result;
   }, [records, filterSubject, filterDate, searchQuery]);
 

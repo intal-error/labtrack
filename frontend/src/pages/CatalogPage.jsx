@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../services/api";
 import { useCatalog } from "../hooks/useQueries";
 import { COURSES } from "../constants/courses";
-import { numOr, getAvailableQuantity } from "../utils/helpers";
+import { numOr, getAvailableQuantity, conditionClass } from "../utils/helpers";
 import { filterBySearch } from "../utils/search";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Modal from "../components/ui/Modal";
@@ -21,7 +22,9 @@ export default function CatalogPage() {
   const [filter, setFilter] = useState("All");
   const [filterCourse, setFilterCourse] = useState("All");
   const [sort, setSort] = useState("name");
-  const [search, setSearch] = useState("");
+  const [searchParams] = useSearchParams();
+  const urlSearch = searchParams.get("search") || "";
+  const [search, setSearch] = useState(urlSearch);
   const [page, setPage] = useState(1);
   const [showCreate, setShowCreate] = useState(false);
   const [showQr, setShowQr] = useState(null);
@@ -33,6 +36,12 @@ export default function CatalogPage() {
   const [openKebab, setOpenKebab] = useState(null);
   const { role, userProfile } = useAuth();
   const [restriction, setRestriction] = useState(null);
+
+  const [prevUrlSearch, setPrevUrlSearch] = useState(urlSearch);
+  if (prevUrlSearch !== urlSearch) {
+    setPrevUrlSearch(urlSearch);
+    setSearch(urlSearch);
+  }
 
   const [prevResetKeys, setPrevResetKeys] = useState([search, filter, filterCourse, sort]);
   if (
@@ -136,17 +145,6 @@ export default function CatalogPage() {
       setShowQr({ name, value: `SLSU-TOOL:${id}`, dataUrl });
     } catch { toast.error("Failed to generate QR"); }
   };
-
-  function conditionClass(c) {
-    const v = (c || "").toLowerCase();
-    if (v === "excellent") return "cond-excellent";
-    if (v === "good") return "cond-good";
-    if (v === "fair") return "cond-fair";
-    if (v === "damaged") return "cond-damaged";
-    if (v === "for repair") return "cond-repair";
-    if (v === "missing") return "cond-missing";
-    return "";
-  }
 
   if (isLoading) return <LoadingSpinner />;
 

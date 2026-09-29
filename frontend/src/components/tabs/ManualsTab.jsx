@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
+import { timeAgo, fmtDate as formatDate } from "../../utils/helpers";
+import { filterBySearch } from "../../utils/search";
 import { COURSES } from "../../constants/courses";
 import { LAB_ROOMS } from "../../constants/labRooms";
 import toast from "react-hot-toast";
@@ -36,31 +38,6 @@ function getFileType(fileName) {
   if (!fileName) return null;
   const ext = fileName.split(".").pop().toLowerCase();
   return FILE_TYPE_ICONS[ext] || null;
-}
-
-function formatDate(date) {
-  if (!date) return "";
-  const d = typeof date === "string" ? new Date(date) : date;
-  if (!(d instanceof Date) || isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
-function timeAgo(date) {
-  if (!date) return "";
-  const d = typeof date === "string" ? new Date(date) : date;
-  if (!(d instanceof Date) || isNaN(d.getTime())) return "";
-  const now = new Date();
-  const diff = now - d;
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  if (days < 7) return `${days}d ago`;
-  const weeks = Math.floor(days / 7);
-  if (weeks < 4) return `${weeks}w ago`;
-  return formatDate(date);
 }
 
 const EMPTY_FORM = {
@@ -109,19 +86,12 @@ export default function ManualsTab() {
   }), [manuals]);
 
   const filtered = useMemo(() => {
-    let result = manuals.filter((m) => {
-      const q = search.toLowerCase();
-      const matchSearch = !search ||
-        (m.title && m.title.toLowerCase().includes(q)) ||
-        (m.description && m.description.toLowerCase().includes(q)) ||
-        (m.course && m.course.toLowerCase().includes(q)) ||
-        (m.lab_room && m.lab_room.toLowerCase().includes(q)) ||
-        (m.fileName && m.fileName.toLowerCase().includes(q));
+    let result = filterBySearch(manuals, search, ["title", "description", "course", "lab_room", "fileName"]).filter((m) => {
       const matchCategory = filterCategory === "All" || m.category === filterCategory;
       const matchCourse = filterCourse === "All" || m.course === filterCourse;
       const matchLabRoom = filterLabRoom === "All" || m.lab_room === filterLabRoom;
       const matchStatus = filterStatus === "All" || (m.status || "Active") === filterStatus;
-      return matchSearch && matchCategory && matchCourse && matchLabRoom && matchStatus;
+      return matchCategory && matchCourse && matchLabRoom && matchStatus;
     });
 
     result.sort((a, b) => {

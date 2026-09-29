@@ -6,6 +6,7 @@ import RequestsPanel from "./activity/RequestsPanel";
 import AttendancePanel from "./activity/AttendancePanel";
 import FinesTab from "../components/tabs/FinesTab";
 import "../styles/pages/my-activity.css";
+import "../styles/pages/tab-strip.css";
 
 const TABS = [
   { key: "borrowed", label: "Borrowed", icon: MdInbox },
@@ -32,13 +33,13 @@ export default function MyActivityPage() {
 
   return (
     <div className="my-activity-page">
-      <div className="my-activity-tabs" role="tablist" aria-label="My activity">
+      <div className="tab-strip" role="tablist" aria-label="My activity">
         {TABS.map(({ key, label, icon: Icon }) => (
           <button
             key={key}
             role="tab"
             aria-selected={activeTab === key}
-            className={`my-activity-tab ${activeTab === key ? "active" : ""}`}
+            className={`tab-strip-btn ${activeTab === key ? "active" : ""}`}
             onClick={() => switchTab(key)}
             type="button"
           >
@@ -48,7 +49,7 @@ export default function MyActivityPage() {
         ))}
       </div>
 
-      <div className="my-activity-panel" role="tabpanel">
+      <div className="tab-strip-panel" role="tabpanel">
         {activeTab === "borrowed" && <TransactionsPanel mode="borrowed" />}
         {activeTab === "returned" && <TransactionsPanel mode="returned" />}
         {activeTab === "requests" && <RequestsPanel />}

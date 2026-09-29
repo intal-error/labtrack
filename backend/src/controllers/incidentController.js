@@ -9,6 +9,10 @@ const getAll = async (req, res) => {
   try {
     let query = supabase.from(TABLE).select("*").order("created_at", { ascending: false });
 
+    if (req.user?.role !== "admin") {
+      query = query.eq("reported_by", req.user.uid);
+    }
+
     if (req.query.status && req.query.status !== "All") {
       query = query.eq("status", req.query.status);
     }

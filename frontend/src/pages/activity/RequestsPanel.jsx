@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { api } from "../../services/api";
+import { timeAgo } from "../../utils/helpers";
 import Modal from "../../components/ui/Modal";
 import toast from "react-hot-toast";
 import ViewToggle from "../../components/ui/ViewToggle";
@@ -21,17 +22,6 @@ const STATUS_LABELS = {
 };
 
 const FILTERS = ["all", "pending", "approved", "rejected", "cancelled"];
-
-function timeAgo(date) {
-  if (!date) return "";
-  const diff = Date.now() - new Date(date).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-}
 
 export default function RequestsPanel() {
   const [requests, setRequests] = useState([]);

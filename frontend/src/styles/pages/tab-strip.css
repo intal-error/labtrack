@@ -1,0 +1,101 @@
+.tab-strip {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--card-shadow);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tab-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.tab-strip-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex: 1 0 auto;
+  padding: 9px 16px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+.tab-strip-btn svg {
+  flex-shrink: 0;
+}
+.tab-strip-btn:hover {
+  color: var(--text);
+  background: var(--bg);
+}
+.tab-strip-btn.active {
+  background: var(--green);
+  color: #000;
+}
+.tab-strip-btn.active svg {
+  color: #000;
+}
+
+.resources-page {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.tab-strip-panel {
+  animation: tabStripIn 0.18s ease both;
+}
+@keyframes tabStripIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 600px) {
+  .tab-strip {
+    margin-bottom: 16px;
+  }
+  .tab-strip-btn {
+    flex: 0 0 auto;
+    padding: 11px 14px;
+    min-height: 44px;
+    font-size: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-strip-btn,
+  .tab-strip-panel {
+    transition: none;
+    animation: none;
+  }
+}
+
+body.dark .tab-strip {
+  background: var(--bg-card);
+  border-color: var(--border);
+}
+body.dark .tab-strip-btn {
+  color: var(--text-muted);
+}
+body.dark .tab-strip-btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+body.dark .tab-strip-btn.active {
+  background: var(--green);
+  color: #000;
+}

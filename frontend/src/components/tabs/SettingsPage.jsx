@@ -9,6 +9,7 @@ import ProfilePage from "../../pages/ProfilePage";
 import AdminPage from "../../pages/AdminPage";
 import AboutPage from "../../pages/AboutPage";
 import "../../styles/pages/settings-page.css";
+import "../../styles/pages/tab-strip.css";
 
 const ALL_TABS = [
   { id: "general", label: "General", icon: MdSettings, roles: ["admin"], subtitle: "Manage system preferences and configurations" },
@@ -30,20 +31,20 @@ export default function SettingsPage() {
 
   return (
     <div className="settings-page">
-      <div className="settings-tabs-nav">
+      <div className="tab-strip">
         {tabs.map((tab) => (
           <button
             key={tab.id}
-            className={`settings-tab-btn ${activeTab === tab.id ? "active" : ""}`}
+            className={`tab-strip-btn ${activeTab === tab.id ? "active" : ""}`}
             onClick={() => setActiveTab(tab.id)}
           >
-            <tab.icon size={18} />
+            <tab.icon size={16} />
             <span>{tab.label}</span>
           </button>
         ))}
       </div>
 
-      <div className="settings-tab-panel">
+      <div className="tab-strip-panel">
         <ActiveComponent />
       </div>
     </div>

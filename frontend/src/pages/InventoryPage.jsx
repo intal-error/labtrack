@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useCatalog } from "../hooks/useQueries";
 import { COURSES } from "../constants/courses";
-import { numOr, getAvailableQuantity } from "../utils/helpers";
+import { numOr, getAvailableQuantity, conditionClass } from "../utils/helpers";
 import { filterBySearch } from "../utils/search";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Pagination from "../components/ui/Pagination";
@@ -58,17 +58,6 @@ export default function InventoryPage() {
     borrowed: allItems.filter((i) => i.status === "Borrowed").length,
     categories: new Set(allItems.map((i) => i.category).filter(Boolean)).size,
   };
-
-  function conditionClass(c) {
-    const v = (c || "").toLowerCase();
-    if (v === "excellent") return "cond-excellent";
-    if (v === "good") return "cond-good";
-    if (v === "fair") return "cond-fair";
-    if (v === "damaged") return "cond-damaged";
-    if (v === "for repair") return "cond-repair";
-    if (v === "missing") return "cond-missing";
-    return "";
-  }
 
   if (isLoading) return <LoadingSpinner />;
 

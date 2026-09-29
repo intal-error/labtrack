@@ -3,14 +3,14 @@ import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { api } from "../../services/api";
-import { useMyNotifications } from "../../hooks/useQueries";
+import { useMyNotifications, pickNotifications, useUnreadCount } from "../../hooks/useQueries";
 import { prefetchRoute } from "../../utils/prefetchRoute";
 import { timeAgo } from "../../utils/helpers";
 import { FiMenu, FiX } from "react-icons/fi";
 import {
   MdQrCodeScanner, MdInventory, MdPerson, MdInfo,
   MdLogout, MdDarkMode, MdLightMode, MdHome,
-  MdNotifications, MdFolderOpen, MdSettings,
+  MdNotifications, MdSettings,
   MdChevronLeft, MdChevronRight, MdExpandMore, MdExpandLess,
   MdBuild, MdWarning, MdMenuBook, MdHistory,
   MdAssignment, MdEventAvailable,
@@ -28,14 +28,12 @@ const ROUTE_NAMES = {
   "/notifications": "Notifications",
   "/transactions": "Transactions",
   "/catalog": "Catalog",
-  "/inventory": "Catalog",
+  "/inventory": "Equipment Catalog",
   "/scanner": "Scanner",
   "/borrow-requests": "Borrow Requests",
   "/maintenance": "Maintenance",
-  "/incidents": "Incidents",
+  "/resources": "Resources",
   "/fines": "Fines",
-  "/manuals": "Lab Manuals",
-  "/documents": "Documents",
   "/persona": "Persona",
   "/attendance": "Attendance Logs",
   "/reports": "Reports",
@@ -49,7 +47,7 @@ function resolvePageTitle(pathname) {
 
 const NAV_ITEMS = [
   {
-    label: "HOME",
+    label: "OVERVIEW",
     items: [
       { path: "/dashboard", label: "Dashboard", icon: MdHome, roles: ["student", "admin"] },
       { path: "/my-activity", label: "My Activity", icon: MdHistory, roles: ["student"] },
@@ -58,26 +56,32 @@ const NAV_ITEMS = [
     ],
   },
   {
-    label: "TOOLS",
+    label: "LAB",
+    roles: ["student"],
     items: [
       { path: "/scanner", label: "Scanner", icon: MdQrCodeScanner, roles: ["student"] },
+      { path: "/inventory", label: "Equipment Catalog", icon: MdInventory, roles: ["student"] },
+      { path: "/resources", label: "Resources", icon: MdMenuBook, roles: ["student"] },
+    ],
+  },
+  {
+    label: "OPERATIONS",
+    roles: ["admin"],
+    items: [
       { path: "/transactions", label: "Transactions", icon: FaExchangeAlt, roles: ["admin"] },
       { path: "/borrow-requests", label: "Borrow Requests", icon: MdAssignment, roles: ["admin"] },
-      { path: "/inventory", label: "Catalog", icon: MdInventory, roles: ["student"] },
       { path: "/catalog", label: "Catalog", icon: MdInventory, roles: ["admin"] },
       { path: "/maintenance", label: "Maintenance", icon: MdBuild, roles: ["admin"] },
       { path: "/attendance", label: "Attendance Logs", icon: MdEventAvailable, roles: ["admin"] },
     ],
   },
   {
-    label: "SYSTEM",
+    label: "MANAGEMENT",
+    roles: ["admin"],
     items: [
-      { path: "/incidents", label: "Incidents", icon: MdWarning, roles: ["admin", "student"] },
-      { path: "/manuals", label: "Lab Manuals", icon: MdMenuBook, roles: ["student", "admin"] },
-      { path: "/documents", label: "Documents", icon: MdFolderOpen, roles: ["admin"] },
+      { path: "/resources", label: "Resources", icon: MdMenuBook, roles: ["admin"] },
       { path: "/fines", label: "Fines", icon: PesoIcon, roles: ["admin"] },
       { path: "/persona", label: "Persona", icon: MdPerson, roles: ["admin"] },
-      { path: "/settings", label: "Settings", icon: MdSettings, roles: ["student", "admin"] },
     ],
   },
 ];
@@ -112,10 +116,8 @@ export default function DashboardLayout() {
   const location = useLocation();
 
   const notifData = useMyNotifications();
-  const rawNotifs = notifData?.data;
-  const notifications = Array.isArray(rawNotifs) ? rawNotifs : Array.isArray(rawNotifs?.data) ? rawNotifs.data : [];
-  const unreadNotifications = notifications.filter((n) => !n?.read);
-  const unreadCount = unreadNotifications.length;
+  const notifications = pickNotifications(notifData?.data);
+  const unreadCount = useUnreadCount();
 
   const pageTitle = resolvePageTitle(location.pathname);
 
@@ -229,6 +231,7 @@ export default function DashboardLayout() {
         <nav>
           <ul>
             {NAV_ITEMS.map((section) => {
+              if (section.roles && !section.roles.includes(role)) return null;
               const visibleItems = section.items.filter((item) => item.roles.includes(role));
               if (visibleItems.length === 0) return null;
               const isOpen = openSections[section.label];
@@ -276,6 +279,15 @@ export default function DashboardLayout() {
         </nav>
 
         <div className="sidebar-bottom">
+          <NavLink
+            to="/settings"
+            className={({ isActive }) => `sidebar-bottom-item settings-btn ${isActive ? "active" : ""}`}
+            onClick={() => setSidebarOpen(false)}
+            data-label="Settings"
+          >
+            <span className="nav-icon"><MdSettings size={18} /></span>
+            {!collapsed && <span className="nav-label">Settings</span>}
+          </NavLink>
           <button className="sidebar-bottom-item theme-toggle" onClick={toggleTheme} title={dark ? "Light Mode" : "Dark Mode"} data-label={dark ? "Light Mode" : "Dark Mode"}>
             <span className="nav-icon">{dark ? <MdLightMode size={18} /> : <MdDarkMode size={18} />}</span>
             {!collapsed && <span className="nav-label">{dark ? "Light Mode" : "Dark Mode"}</span>}
@@ -309,7 +321,7 @@ export default function DashboardLayout() {
             <MdSearch size={18} />
             <input
               type="text"
-              placeholder="Search anything..."
+              placeholder={role === "admin" ? "Search equipment catalog..." : "Search borrowed items..."}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -325,8 +337,8 @@ export default function DashboardLayout() {
               {notifOpen && (
                 <div className="dash-notif-dropdown">
                   <div className="dash-dd-header">
-                    <h4>Notifications {unreadNotifications.length > 0 && <span className="dash-dd-count">{unreadNotifications.length}</span>}</h4>
-                    {unreadNotifications.length > 0 && (
+                    <h4>Notifications {unreadCount > 0 && <span className="dash-dd-count">{unreadCount}</span>}</h4>
+                    {unreadCount > 0 && (
                       <button className="dash-dd-mark-read" onClick={handleMarkAllRead}>Mark all read</button>
                     )}
                   </div>

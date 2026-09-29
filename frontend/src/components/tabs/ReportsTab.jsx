@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { api } from "../../services/api";
 import { useReportSummary } from "../../hooks/useQueries";
+import { toDate, fmtDate as formatDate } from "../../utils/helpers";
 import toast from "react-hot-toast";
 import EmptyChart from "../ui/EmptyChart";
 import LoadError from "../ui/LoadError";
@@ -21,22 +22,6 @@ const CONDITION_COLORS = {
 };
 const INCIDENT_COLORS = { open: "#d32f2f", investigating: "#f57c00", resolved: "#43A047" };
 const REQUEST_STATUS_COLORS = { pending: "#f9a825", approved: "#2E7D32", rejected: "#d32f2f", cancelled: "#888" };
-
-function toDate(value) {
-  if (!value) return null;
-  if (typeof value?.toDate === "function") return value.toDate();
-  if (value instanceof Date) return value;
-  if (typeof value?.seconds === "number") return new Date(value.seconds * 1000);
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function formatDate(date) {
-  const d = toDate(date);
-  if (!d) return "—";
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
-}
 
 const EMPTY_SUMMARY = {
   counts: { users: 0, students: 0, catalog: 0, borrowed: 0, returned: 0 },

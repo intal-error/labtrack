@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
-import { toDate } from "../../utils/helpers";
+import { toDate, timeAgo } from "../../utils/helpers";
 import { formatDuration } from "../../utils/attendanceHelpers";
 import toast from "react-hot-toast";
 import {
@@ -22,17 +22,6 @@ function formatTimeShort(date) {
   const d = toDate(date);
   if (!d) return "—";
   return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
-}
-
-function timeAgo(date) {
-  const d = toDate(date);
-  if (!d) return "";
-  const now = new Date();
-  const diff = Math.floor((now.getTime() - d.getTime()) / 1000);
-  if (diff < 60) return "just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
 }
 
 export default function AttendanceScanner() {

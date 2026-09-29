@@ -132,12 +132,26 @@ export function useMyIncidents(params) {
 }
 
 // ── Notifications ──
+export function pickNotifications(raw) {
+  if (Array.isArray(raw)) return raw;
+  return Array.isArray(raw?.data) ? raw.data : [];
+}
+
+export function countUnread(list) {
+  return list.filter((n) => !n?.read).length;
+}
+
 export function useMyNotifications(params) {
   return useQuery({
     queryKey: ["myNotifications", params],
     queryFn: () => api.getMyNotifications(params),
     staleTime: 30 * 1000,
   });
+}
+
+export function useUnreadCount() {
+  const { data } = useMyNotifications();
+  return countUnread(pickNotifications(data));
 }
 
 // ── Reports ──

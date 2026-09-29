@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../services/api";
+import { timeAgo, toDate } from "../../utils/helpers";
 import { useAuth } from "../../context/AuthContext";
 import { useBorrowRequests, useCatalog, useActiveAdmins } from "../../hooks/useQueries";
 import Modal from "../ui/Modal";
@@ -29,20 +30,6 @@ const STATUS_LABELS = {
   cancelled: "Cancelled",
 };
 
-function timeAgo(date) {
-  if (!date) return "";
-  const now = new Date();
-  const d = new Date(date);
-  const diff = now - d;
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
-}
-
 function getDueDateInfo(dueDate) {
   if (!dueDate) return null;
   const now = new Date();
@@ -56,15 +43,6 @@ function getDueDateInfo(dueDate) {
   if (diffDays <= 3) return { label: `Due in ${diffDays}d`, cls: "date-urgent", days: diffDays };
   if (diffDays <= 7) return { label: `Due in ${diffDays}d`, cls: "date-soon", days: diffDays };
   return { label: `Due in ${diffDays}d`, cls: "date-normal", days: diffDays };
-}
-
-function toDate(value) {
-  if (!value) return null;
-  if (typeof value?.toDate === "function") return value.toDate();
-  if (value instanceof Date) return value;
-  if (typeof value?.seconds === "number") return new Date(value.seconds * 1000);
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 export default function BorrowRequestsTab() {

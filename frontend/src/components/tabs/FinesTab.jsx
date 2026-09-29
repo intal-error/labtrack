@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../services/api";
 import { useFines, useMyFines, useOverdueCount } from "../../hooks/useQueries";
 import { useAuth } from "../../context/AuthContext";
+import { getInitials, getAvatarColor, fmtDate, fmtDateTime } from "../../utils/helpers";
 import Modal from "../ui/Modal";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
@@ -12,30 +13,6 @@ import PesoIcon from "../ui/PesoIcon";
 import Pagination from "../ui/Pagination";
 
 const STATUS_LABELS = { pending: "Unpaid", paid: "Paid", waived: "Waived" };
-
-function getInitials(name) {
-  const parts = (name || "").split(" ").filter(Boolean);
-  return parts.length >= 2 ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase() : (parts[0]?.[0] || "?").toUpperCase();
-}
-
-function getAvatarColor(name) {
-  const colors = ["#2E7D32", "#1565c0", "#6a1b9a", "#c62828", "#ef6c00", "#00838f", "#4e342e", "#37474f"];
-  let hash = 0;
-  for (let i = 0; i < (name || "").length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return colors[Math.abs(hash) % colors.length];
-}
-
-function fmtDate(date) {
-  if (!date) return "-";
-  const d = date?.toDate ? date.toDate() : new Date(date);
-  return isNaN(d.getTime()) ? "-" : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
-function fmtDateTime(date) {
-  if (!date) return "-";
-  const d = date?.toDate ? date.toDate() : new Date(date);
-  return isNaN(d.getTime()) ? "-" : d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
-}
 
 export default function FinesTab() {
   const { role } = useAuth();

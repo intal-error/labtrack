@@ -9,7 +9,7 @@ import {
   useStudentAttendance,
   useMyFines,
 } from "../hooks/useQueries";
-import { toDate } from "../utils/helpers";
+import { toDate, timeAgo } from "../utils/helpers";
 import DateRangeFilter from "../components/ui/DateRangeFilter";
 import { DEFAULT_RANGE, rangeToParams } from "../components/ui/dateRange";
 import EmptyChart from "../components/ui/EmptyChart";
@@ -19,7 +19,6 @@ import {
   MdQrCodeScanner,
   MdInventory,
   MdHistory,
-  MdMenuBook,
   MdSwapHoriz,
   MdAssignment,
   MdWarning,
@@ -66,6 +65,13 @@ function formatRangeDate(value) {
   });
 }
 
+const REQUEST_STATUS = {
+  pending: "Pending review",
+  approved: "Approved",
+  rejected: "Rejected",
+  cancelled: "Cancelled",
+};
+
 function LoadingState() {
   return (
     <div className="dash-page">
@@ -89,8 +95,9 @@ function StudentDashboard() {
   const { data: attendanceData } = useStudentAttendance(userProfile?.schoolId);
 
   const borrowed = useMemo(() => borrowedData || [], [borrowedData]);
-  const myRequests = useMemo(() => myRequestsData || [], [myRequestsData]);
+  const requests = useMemo(() => myRequestsData || [], [myRequestsData]);
   const fines = useMemo(() => finesData || [], [finesData]);
+  const records = useMemo(() => attendanceData?.records || [], [attendanceData]);
 
   const overdueItems = useMemo(() => {
     const now = new Date();
@@ -101,8 +108,8 @@ function StudentDashboard() {
   }, [borrowed]);
 
   const pendingRequests = useMemo(
-    () => myRequests.filter((r) => r.status === "pending"),
-    [myRequests]
+    () => requests.filter((r) => r.status === "pending"),
+    [requests]
   );
 
   const unpaidFines = useMemo(
@@ -110,65 +117,111 @@ function StudentDashboard() {
     [fines]
   );
 
-  const attendanceSummary = attendanceData?.summary || {};
-  const totalSessions = attendanceSummary.totalSessions || 0;
+  const totalSessions = attendanceData?.summary?.totalSessions || 0;
 
-  const stats = [
+  const activeSession = useMemo(
+    () => records.find((r) => r.status === "active"),
+    [records]
+  );
+
+  const statusItems = [
     {
       key: "borrowed",
-      label: "My Borrowings",
+      label: "Items out",
       value: borrowed.length,
-      icon: MdHistory,
-      tone: "orange",
-    },
-    {
-      key: "overdue",
-      label: "Overdue Items",
-      value: overdueItems.length,
-      icon: MdEventBusy,
-      tone: "red",
-    },
-    {
-      key: "requests",
-      label: "Pending Requests",
-      value: pendingRequests.length,
-      icon: MdAssignment,
-      tone: "amber",
+      detail: overdueItems.length > 0
+        ? `${overdueItems.length} overdue`
+        : borrowed.length > 0 ? "All on time" : "Nothing borrowed",
+      tone: overdueItems.length > 0 ? "alert" : "ok",
+      icon: MdSwapHoriz,
+      path: "/my-activity?tab=borrowed",
     },
     {
       key: "fines",
-      label: "Unpaid Fines",
+      label: "Unpaid fines",
       value: unpaidFines.length,
+      detail: unpaidFines.length > 0 ? "Settle at the lab counter" : "Nothing to pay",
+      tone: unpaidFines.length > 0 ? "alert" : "ok",
       icon: MdAttachMoney,
-      tone: "blue",
+      path: "/my-activity?tab=fines",
     },
     {
       key: "sessions",
-      label: "Lab Sessions",
+      label: "Lab sessions",
       value: totalSessions,
+      detail: activeSession
+        ? `In ${activeSession.labRoom || "the lab"} now`
+        : pendingRequests.length > 0
+          ? `${pendingRequests.length} request${pendingRequests.length > 1 ? "s" : ""} awaiting approval`
+          : "Attendance log",
+      tone: activeSession || pendingRequests.length === 0 ? "ok" : "warn",
       icon: MdEventAvailable,
-      tone: "teal",
+      path: "/my-activity?tab=attendance",
     },
   ];
+
+  const feed = useMemo(() => {
+    const items = [];
+
+    borrowed.forEach((t) => {
+      const at = toDate(t.timestamp) || toDate(t.borrowedAt);
+      if (!at) return;
+      items.push({
+        key: `borrow-${t.id}`,
+        icon: MdSwapHoriz,
+        title: `Borrowed ${t.itemName || "an item"}`,
+        detail: t.dueDate ? `Due ${formatShortDate(toDate(t.dueDate))}` : "Return at the lab counter",
+        at,
+      });
+    });
+
+    requests.forEach((r) => {
+      const at = toDate(r.createdAt);
+      if (!at) return;
+      items.push({
+        key: `request-${r.id}`,
+        icon: MdAssignment,
+        title: `Requested ${r.itemName || "an item"}`,
+        detail: REQUEST_STATUS[r.status] || r.status,
+        at,
+      });
+    });
+
+    records.forEach((r) => {
+      const at = toDate(r.date ? `${r.date}T${r.timeIn || "00:00"}` : r.date);
+      if (!at) return;
+      items.push({
+        key: `attendance-${r.id || `${r.date}-${r.timeIn}`}`,
+        icon: MdEventAvailable,
+        title: r.status === "active" ? `Signed in · ${r.labRoom || "Lab"}` : `Attended · ${r.labRoom || "Lab"}`,
+        detail: r.subject || formatShortDate(at),
+        at,
+      });
+    });
+
+    return items
+      .sort((a, b) => b.at.getTime() - a.at.getTime())
+      .slice(0, 6);
+  }, [borrowed, requests, records]);
 
   const quickActions = [
     {
       label: "My Requests",
-      desc: "Track borrow requests",
+      desc: `${pendingRequests.length} pending`,
       icon: MdAssignment,
       path: "/my-activity?tab=requests",
     },
     {
-      label: "My Activity",
-      desc: "Borrowing history",
-      icon: MdHistory,
-      path: "/my-activity",
+      label: "Equipment Catalog",
+      desc: "Browse what you can borrow",
+      icon: MdInventory,
+      path: "/inventory",
     },
     {
-      label: "Lab Manuals",
-      desc: "Guides & references",
-      icon: MdMenuBook,
-      path: "/manuals",
+      label: "Report Incident",
+      desc: "Damaged or missing item",
+      icon: MdWarning,
+      path: "/resources?tab=incidents",
     },
   ];
 
@@ -176,7 +229,6 @@ function StudentDashboard() {
 
   return (
     <div className="dash-page">
-      {/* Hero Actions */}
       <div className="dash-hero-actions">
         <button
           className="dash-hero-action primary"
@@ -206,39 +258,80 @@ function StudentDashboard() {
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="dash-stats">
-        {stats.map(({ key, label, value, icon: Icon, tone }) => (
-          <div className={`dash-stat ${key}`} key={key}>
-            <span className={`dash-stat-icon ${tone}`}>
-              <Icon size={22} />
+      <div className="dash-status-bar">
+        {statusItems.map(({ key, label, value, detail, tone, icon: Icon, path }) => (
+          <button
+            key={key}
+            type="button"
+            className={`dash-status-chip ${tone}`}
+            onClick={() => navigate(path)}
+          >
+            <span className="dash-status-icon"><Icon size={18} /></span>
+            <span className="dash-status-body">
+              <span className="dash-status-line">
+                <strong>{value}</strong> {label}
+              </span>
+              <span className="dash-status-detail">{detail}</span>
             </span>
-            <div className="dash-stat-body">
-              <span className="dash-stat-value">{value}</span>
-              <span className="dash-stat-label">{label}</span>
-            </div>
-          </div>
+          </button>
         ))}
       </div>
 
-      {/* Quick Actions */}
-      <div className="dash-actions">
-        {quickActions.map(({ label, desc, icon: Icon, path }) => (
-          <button
-            key={path}
-            className="dash-action"
-            onClick={() => navigate(path)}
-          >
-            <span className="dash-action-icon">
-              <Icon size={22} />
-            </span>
-            <span className="dash-action-text">
-              <span className="dash-action-label">{label}</span>
-              <span className="dash-action-desc">{desc}</span>
-            </span>
-            <MdArrowForward size={16} className="dash-action-arrow" />
-          </button>
-        ))}
+      <div className="dash-overview">
+        <section className="dash-feed-card">
+          <div className="dash-section-head">
+            <h3>Recent activity</h3>
+            <button className="dash-section-link" onClick={() => navigate("/my-activity")}>
+              View all <MdArrowForward size={14} />
+            </button>
+          </div>
+          {feed.length === 0 ? (
+            <div className="dash-feed-empty">
+              <MdHistory size={28} />
+              <p>No activity yet. Scan a QR code to borrow your first item.</p>
+              <button className="btn btn-primary btn-sm" onClick={() => navigate("/scanner")}>
+                Open Scanner
+              </button>
+            </div>
+          ) : (
+            <ul className="dash-feed">
+              {feed.map((item) => (
+                <li key={item.key} className="dash-feed-item">
+                  <span className="dash-feed-icon"><item.icon size={16} /></span>
+                  <span className="dash-feed-text">
+                    <span className="dash-feed-title">{item.title}</span>
+                    <span className="dash-feed-detail">{item.detail}</span>
+                  </span>
+                  <span className="dash-feed-time">{timeAgo(item.at)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="dash-quick-card">
+          <div className="dash-section-head">
+            <h3>Quick actions</h3>
+          </div>
+          <div className="dash-actions dash-actions-stack">
+            {quickActions.map(({ label, desc, icon: Icon, path }) => (
+              <button
+                key={path}
+                className="dash-action"
+                onClick={() => navigate(path)}
+              >
+                <span className="dash-action-icon">
+                  <Icon size={22} />
+                </span>
+                <span className="dash-action-text">
+                  <span className="dash-action-label">{label}</span>
+                  <span className="dash-action-desc">{desc}</span>
+                </span>
+                <MdArrowForward size={16} className="dash-action-arrow" />
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );
