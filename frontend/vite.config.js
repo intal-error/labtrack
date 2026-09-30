@@ -20,8 +20,8 @@ export default defineConfig({
         short_name: "LabTrack",
         description:
           "Laboratory Equipment Borrowing, Return & Logbook Attendance System for SLSU",
-        theme_color: "#1a1a2e",
-        background_color: "#0f3418",
+        theme_color: "#000000",
+        background_color: "#04140c",
         display: "standalone",
         orientation: "portrait",
         scope: "/",

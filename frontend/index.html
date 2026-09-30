@@ -4,6 +4,38 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 
+    <!--
+      Pre-paint theme bootstrap. Runs before any stylesheet so the very first
+      frame is already the correct theme: without it the page paints white,
+      then cream (global.css loads with no theme class), then jumps to dark
+      once ThemeContext's useEffect runs.
+
+      Only <html> can be classed here - document.body is still null while
+      <head> is being parsed. The dark tokens in global.css are keyed to
+      :root.dark for exactly this reason, so no second class is needed.
+
+      The inline background bridges the gap before global.css is applied. In
+      production that stylesheet is a render-blocking <link> so it wins on
+      cascade; in dev Vite injects it via JS, so this is what prevents a
+      white frame before the CSS lands.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("theme");
+          var dark = stored ? stored === "dark" : true; // matches ThemeContext default
+          if (dark) {
+            document.documentElement.classList.add("dark");
+          }
+          var s = document.createElement("style");
+          s.textContent = "html{background:" + (dark ? "#000000" : "#f5f5f0") + "}";
+          document.head.appendChild(s);
+        } catch (e) {
+          /* private mode / storage disabled - fall through to defaults */
+        }
+      })();
+    </script>
+
     <title>SLSU LabTrack</title>
     <meta name="description" content="SLSU Laboratory Equipment Borrowing, Return &amp; Logbook Attendance System" />
 
@@ -20,7 +52,12 @@
     <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-192x192.png" />
 
-    <meta name="theme-color" content="#1a1a2e" />
+    <!-- Two tags: UA picks the one matching the system scheme. The bootstrap
+         script above rewrites the non-media tag when the user has explicitly
+         toggled, so chrome tracks the real preference. -->
+    <meta name="theme-color" content="#04140c" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f2f7f3" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#04140c" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="LabTrack" />

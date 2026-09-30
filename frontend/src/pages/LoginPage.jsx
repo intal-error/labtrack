@@ -1,10 +1,12 @@
 import { useState } from "react";
 import {
   MdQrCodeScanner, MdInventory2, MdReceiptLong,
-  MdArrowBack, MdChevronRight, MdLogin, MdPersonAdd,
+  MdArrowBack, MdChevronRight, MdLogin, MdPersonAdd, MdLockOutline,
+  MdLightMode, MdDarkMode,
 } from "react-icons/md";
 import SignInForm from "./components/SignInForm";
 import SignUpForm from "./components/SignUpForm";
+import { useTheme } from "../context/ThemeContext";
 import "../styles/pages/auth.css";
 
 const FEATURES = [
@@ -25,11 +27,14 @@ const OPTIONS = [
     icon: MdPersonAdd,
     title: "Sign up",
     desc: "Create a new student account",
+    tag: "New students",
+    primary: true,
   },
 ];
 
 export default function LoginPage() {
   const [view, setView] = useState("choice");
+  const { dark, toggleTheme } = useTheme();
 
   const cardClass = [
     "auth-card",
@@ -38,6 +43,8 @@ export default function LoginPage() {
     .filter(Boolean)
     .join(" ");
 
+  const themeLabel = dark ? "Light Mode" : "Dark Mode";
+
   return (
     <div className="login-page auth-page">
       <picture>
@@ -45,6 +52,16 @@ export default function LoginPage() {
         <img src="/Lucena.png" alt="" className="auth-bg" loading="eager" width="1920" height="1080" decoding="async" />
       </picture>
       <div className="auth-overlay" />
+
+      <button
+        type="button"
+        className="auth-theme-toggle"
+        onClick={toggleTheme}
+        title={themeLabel}
+        aria-label={`Switch to ${dark ? "light" : "dark"} mode`}
+      >
+        {dark ? <MdLightMode size={17} /> : <MdDarkMode size={17} />}
+      </button>
 
       <div className={`auth-content${view === "signup" ? " is-wide" : ""}`}>
         <div className="auth-left">
@@ -81,19 +98,32 @@ export default function LoginPage() {
               <>
                 <div className="auth-card-head">
                   <h2 className="auth-card-title">Get started</h2>
+                  <p className="auth-card-subtitle">Choose how you&apos;d like to continue.</p>
                 </div>
-                <div className="auth-choice-list">
-                  {OPTIONS.map(({ key, icon: Icon, title, desc }) => (
-                    <button key={key} type="button" className="auth-choice-row" onClick={() => setView(key)}>
-                      <span className="auth-choice-icon"><Icon size={18} /></span>
+                <div className="auth-choice-grid">
+                  {OPTIONS.map(({ key, icon: Icon, title, desc, tag, primary }) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className={`auth-choice-card${primary ? " is-primary" : ""}`}
+                      onClick={() => setView(key)}
+                    >
+                      <span className="auth-choice-icon"><Icon size={19} /></span>
                       <span className="auth-choice-text">
-                        <span className="auth-choice-title">{title}</span>
+                        <span className="auth-choice-title">
+                          {title}
+                          {tag && <span className="auth-choice-tag">{tag}</span>}
+                        </span>
                         <span className="auth-choice-desc">{desc}</span>
                       </span>
-                      <MdChevronRight size={18} className="auth-choice-chev" />
+                      <MdChevronRight size={20} className="auth-choice-chev" />
                     </button>
                   ))}
                 </div>
+                <p className="auth-card-note">
+                  <MdLockOutline size={14} />
+                  Access is limited to SLSU students and staff.
+                </p>
               </>
             )}
 

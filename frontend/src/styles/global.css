@@ -1,5 +1,16 @@
 :root{--green:#2E7D32;--green-dark:#1B5E20;--green-light:#43A047;--dark-green:#1B5E20;--bg:#f5f5f0;--bg-card:#ffffff;--bg-hover:rgba(0,0,0,.04);--text:#1a1a1a;--text-muted:#888;--border:#d0d0d0;--card-shadow:0 2px 8px rgba(0,0,0,.06);--orange:#ef6c00;--orange-hover:#e65100;--amber:#F57C00;--amber-light:#FF8F00;--red:#d32f2f;--red-hover:#b71c1c;--yellow:#fbc02d;--yellow-hover:#f9a825;--accent-glow:rgba(46,125,50,.06)}
-body.dark{--bg:#000000;--bg-card:#131313;--bg-hover:rgba(255,255,255,.06);--text:#FFFFFF;--text-muted:#888;--border:#353535;--card-shadow:0 2px 8px rgba(0,0,0,.15);--green:#43A047;--green-dark:#2E7D32;--green-light:#66BB6A;--dark-green:#A5D6A7;--amber:#FFB74D;--amber-light:#FFA726;--accent-glow:rgba(46,125,50,.06)}
+:root.dark{--bg:#000000;--bg-card:#131313;--bg-hover:rgba(255,255,255,.06);--text:#FFFFFF;--text-muted:#888;--border:#353535;--card-shadow:0 2px 8px rgba(0,0,0,.15);--green:#43A047;--green-dark:#2E7D32;--green-light:#66BB6A;--dark-green:#A5D6A7;--amber:#FFB74D;--amber-light:#FFA726;--accent-glow:rgba(46,125,50,.06)}
+/* Without an explicit color-scheme the UA assumes LIGHT, so iOS/Android paint
+   the overscroll gutter, scrollbar, pre-CSS canvas and form controls white
+   even when the theme is dark. Keep it here (not a page stylesheet) so every
+   route is covered.
+   The dark tokens above hang off :root.dark, NOT body.dark, on purpose: the
+   pre-paint bootstrap in index.html can only set the class on <html> (document
+   .body is still null while <head> is parsed). Keying them to :root means the
+   very first paint already resolves --bg correctly, so `body,html{background:
+   var(--bg)}` below needs no hardcoded colour override. */
+html{color-scheme:light}
+:root.dark{color-scheme:dark}
 *{margin:0;padding:0;box-sizing:border-box;font-family:"Poppins",Arial,sans-serif}
 body,html{min-height:100%;background:var(--bg);color:var(--text);-webkit-text-size-adjust:100%;text-size-adjust:100%}
 a{text-decoration:none;color:inherit}

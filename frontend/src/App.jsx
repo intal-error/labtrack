@@ -99,12 +99,17 @@ const fullScreenFallback = (
 function App() {
   const [splashComplete, setSplashComplete] = useState(false);
 
+  // ErrorBoundary sits ABOVE the providers on purpose: a throw inside a
+  // provider's render phase (e.g. ThemeProvider's localStorage read) would
+  // otherwise escape every boundary and white-screen the app. ErrorBoundary
+  // itself is a plain class component with no context/query/router deps, so
+  // hoisting it is safe.
   return (
+    <ErrorBoundary>
     <BrowserRouter>
       <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <ThemeProvider>
-          <ErrorBoundary>
           {!splashComplete && <SplashScreen onComplete={() => setSplashComplete(true)} />}
           <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
           <InstallPrompt />
@@ -149,11 +154,11 @@ function App() {
             </Route>
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
-          </ErrorBoundary>
         </ThemeProvider>
       </AuthProvider>
       </QueryClientProvider>
     </BrowserRouter>
+    </ErrorBoundary>
   );
 }
 
