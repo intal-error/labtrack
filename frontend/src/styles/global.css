@@ -88,8 +88,7 @@ body.dark .card:hover{box-shadow:0 4px 16px rgba(0,0,0,.25)}
   .attendance-edit-form input,.attendance-edit-form select,
   .scan-form-field input,.scan-form-field select,
   .lab-input-wrap input,.lab-input-wrap select,.lab-form-field textarea,
-  .login-field input,
-  .register-input-wrap input,.register-input-wrap select,
+  .auth-input,
   .admin-input-wrap input,.course-toggle-fields select,
   .persona-input-wrap input,
   .profile-field input{

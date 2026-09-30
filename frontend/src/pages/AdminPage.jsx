@@ -387,7 +387,7 @@ export default function AdminPage() {
                       <div className="admin-input-wrap">
                         <select value={form.assignedYear} onChange={(e) => setForm({ ...form, assignedYear: e.target.value })}>
                           <option value="">Select Year (optional)</option>
-                          {["1st Year", "2nd Year", "3rd Year", "4th Year", "5th Year"].map((y) => <option key={y} value={y}>{y}</option>)}
+                          {["1st Year", "2nd Year", "3rd Year", "4th Year"].map((y) => <option key={y} value={y}>{y}</option>)}
                         </select>
                       </div>
                     </div>

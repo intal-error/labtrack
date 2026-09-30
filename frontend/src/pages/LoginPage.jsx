@@ -6,11 +6,11 @@ import { auth, db } from "../services/firebase";
 import { useAuth } from "../context/AuthContext";
 import {
   MdSchool, MdAdminPanelSettings, MdVisibility, MdVisibilityOff,
-  MdMailOutline, MdLockOutline, MdErrorOutline, MdCheckCircle, MdWarningAmber,
+  MdMailOutline, MdLockOutline, MdErrorOutline, MdWarningAmber,
   MdQrCodeScanner, MdInventory2, MdReceiptLong,
 } from "react-icons/md";
 import toast from "react-hot-toast";
-import "../styles/pages/login.css";
+import "../styles/pages/auth.css";
 
 const ROLES = [
   { key: "student", label: "Student", icon: MdSchool, desc: "Access lab equipment" },
@@ -145,76 +145,82 @@ export default function LoginPage() {
     if (e.getModifierState) setCapsLockOn(e.getModifierState("CapsLock"));
   };
 
-  return (
-      <div className="login-page">
-      <picture>
-            <source srcSet="/Lucena.webp" type="image/webp" />
-            <img src="/Lucena.png" alt="" className="login-bg" loading="eager" width="1920" height="1080" decoding="async" />
-          </picture>
-      <div className="login-overlay" />
+  const activeRole = ROLES.find((r) => r.key === selectedRole) || ROLES[0];
 
-      <div className="login-content">
-        <div className="login-left">
-          <div className="login-brand">
-            <img src="/logo.png" alt="SLSU Logo" className="login-logo" loading="eager" width="48" height="48" decoding="async" />
-            <span className="login-brand-name">SLSU</span>
+  return (
+    <div className="login-page auth-page">
+      <picture>
+        <source srcSet="/Lucena.webp" type="image/webp" />
+        <img src="/Lucena.png" alt="" className="auth-bg" loading="eager" width="1920" height="1080" decoding="async" />
+      </picture>
+      <div className="auth-overlay" />
+
+      <div className="auth-content">
+        <div className="auth-left">
+          <div className="auth-brand">
+            <img src="/logo.png" alt="SLSU Logo" className="auth-logo" loading="eager" width="48" height="48" decoding="async" />
+            <span className="auth-brand-name">SLSU</span>
           </div>
-          <h1 className="login-title">LAB<span className="login-title-bold">TRACK</span></h1>
-          <p className="login-subtitle">Laboratory Equipment Borrowing, Return & Logbook Attendance System</p>
-          <p className="login-desc">
+          <h1 className="auth-title">LAB<span className="auth-title-accent">TRACK</span></h1>
+          <p className="auth-subtitle">Laboratory Equipment Borrowing, Return &amp; Logbook Attendance System</p>
+          <p className="auth-desc">
             A capstone project of Southern Luzon State University - Lucena Campus,
             digitalizing the borrowing, return, and logbook attendance process for efficiency and accountability.
           </p>
-          <ul className="login-features">
+          <ul className="auth-features">
             {FEATURES.map(({ icon: Icon, text }, i) => (
-              <li key={i} className="login-feature-item" style={{ animationDelay: `${0.5 + i * 0.12}s` }}>
-                <span className="login-feature-icon"><Icon size={18} /></span>
+              <li key={i} className="auth-feature-item" style={{ animationDelay: `${0.5 + i * 0.12}s` }}>
+                <span className="auth-feature-icon"><Icon size={17} /></span>
                 <span>{text}</span>
               </li>
             ))}
           </ul>
         </div>
 
-        <div className="login-card">
-          <h2 className="login-card-title">Welcome Back</h2>
-          <p className="login-card-subtitle">Sign in to your account</p>
+        <div className="auth-card">
+          <div className="auth-card-head">
+            <h2 className="auth-card-title">Welcome back</h2>
+            <p className="auth-card-subtitle">Sign in to your account</p>
+          </div>
 
-          <div className="login-role-selector" role="radiogroup" aria-label="Select your role">
-            {ROLES.map(({ key, label, icon: Icon, desc }) => (
-              <div
-                key={key}
-                ref={(el) => (roleRefs.current[key] = el)}
-                role="radio"
-                aria-checked={selectedRole === key}
-                tabIndex={selectedRole === key ? 0 : -1}
-                className={`login-role-card ${selectedRole === key ? "active" : ""}`}
-                onClick={() => { setSelectedRole(key); clearError(); }}
-                onKeyDown={(e) => handleRoleKeyDown(e, key)}
-              >
-                <span className="role-check"><MdCheckCircle size={16} /></span>
-                <div className="role-icon"><Icon size={26} /></div>
-                <div className="role-label">{label}</div>
-                <div className="role-desc">{desc}</div>
-              </div>
-            ))}
+          <div className="auth-role-block">
+            <div className="auth-segmented" role="radiogroup" aria-label="Select your role">
+              {ROLES.map(({ key, label, icon: Icon }) => (
+                <div
+                  key={key}
+                  ref={(el) => (roleRefs.current[key] = el)}
+                  role="radio"
+                  aria-checked={selectedRole === key}
+                  tabIndex={selectedRole === key ? 0 : -1}
+                  className={`auth-segment ${selectedRole === key ? "active" : ""}`}
+                  onClick={() => { setSelectedRole(key); clearError(); }}
+                  onKeyDown={(e) => handleRoleKeyDown(e, key)}
+                >
+                  <Icon size={16} className="auth-segment-icon" />
+                  <span className="auth-segment-label">{label}</span>
+                </div>
+              ))}
+            </div>
+            <p className="auth-role-hint">{activeRole.desc}</p>
           </div>
 
           {error && (
-            <div className="login-error-banner" role="alert" aria-live="assertive">
+            <div className="auth-error" role="alert" aria-live="assertive">
               <MdErrorOutline size={18} />
               <span>{error}</span>
-              <button type="button" className="login-error-close" onClick={clearError} aria-label="Dismiss error">
+              <button type="button" className="auth-error-close" onClick={clearError} aria-label="Dismiss error">
                 &times;
               </button>
             </div>
           )}
 
-          <form onSubmit={handleSubmit}>
-            <div className="login-field">
-              <label htmlFor="email">Email</label>
-              <div className="login-input-wrap">
-                <span className="login-input-icon"><MdMailOutline size={18} /></span>
+          <form className="auth-form" onSubmit={handleSubmit}>
+            <div className="auth-field">
+              <label className="auth-label" htmlFor="email">Email</label>
+              <div className="auth-input-wrap has-left">
+                <span className="auth-input-icon"><MdMailOutline size={17} /></span>
                 <input
+                  className="auth-input"
                   id="email"
                   type="email"
                   placeholder={`Enter your ${selectedRole} email`}
@@ -227,11 +233,12 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <div className="login-field">
-              <label htmlFor="password">Password</label>
-              <div className="login-input-wrap">
-                <span className="login-input-icon"><MdLockOutline size={18} /></span>
+            <div className="auth-field">
+              <label className="auth-label" htmlFor="password">Password</label>
+              <div className="auth-input-wrap has-left has-toggle">
+                <span className="auth-input-icon"><MdLockOutline size={17} /></span>
                 <input
+                  className="auth-input"
                   id="password"
                   type={showPassword ? "text" : "password"}
                   placeholder="Enter your password"
@@ -244,46 +251,46 @@ export default function LoginPage() {
                 />
                 <button
                   type="button"
-                  className="login-password-toggle"
+                  className="auth-password-toggle"
                   onClick={() => setShowPassword(!showPassword)}
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
-                  {showPassword ? <MdVisibilityOff size={20} /> : <MdVisibility size={20} />}
+                  {showPassword ? <MdVisibilityOff size={19} /> : <MdVisibility size={19} />}
                 </button>
               </div>
               {capsLockOn && (
-                <p className="login-capslock-warning">
+                <p className="auth-capslock">
                   <MdWarningAmber size={14} /> Caps Lock is on
                 </p>
               )}
             </div>
 
-            <div className="login-extras">
-              <label className="login-remember">
+            <div className="auth-extras">
+              <label className="auth-remember">
                 <input
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
                 />
-                <span>Remember Me</span>
+                <span>Remember me</span>
               </label>
-              <a href="#" className="login-forgot" onClick={handleForgotPassword}>Forgot Password?</a>
+              <a href="#" className="auth-forgot" onClick={handleForgotPassword}>Forgot password?</a>
             </div>
 
-            <button type="submit" className="login-submit" disabled={loading}>
+            <button type="submit" className="auth-submit" disabled={loading}>
               {loading ? (
                 <>
-                  <span className="login-spinner" aria-hidden="true" />
+                  <span className="auth-spinner" aria-hidden="true" />
                   Signing in...
                 </>
               ) : (
-                "Sign In"
+                "Sign in"
               )}
             </button>
           </form>
 
           {selectedRole !== "admin" && (
-            <p className="login-register-link">
+            <p className="auth-footer">
               Don&apos;t have an account? <Link to="/register">Register here</Link>
             </p>
           )}

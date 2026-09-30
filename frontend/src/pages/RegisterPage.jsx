@@ -7,9 +7,9 @@ import { useAuth } from "../context/AuthContext";
 import { COURSES } from "../constants/courses";
 import { MdSchool, MdPerson, MdVisibility, MdVisibilityOff, MdEmail, MdLock, MdBadge, MdBook, MdCalendarToday, MdAssignment, MdArrowForward, MdClose, MdCheckCircle } from "react-icons/md";
 import toast from "react-hot-toast";
-import "../styles/pages/register.css";
+import "../styles/pages/auth.css";
 
-const YEARS = ["1st Year", "2nd Year", "3rd Year", "4th Year", "5th Year"];
+const YEARS = ["1st Year", "2nd Year", "3rd Year", "4th Year"];
 
 export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -99,192 +99,198 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="register-page">
+    <div className="register-page auth-page">
       <picture>
-            <source srcSet="/Lucena.webp" type="image/webp" />
-            <img src="/Lucena.png" alt="" className="register-bg" loading="eager" width="1920" height="1080" decoding="async" />
-          </picture>
-      <div className="register-overlay" />
+        <source srcSet="/Lucena.webp" type="image/webp" />
+        <img src="/Lucena.png" alt="" className="auth-bg" loading="eager" width="1920" height="1080" decoding="async" />
+      </picture>
+      <div className="auth-overlay" />
 
-      <div className="register-content">
-        <div className="register-left">
-          <div className="register-brand">
-            <img src="/logo.png" alt="SLSU Logo" className="register-logo" loading="eager" width="48" height="48" decoding="async" />
-            <span className="register-brand-name">SLSU</span>
+      <div className="auth-content">
+        <div className="auth-left">
+          <div className="auth-brand">
+            <img src="/logo.png" alt="SLSU Logo" className="auth-logo" loading="eager" width="48" height="48" decoding="async" />
+            <span className="auth-brand-name">SLSU</span>
           </div>
-          <h1 className="register-title">LAB<span className="register-title-bold">TRACK</span></h1>
-          <p className="register-subtitle">Create Your Account</p>
-          <p className="register-desc">
+          <h1 className="auth-title">LAB<span className="auth-title-accent">TRACK</span></h1>
+          <p className="auth-subtitle">Create Your Account</p>
+          <p className="auth-desc">
             Join the laboratory equipment borrowing, return, and logbook attendance system.
             Register as a student to get started.
           </p>
         </div>
 
-        <div className="register-card">
-          <div className="register-card-header">
-            <div className="register-badge">
-              <MdSchool size={16} />
+        <div className="auth-card register-card">
+          <div className="auth-card-head">
+            <div className="auth-badge">
+              <MdSchool size={14} />
               <span>Student Registration</span>
             </div>
-            <h2 className="register-card-title">Create Account</h2>
-            <p className="register-card-subtitle">Fill in your details to get started</p>
+            <h2 className="auth-card-title">Create your account</h2>
+            <p className="auth-card-subtitle">Fill in your details to get started</p>
           </div>
 
-          <form onSubmit={handleSubmit}>
-            <div className="register-section">
-              <div className="register-section-header">
-                <div className="register-section-icon personal"><MdPerson size={14} /></div>
-                <span className="register-section-title">Personal Info</span>
+          <form className="auth-form" onSubmit={handleSubmit}>
+            <div className="auth-section">
+              <div className="auth-section-header">
+                <span className="auth-section-label">Personal Info</span>
               </div>
-              <div className="register-row">
-                <div className="register-field">
-                  <label>First Name <span className="register-required" /></label>
-                  <div className="register-input-wrap">
+              <div className="auth-row">
+                <div className="auth-field">
+                  <label className="auth-label">First Name <span className="auth-required" /></label>
+                  <div className="auth-input-wrap has-left">
                     <input
+                      className="auth-input"
                       type="text"
-                      placeholder=""
+                      placeholder="Juan"
                       value={form.firstName}
                       onChange={(e) => update("firstName", e.target.value)}
                       required
                     />
-                    <MdPerson size={16} className="register-input-icon" />
+                    <span className="auth-input-icon"><MdPerson size={17} /></span>
                   </div>
                 </div>
-                <div className="register-field">
-                  <label>Last Name <span className="register-required" /></label>
-                  <div className="register-input-wrap">
+                <div className="auth-field">
+                  <label className="auth-label">Last Name <span className="auth-required" /></label>
+                  <div className="auth-input-wrap has-left">
                     <input
+                      className="auth-input"
                       type="text"
-                      placeholder=""
+                      placeholder="Dela Cruz"
                       value={form.lastName}
                       onChange={(e) => update("lastName", e.target.value)}
                       required
                     />
-                    <MdPerson size={16} className="register-input-icon" />
+                    <span className="auth-input-icon"><MdPerson size={17} /></span>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="register-section">
-              <div className="register-section-header">
-                <div className="register-section-icon academic"><MdBook size={14} /></div>
-                <span className="register-section-title">Academic Details</span>
+            <div className="auth-section">
+              <div className="auth-section-header">
+                <span className="auth-section-label">Academic Details</span>
               </div>
-              <div className="register-field">
-                <label>School ID <span className="register-required" /></label>
-                <div className="register-input-wrap">
+              <div className="auth-field">
+                <label className="auth-label">School ID <span className="auth-required" /></label>
+                <div className="auth-input-wrap has-left">
                   <input
+                    className="auth-input"
                     type="text"
                     placeholder="e.g. 24D-00001"
                     value={form.schoolId}
                     onChange={(e) => update("schoolId", e.target.value)}
                     required
                   />
-                  <MdBadge size={16} className="register-input-icon" />
+                  <span className="auth-input-icon"><MdBadge size={17} /></span>
                 </div>
               </div>
-              <div className="register-row register-row-3">
-                <div className="register-field">
-                  <label>Course</label>
-                  <div className="register-input-wrap">
-                    <select value={form.course} onChange={(e) => update("course", e.target.value)}>
-                      <option value="">Select course</option>
+              <div className="auth-row auth-row-3">
+                <div className="auth-field">
+                  <label className="auth-label">Course</label>
+                  <div className="auth-input-wrap has-left">
+                    <select className="auth-input" value={form.course} onChange={(e) => update("course", e.target.value)}>
+                      <option value="">Course</option>
                       {COURSES.map((c) => <option key={c}>{c}</option>)}
                     </select>
-                    <MdBook size={16} className="register-input-icon" />
+                    <span className="auth-input-icon"><MdBook size={17} /></span>
                   </div>
                 </div>
-                <div className="register-field">
-                  <label>Year</label>
-                  <div className="register-input-wrap">
-                    <select value={form.year} onChange={(e) => update("year", e.target.value)}>
-                      <option value="">Select year</option>
+                <div className="auth-field">
+                  <label className="auth-label">Year</label>
+                  <div className="auth-input-wrap has-left">
+                    <select className="auth-input" value={form.year} onChange={(e) => update("year", e.target.value)}>
+                      <option value="">Year</option>
                       {YEARS.map((y) => <option key={y}>{y}</option>)}
                     </select>
-                    <MdCalendarToday size={16} className="register-input-icon" />
+                    <span className="auth-input-icon"><MdCalendarToday size={17} /></span>
                   </div>
                 </div>
-                <div className="register-field">
-                  <label>Section</label>
-                  <div className="register-input-wrap">
+                <div className="auth-field">
+                  <label className="auth-label">Section</label>
+                  <div className="auth-input-wrap has-left">
                     <input
+                      className="auth-input"
                       type="text"
                       placeholder="e.g. A, 3B"
                       value={form.section}
                       onChange={(e) => update("section", e.target.value)}
                     />
-                    <MdAssignment size={16} className="register-input-icon" />
+                    <span className="auth-input-icon"><MdAssignment size={17} /></span>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="register-section">
-              <div className="register-section-header">
-                <div className="register-section-icon security"><MdLock size={14} /></div>
-                <span className="register-section-title">Account Security</span>
+            <div className="auth-section">
+              <div className="auth-section-header">
+                <span className="auth-section-label">Account Security</span>
               </div>
-              <div className="register-field">
-                <label>Email <span className="register-required" /></label>
-                <div className="register-input-wrap">
+              <div className="auth-field">
+                <label className="auth-label">Email <span className="auth-required" /></label>
+                <div className="auth-input-wrap has-left">
                   <input
+                    className="auth-input"
                     type="email"
                     placeholder="your.email@slsu.edu.ph"
                     value={form.email}
                     onChange={(e) => update("email", e.target.value)}
                     required
                   />
-                  <MdEmail size={16} className="register-input-icon" />
+                  <span className="auth-input-icon"><MdEmail size={17} /></span>
                 </div>
               </div>
-              <div className="register-row">
-                <div className="register-field">
-                  <label>Password <span className="register-required" /></label>
-                  <div className="register-input-wrap">
+              <div className="auth-row">
+                <div className="auth-field">
+                  <label className="auth-label">Password <span className="auth-required" /></label>
+                  <div className="auth-input-wrap has-left has-toggle">
                     <input
+                      className="auth-input"
                       type={showPassword ? "text" : "password"}
                       placeholder="Min. 8 characters"
                       value={form.password}
                       onChange={(e) => update("password", e.target.value)}
                       required
                     />
-                    <button type="button" className="register-password-toggle" onClick={() => setShowPassword(!showPassword)} tabIndex={-1}>
+                    <span className="auth-input-icon"><MdLock size={17} /></span>
+                    <button type="button" className="auth-password-toggle" onClick={() => setShowPassword(!showPassword)} tabIndex={-1}>
                       {showPassword ? <MdVisibilityOff size={18} /> : <MdVisibility size={18} />}
                     </button>
                   </div>
                   {form.password.length > 0 && (
-                    <div className="password-requirements">
-                      <div className={`password-req-item ${passwordRequirements.minLength ? "met" : "unmet"}`}>
+                    <div className="auth-reqs">
+                      <div className={`auth-req ${passwordRequirements.minLength ? "met" : "unmet"}`}>
                         {passwordRequirements.minLength ? <MdCheckCircle size={14} /> : <MdClose size={14} />}
                         <span>Minimum 8 characters</span>
                       </div>
-                      <div className={`password-req-item ${passwordRequirements.hasUppercase ? "met" : "unmet"}`}>
+                      <div className={`auth-req ${passwordRequirements.hasUppercase ? "met" : "unmet"}`}>
                         {passwordRequirements.hasUppercase ? <MdCheckCircle size={14} /> : <MdClose size={14} />}
                         <span>At least one uppercase letter</span>
                       </div>
-                      <div className={`password-req-item ${passwordRequirements.hasLowercase ? "met" : "unmet"}`}>
+                      <div className={`auth-req ${passwordRequirements.hasLowercase ? "met" : "unmet"}`}>
                         {passwordRequirements.hasLowercase ? <MdCheckCircle size={14} /> : <MdClose size={14} />}
                         <span>At least one lowercase letter</span>
                       </div>
-                      <div className={`password-req-item ${passwordRequirements.hasNumber ? "met" : "unmet"}`}>
+                      <div className={`auth-req ${passwordRequirements.hasNumber ? "met" : "unmet"}`}>
                         {passwordRequirements.hasNumber ? <MdCheckCircle size={14} /> : <MdClose size={14} />}
                         <span>At least one number</span>
                       </div>
                     </div>
                   )}
                 </div>
-                <div className="register-field">
-                  <label>Confirm Password <span className="register-required" /></label>
-                  <div className="register-input-wrap">
+                <div className="auth-field">
+                  <label className="auth-label">Confirm Password <span className="auth-required" /></label>
+                  <div className="auth-input-wrap has-left has-toggle">
                     <input
+                      className="auth-input"
                       type={showConfirm ? "text" : "password"}
                       placeholder="Repeat password"
                       value={form.confirmPassword}
                       onChange={(e) => update("confirmPassword", e.target.value)}
                       required
                     />
-                    <button type="button" className="register-password-toggle" onClick={() => setShowConfirm(!showConfirm)} tabIndex={-1}>
+                    <span className="auth-input-icon"><MdLock size={17} /></span>
+                    <button type="button" className="auth-password-toggle" onClick={() => setShowConfirm(!showConfirm)} tabIndex={-1}>
                       {showConfirm ? <MdVisibilityOff size={18} /> : <MdVisibility size={18} />}
                     </button>
                   </div>
@@ -292,19 +298,20 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            <button type="submit" className="register-submit" disabled={loading}>
+            <button type="submit" className="auth-submit" disabled={loading}>
               {loading ? (
-                <span className="register-submit-loading">Creating Account...</span>
-              ) : (
+                <span className="auth-spinner" aria-hidden="true" />
+              ) : null}
+              {loading ? "Creating account..." : (
                 <>
-                  Create Account
-                  <MdArrowForward size={18} />
+                  Create account
+                  <MdArrowForward size={17} />
                 </>
               )}
             </button>
           </form>
 
-          <p className="register-login-link">
+          <p className="auth-footer">
             Already have an account? <Link to="/login">Sign in</Link>
           </p>
         </div>
