@@ -15,7 +15,6 @@ const queryClient = new QueryClient({
 });
 
 const LoginPage = lazy(() => import("./pages/LoginPage"));
-const RegisterPage = lazy(() => import("./pages/RegisterPage"));
 const ScannerHubPage = lazy(() => import("./pages/components/ScannerHubPage"));
 const TransactionsPage = lazy(() => import("./pages/TransactionsPage"));
 const CatalogPage = lazy(() => import("./pages/CatalogPage"));
@@ -111,7 +110,7 @@ function App() {
           <InstallPrompt />
           <Routes>
             <Route path="/login" element={<Suspense fallback={fullScreenFallback}><GuestRoute><LoginPage /></GuestRoute></Suspense>} />
-            <Route path="/register" element={<Suspense fallback={fullScreenFallback}><GuestRoute><RegisterPage /></GuestRoute></Suspense>} />
+            <Route path="/register" element={<Suspense fallback={fullScreenFallback}><GuestRoute><LoginPage /></GuestRoute></Suspense>} />
             <Route path="/attend/kiosk" element={<Suspense fallback={fullScreenFallback}><AttendanceKioskPage /></Suspense>} />
             <Route path="/" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
               <Route index element={<IndexRedirect />} />
