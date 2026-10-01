@@ -1,38 +1,20 @@
 import { useState, useCallback, useMemo } from "react";
 import { api } from "../services/api";
 import { useBorrowed, useReturned, useTransactionStats } from "../hooks/useQueries";
-import { COURSES } from "../constants/courses";
+import { COURSES, YEARS } from "../constants/courses";
 import { toDate, formatDate, getRemainingQuantity, timeAgo, getInitials, getAvatarColor, getOverdueInfo, sortTransactions as sortItems } from "../utils/helpers";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Modal from "../components/ui/Modal";
 import Pagination from "../components/ui/Pagination";
 import LoadError from "../components/ui/LoadError";
 import StatStrip from "../components/ui/StatStrip";
+import ExportReportModal from "../components/ui/ExportReportModal";
+import { DATE_RANGE_OPTIONS, rangeToParams, buildExportQuery } from "../components/ui/exportReport";
 import toast from "react-hot-toast";
 import "../styles/pages/tables.css";
 import ViewToggle from "../components/ui/ViewToggle";
 
 const PAGE_LIMIT = 25;
-
-function getDateParams(range) {
-  if (!range || range === "all") return {};
-  const now = new Date();
-  if (range === "today") {
-    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    return { dateFrom: start.toISOString() };
-  }
-  if (range === "week") {
-    const start = new Date(now);
-    start.setDate(start.getDate() - 7);
-    return { dateFrom: start.toISOString() };
-  }
-  if (range === "month") {
-    const start = new Date(now);
-    start.setMonth(start.getMonth() - 1);
-    return { dateFrom: start.toISOString() };
-  }
-  return {};
-}
 
 const SORT_OPTIONS = [
   { value: "date-desc", label: "Newest First" },
@@ -43,48 +25,52 @@ const SORT_OPTIONS = [
   { value: "qty-asc", label: "Qty Low-High" },
 ];
 
-const DATE_RANGES = [
-  { value: "all", label: "All Time" },
-  { value: "today", label: "Today" },
-  { value: "week", label: "This Week" },
-  { value: "month", label: "This Month" },
-];
-
 export default function TransactionsPage() {
   const [activeTab, setActiveTab] = useState("borrowed");
   const [search, setSearch] = useState("");
   const [filterCourse, setFilterCourse] = useState("All");
+  const [filterYear, setFilterYear] = useState("All");
   const [sortBy, setSortBy] = useState("date-desc");
   const [dateRange, setDateRange] = useState("all");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
   const [viewMode, setViewMode] = useState("list");
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [page, setPage] = useState(1);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
-  const [prevResetKeys, setPrevResetKeys] = useState([activeTab, search, filterCourse, dateRange]);
+  const [prevResetKeys, setPrevResetKeys] = useState(
+    [activeTab, search, filterCourse, filterYear, dateRange, customFrom, customTo]
+  );
   if (
     prevResetKeys[0] !== activeTab ||
     prevResetKeys[1] !== search ||
     prevResetKeys[2] !== filterCourse ||
-    prevResetKeys[3] !== dateRange
+    prevResetKeys[3] !== filterYear ||
+    prevResetKeys[4] !== dateRange ||
+    prevResetKeys[5] !== customFrom ||
+    prevResetKeys[6] !== customTo
   ) {
-    setPrevResetKeys([activeTab, search, filterCourse, dateRange]);
+    setPrevResetKeys([activeTab, search, filterCourse, filterYear, dateRange, customFrom, customTo]);
     setPage(1);
   }
 
   const params = useMemo(() => {
-    const dateParams = getDateParams(dateRange);
+    const dateParams = rangeToParams(dateRange, customFrom, customTo);
     const p = {
       page: String(page),
       limit: String(PAGE_LIMIT),
       search: search || "",
       course: filterCourse !== "All" ? filterCourse : "",
+      year: filterYear !== "All" ? filterYear : "",
       ...dateParams,
     };
     return "?" + Object.entries(p)
       .filter(([, v]) => v !== "")
       .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
       .join("&");
-  }, [page, search, filterCourse, dateRange]);
+  }, [page, search, filterCourse, filterYear, dateRange, customFrom, customTo]);
 
   const {
     data: borrowedData,
@@ -140,12 +126,31 @@ export default function TransactionsPage() {
       ? (borrowedFailed ? borrowedError : null)
       : (returnedFailed ? returnedError : null);
 
-  const downloadReport = async () => {
+  const exportFilters = useMemo(() => ({
+    tab: activeTab,
+    course: filterCourse,
+    year: filterYear,
+    dateRange,
+    dateFrom: customFrom,
+    dateTo: customTo,
+    search,
+    sort: sortBy,
+  }), [activeTab, filterCourse, filterYear, dateRange, customFrom, customTo, search, sortBy]);
+
+  const handleExport = async (draft) => {
+    setExporting(true);
     try {
-      await api.downloadReport(activeTab);
+      const query = buildExportQuery(draft);
+      const qs = Object.entries(query)
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+        .join("&");
+      await api.downloadReport(draft.tab, qs);
+      setExportOpen(false);
       toast.success("Report downloaded!");
     } catch (err) {
       toast.error(err.message || "Download failed");
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -169,7 +174,7 @@ export default function TransactionsPage() {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
         Refresh
       </button>
-      <button className="hero-action-btn primary" onClick={downloadReport}>
+      <button className="hero-action-btn primary" onClick={() => setExportOpen(true)}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Download Report
       </button>
@@ -223,11 +228,35 @@ export default function TransactionsPage() {
             {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
           <select className="transactions-date-filter" value={dateRange} onChange={(e) => setDateRange(e.target.value)}>
-            {DATE_RANGES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+            {DATE_RANGE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
           </select>
+          {dateRange === "custom" && (
+            <>
+              <input
+                type="date"
+                className="transactions-custom-date"
+                aria-label="From date"
+                value={customFrom}
+                max={customTo || undefined}
+                onChange={(e) => setCustomFrom(e.target.value)}
+              />
+              <input
+                type="date"
+                className="transactions-custom-date"
+                aria-label="To date"
+                value={customTo}
+                min={customFrom || undefined}
+                onChange={(e) => setCustomTo(e.target.value)}
+              />
+            </>
+          )}
           <select className="transactions-course-filter" value={filterCourse} onChange={(e) => setFilterCourse(e.target.value)}>
             <option value="All">All Courses</option>
             {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select className="transactions-year-filter" value={filterYear} onChange={(e) => setFilterYear(e.target.value)}>
+            <option value="All">All Years</option>
+            {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
           <div className="transactions-search">
             <svg className="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
@@ -254,7 +283,7 @@ export default function TransactionsPage() {
             )}
           </svg>
           <h3>No {activeTab} records found</h3>
-          <p>{search || filterCourse !== "All" || dateRange !== "all" ? "Try adjusting your filters" : `No ${activeTab} transactions yet`}</p>
+          <p>{search || filterCourse !== "All" || filterYear !== "All" || dateRange !== "all" ? "Try adjusting your filters" : `No ${activeTab} transactions yet`}</p>
         </div>
       ) : viewMode === "grid" ? (
         <div className="transactions-grid">
@@ -538,6 +567,14 @@ export default function TransactionsPage() {
           })()}
         </Modal>
       )}
+
+      <ExportReportModal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        initialFilters={exportFilters}
+        onExport={handleExport}
+        exporting={exporting}
+      />
     </section>
   );
 }

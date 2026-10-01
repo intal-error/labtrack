@@ -3,6 +3,7 @@ const { supabase } = require("../config/supabase");
 const { parsePagination, paginatedResponse } = require("../middleware/pagination");
 const { randomUUID } = require("crypto");
 const { transformKeys } = require("../utils/transformKeys");
+const { getRemainingQuantity, isOpenBorrow, queryTransactions } = require("../utils/transactionFilters");
 
 function numberOr(value, fallback = 0) {
   const parsed = Number(value);
@@ -16,17 +17,6 @@ function getAvailableQuantity(item) {
   }
   const quantity = Math.max(0, numberOr(item?.quantity));
   return (item?.status || "").toLowerCase() === "borrowed" ? 0 : quantity;
-}
-
-function getRemainingQuantity(t) {
-  const ret = t?.returned_quantity ?? t?.returnedQuantity;
-  return Math.max(0, numberOr(t?.quantity, 1) - numberOr(ret));
-}
-
-function isOpenBorrow(t) {
-  if (t?.action !== "borrowed") return false;
-  if ((t?.status || "").toLowerCase() === "returned") return false;
-  return getRemainingQuantity(t) > 0;
 }
 
 async function createFineForLateReturn(borrowData, transactionId) {
@@ -105,36 +95,7 @@ async function enrichWithProfileURL(items) {
 
 const getBorrowed = async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from("transactions").select("*")
-      .eq("action", "borrowed");
-    if (error) throw new Error(error.message);
-
-    let items = (data || [])
-      .filter((d) => isOpenBorrow(d))
-      .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
-
-    if (req.query.search) {
-      const q = req.query.search.toLowerCase();
-      items = items.filter((i) =>
-        `${i.first_name || ""} ${i.last_name || ""}`.toLowerCase().includes(q) ||
-        (i.school_id || "").toLowerCase().includes(q) ||
-        (i.item_name || "").toLowerCase().includes(q) ||
-        (i.course || "").toLowerCase().includes(q)
-      );
-    }
-    if (req.query.course) {
-      items = items.filter((i) => i.course === req.query.course || i.equipment_course === req.query.course);
-    }
-    if (req.query.dateFrom) {
-      const from = new Date(req.query.dateFrom);
-      items = items.filter((i) => { const d = new Date(i.timestamp); return !isNaN(d.getTime()) && d >= from; });
-    }
-    if (req.query.dateTo) {
-      const to = new Date(req.query.dateTo);
-      to.setHours(23, 59, 59, 999);
-      items = items.filter((i) => { const d = new Date(i.timestamp); return !isNaN(d.getTime()) && d <= to; });
-    }
+    let items = await queryTransactions("borrowed", req.query);
 
     const { page, limit, paginate } = parsePagination(req);
     const total = items.length;
@@ -154,55 +115,7 @@ const getBorrowed = async (req, res) => {
 
 const getReturned = async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from("transactions").select("*")
-      .eq("action", "returned");
-    if (error) throw new Error(error.message);
-
-    let items = (data || [])
-      .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
-
-    const missingDates = items.filter((i) => !i.borrowed_at && i.original_transaction_id);
-    if (missingDates.length > 0) {
-      const borrowIds = [...new Set(missingDates.map((i) => i.original_transaction_id))];
-      const { data: borrowRecords } = await supabase
-        .from("transactions").select("*").in("id", borrowIds);
-      const borrowMap = {};
-      if (borrowRecords) borrowRecords.forEach((r) => { borrowMap[r.id] = r; });
-      items = items.map((item) => {
-        if (!item.borrowed_at && item.original_transaction_id && borrowMap[item.original_transaction_id]) {
-          const borrow = borrowMap[item.original_transaction_id];
-          return {
-            ...item,
-            borrowed_at: borrow.borrowed_at || borrow.timestamp || null,
-            due_date: item.due_date || borrow.due_date || null,
-          };
-        }
-        return item;
-      });
-    }
-
-    if (req.query.search) {
-      const q = req.query.search.toLowerCase();
-      items = items.filter((i) =>
-        `${i.first_name || ""} ${i.last_name || ""}`.toLowerCase().includes(q) ||
-        (i.school_id || "").toLowerCase().includes(q) ||
-        (i.item_name || "").toLowerCase().includes(q) ||
-        (i.course || "").toLowerCase().includes(q)
-      );
-    }
-    if (req.query.course) {
-      items = items.filter((i) => i.course === req.query.course || i.equipment_course === req.query.course);
-    }
-    if (req.query.dateFrom) {
-      const from = new Date(req.query.dateFrom);
-      items = items.filter((i) => { const d = new Date(i.timestamp); return !isNaN(d.getTime()) && d >= from; });
-    }
-    if (req.query.dateTo) {
-      const to = new Date(req.query.dateTo);
-      to.setHours(23, 59, 59, 999);
-      items = items.filter((i) => { const d = new Date(i.timestamp); return !isNaN(d.getTime()) && d <= to; });
-    }
+    let items = await queryTransactions("returned", req.query);
 
     const { page, limit, paginate } = parsePagination(req);
     const total = items.length;

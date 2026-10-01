@@ -99,7 +99,7 @@ export const api = {
 
   getReportSummary: (params) => request(`/reports/summary${toQuery(params)}`),
 
-  downloadReport: async (type) => {
+  downloadReport: async (type, params = "") => {
     let headers = {};
     if (auth.currentUser) {
       try {
@@ -109,9 +109,10 @@ export const api = {
     }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const query = params ? `?${params}` : "";
     let res;
     try {
-      res = await fetch(`${API_URL}/reports/${type}`, { headers, signal: controller.signal });
+      res = await fetch(`${API_URL}/reports/${type}${query}`, { headers, signal: controller.signal });
     } catch {
       throw new Error("Server is offline. Please try again later.");
     } finally {
@@ -120,9 +121,11 @@ export const api = {
     if (!res.ok) throw new Error("Download failed");
     const blob = await res.blob();
     const url = window.URL.createObjectURL(blob);
+    const disposition = res.headers.get("Content-Disposition") || "";
+    const match = disposition.match(/filename="?([^";]+)"?/i);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${type}_report.xlsx`;
+    a.download = match?.[1] || `${type}_report.xlsx`;
     a.click();
     window.URL.revokeObjectURL(url);
   },
@@ -305,7 +308,8 @@ export const api = {
   timeOut: (data) => kioskRequest("/attendance/time-out", { method: "POST", body: JSON.stringify(data) }),
   autoScan: (data) => kioskRequest("/attendance/auto-scan", { method: "POST", body: JSON.stringify(data) }),
   getActiveStudents: (params) => request(`/attendance/active${toQuery(params)}`),
-  getTodayAttendance: () => request("/attendance/today"),
+  getTodayAttendance: (params) => request(`/attendance/today${toQuery(params)}`),
+  getAttendanceFacets: () => request("/attendance/facets"),
   getDailyLog: (date) => request(`/attendance/daily-log/${date}`),
   getAttendanceHistory: (params) => request(`/attendance/history?${params}`),
   getRoomAttendanceHistory: (roomId, params) => request(`/attendance/room/${roomId}/history?${params}`),
@@ -323,9 +327,10 @@ export const api = {
     }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const query = params ? `?${params}` : "";
     let res;
     try {
-      res = await fetch(`${API_URL}/attendance/export?${params}`, { headers, signal: controller.signal });
+      res = await fetch(`${API_URL}/attendance/export${query}`, { headers, signal: controller.signal });
     } catch {
       throw new Error("Server is offline. Please try again later.");
     } finally {
@@ -334,9 +339,11 @@ export const api = {
     if (!res.ok) throw new Error("Export failed");
     const blob = await res.blob();
     const url = window.URL.createObjectURL(blob);
+    const disposition = res.headers.get("Content-Disposition") || "";
+    const match = disposition.match(/filename="?([^";]+)"?/i);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `lab_attendance.xlsx`;
+    a.download = match?.[1] || "lab_attendance.xlsx";
     a.click();
     window.URL.revokeObjectURL(url);
   },

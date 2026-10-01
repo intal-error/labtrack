@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../services/api";
-import { formatDuration, formatTime, getTodayString } from "../utils/attendanceHelpers";
+import { formatDuration, formatTime } from "../utils/attendanceHelpers";
+import ExportReportModal from "../components/ui/ExportReportModal";
+import { buildAttendanceQuery } from "../components/ui/exportReport";
 import RoomManagementTab from "../components/tabs/RoomManagementTab";
 import StatStrip from "../components/ui/StatStrip";
 import toast from "react-hot-toast";
@@ -44,6 +46,24 @@ export default function AttendanceLogsPage() {
   const [editSubject, setEditSubject] = useState("");
   const [editProfessor, setEditProfessor] = useState("");
 
+  // Report export
+  const [facets, setFacets] = useState({ courses: [], years: [], sections: [] });
+  const [filterCourse, setFilterCourse] = useState("");
+  const [filterYear, setFilterYear] = useState("");
+  const [filterSection, setFilterSection] = useState("");
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  useEffect(() => {
+    // Full-table scan -- only pay for it when the Today tab actually shows filters.
+    if (activeTab !== "today") return;
+    let cancelled = false;
+    api.getAttendanceFacets()
+      .then((data) => { if (!cancelled && data) setFacets(data); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [activeTab]);
+
   const loadStats = useCallback(async () => {
     try {
       const data = await api.getAttendanceStats();
@@ -66,12 +86,16 @@ export default function AttendanceLogsPage() {
 
   const loadToday = useCallback(async () => {
     try {
-      const data = await api.getTodayAttendance();
+      const params = new URLSearchParams();
+      if (filterCourse) params.set("course", filterCourse);
+      if (filterYear) params.set("year", filterYear);
+      if (filterSection) params.set("section", filterSection);
+      const data = await api.getTodayAttendance(params.toString());
       setTodayRecords(data);
     } catch (err) {
       console.error("Failed to load today records:", err);
     }
-  }, []);
+  }, [filterCourse, filterYear, filterSection]);
 
   useEffect(() => {
     api.getAttendanceStats()
@@ -87,13 +111,17 @@ export default function AttendanceLogsPage() {
         console.error("Failed to load active students:", err);
       }
     })();
-    api.getTodayAttendance()
-      .then(setTodayRecords)
-      .catch((err) => console.error("Failed to load today records:", err));
     api.getRooms()
       .then(setRooms)
       .catch((err) => console.error("Failed to load rooms:", err));
   }, []);
+
+  // Loads today on mount and again whenever a today-tab filter changes.
+  // Deferred so rapid filter changes settle before hitting the API.
+  useEffect(() => {
+    const timer = setTimeout(loadToday, 0);
+    return () => clearTimeout(timer);
+  }, [loadToday]);
 
   // Refetch rooms when switching to active tab (picks up newly created rooms)
   useEffect(() => {
@@ -110,9 +138,21 @@ export default function AttendanceLogsPage() {
     return () => clearInterval(interval);
   }, [activeTab, loadActive]);
 
-  function handleExportToday() {
-    const today = getTodayString();
-    api.exportAttendance(`date=${today}`).catch(() => toast.error("Export failed"));
+  async function handleExport(draft) {
+    setExporting(true);
+    try {
+      const query = buildAttendanceQuery({ ...draft, dateRange: draft.dateRange || "today" });
+      const qs = Object.entries(query)
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+        .join("&");
+      await api.exportAttendance(qs);
+      setExportOpen(false);
+      toast.success("Report downloaded!");
+    } catch (err) {
+      toast.error(err.message || "Download failed");
+    } finally {
+      setExporting(false);
+    }
   }
 
   async function openEditModal(record) {
@@ -266,13 +306,48 @@ export default function AttendanceLogsPage() {
           <>
             <div className="attendance-toolbar">
               <div className="attendance-toolbar-left">
+                {facets.courses.length > 0 && (
+                  <select
+                    className="attendance-filter-select"
+                    value={filterCourse}
+                    onChange={(e) => setFilterCourse(e.target.value)}
+                  >
+                    <option value="">All Courses</option>
+                    {facets.courses.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                )}
+                {facets.years.length > 0 && (
+                  <select
+                    className="attendance-filter-select"
+                    value={filterYear}
+                    onChange={(e) => setFilterYear(e.target.value)}
+                  >
+                    <option value="">All Years</option>
+                    {facets.years.map((y) => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                )}
+                {facets.sections.length > 0 && (
+                  <select
+                    className="attendance-filter-select"
+                    value={filterSection}
+                    onChange={(e) => setFilterSection(e.target.value)}
+                  >
+                    <option value="">All Sections</option>
+                    {facets.sections.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                )}
+                {(filterCourse || filterYear || filterSection) && (
+                  <button className="btn btn-secondary" onClick={() => { setFilterCourse(""); setFilterYear(""); setFilterSection(""); }}>
+                    Clear Filters
+                  </button>
+                )}
                 <span className="attendance-result-count">
                   {todayRecords.length} record{todayRecords.length !== 1 ? "s" : ""} today
                 </span>
               </div>
               <div className="attendance-toolbar-right">
-                <button className="btn btn-primary" onClick={handleExportToday}>
-                  <MdFileDownload size={14} /> Export Today
+                <button className="btn btn-primary" onClick={() => setExportOpen(true)}>
+                  <MdFileDownload size={14} /> Download Report
                 </button>
               </div>
             </div>
@@ -374,6 +449,26 @@ export default function AttendanceLogsPage() {
           </div>
         </div>
       )}
+
+      <ExportReportModal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        initialFilters={{
+          course: filterCourse || "All",
+          year: filterYear || "All",
+          section: filterSection || "All",
+          dateRange: "today",
+        }}
+        onExport={handleExport}
+        exporting={exporting}
+        options={{
+          typeTabs: [],
+          showSection: true,
+          sectionOptions: facets.sections,
+          courseOptions: facets.courses.length ? facets.courses : undefined,
+          yearOptions: facets.years.length ? facets.years : undefined,
+        }}
+      />
     </div>
   );
 }

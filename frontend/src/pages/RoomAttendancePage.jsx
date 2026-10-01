@@ -3,6 +3,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { formatDuration, formatTime } from "../utils/attendanceHelpers";
 import { MdArrowBack, MdSearch, MdFileDownload, MdMeetingRoom } from "react-icons/md";
+import ExportReportModal from "../components/ui/ExportReportModal";
+import { buildAttendanceQuery } from "../components/ui/exportReport";
 import toast from "react-hot-toast";
 import "../styles/pages/attendance.css";
 
@@ -20,8 +22,13 @@ export default function RoomAttendancePage() {
   const [dateTo, setDateTo] = useState("");
   const [filterYear, setFilterYear] = useState("");
   const [filterCourse, setFilterCourse] = useState("");
+  const [filterSection, setFilterSection] = useState("");
   const [years, setYears] = useState([]);
   const [courses, setCourses] = useState([]);
+  const [sections, setSections] = useState([]);
+  const [roomError, setRoomError] = useState("");
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -36,18 +43,24 @@ export default function RoomAttendancePage() {
         if (search) params.set("student", search);
         if (filterYear) params.set("year", filterYear);
         if (filterCourse) params.set("course", filterCourse);
+        if (filterSection) params.set("section", filterSection);
         params.set("page", page);
         params.set("limit", "50");
         const data = await api.getRoomAttendanceHistory(roomId, params.toString());
         if (cancelled) return;
+        setRoomError("");
         setRecords(data.records || []);
         setTotal(data.total || 0);
         setTotalPages(data.totalPages || 1);
         if (data.roomName) setRoomName(data.roomName);
         if (data.years) setYears(data.years);
         if (data.courses) setCourses(data.courses);
+        if (data.sections) setSections(data.sections);
       } catch (err) {
-        if (!cancelled) toast.error(err.message || "Failed to load room attendance");
+        if (cancelled) return;
+        const message = err.message || "Failed to load room attendance";
+        setRoomError(message);
+        toast.error(message);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -56,7 +69,7 @@ export default function RoomAttendancePage() {
       cancelled = true;
       clearTimeout(showLoading);
     };
-  }, [roomId, dateFrom, dateTo, search, filterYear, filterCourse, page]);
+  }, [roomId, dateFrom, dateTo, search, filterYear, filterCourse, filterSection, page]);
 
   const [prevRoomId, setPrevRoomId] = useState(roomId);
   if (prevRoomId !== roomId) {
@@ -67,17 +80,30 @@ export default function RoomAttendancePage() {
     setDateTo("");
     setFilterYear("");
     setFilterCourse("");
+    setFilterSection("");
+    setRoomError("");
   }
 
-  function handleExport() {
-    const params = new URLSearchParams();
-    if (dateFrom) params.set("from", dateFrom);
-    if (dateTo) params.set("to", dateTo);
-    if (search) params.set("student", search);
-    if (filterYear) params.set("year", filterYear);
-    if (filterCourse) params.set("course", filterCourse);
-    api.exportAttendance(params.toString()).catch(() => toast.error("Export failed"));
-  }
+  const handleExport = async (draft) => {
+    setExporting(true);
+    try {
+      const query = buildAttendanceQuery({
+        ...draft,
+        // Always scope the download to this room, whatever the dialog shows.
+        roomId,
+      });
+      const qs = Object.entries(query)
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+        .join("&");
+      await api.exportAttendance(qs);
+      setExportOpen(false);
+      toast.success("Report downloaded!");
+    } catch (err) {
+      toast.error(err.message || "Download failed");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div className="attendance-page">
@@ -107,8 +133,13 @@ export default function RoomAttendancePage() {
             </div>
           </div>
           <div className="attendance-toolbar-right">
-            <button className="btn btn-primary" onClick={handleExport}>
-              <MdFileDownload size={14} /> Export Excel
+            <button
+              className="btn btn-primary"
+              disabled={Boolean(roomError)}
+              title={roomError || undefined}
+              onClick={() => setExportOpen(true)}
+            >
+              <MdFileDownload size={14} /> Download Report
             </button>
           </div>
         </div>
@@ -143,8 +174,18 @@ export default function RoomAttendancePage() {
                 {courses.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             )}
-            {(search || dateFrom || dateTo || filterYear || filterCourse) && (
-              <button className="btn btn-secondary" onClick={() => { setSearch(""); setDateFrom(""); setDateTo(""); setFilterYear(""); setFilterCourse(""); setPage(1); }}>
+            {sections.length > 0 && (
+              <select
+                className="attendance-filter-select"
+                value={filterSection}
+                onChange={(e) => { setFilterSection(e.target.value); setPage(1); }}
+              >
+                <option value="">All Sections</option>
+                {sections.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            )}
+            {(search || dateFrom || dateTo || filterYear || filterCourse || filterSection) && (
+              <button className="btn btn-secondary" onClick={() => { setSearch(""); setDateFrom(""); setDateTo(""); setFilterYear(""); setFilterCourse(""); setFilterSection(""); setPage(1); }}>
                 Clear Filters
               </button>
             )}
@@ -160,6 +201,12 @@ export default function RoomAttendancePage() {
           <div className="attendance-empty">
             <div className="spinner-lg" />
             <h3>Loading records...</h3>
+          </div>
+        ) : roomError ? (
+          <div className="attendance-empty">
+            <div className="attendance-empty-icon"><MdMeetingRoom size={28} /></div>
+            <h3>Couldn&rsquo;t load this room</h3>
+            <p>{roomError}</p>
           </div>
         ) : records.length === 0 ? (
           <div className="attendance-empty">
@@ -226,6 +273,29 @@ export default function RoomAttendancePage() {
           </>
         )}
       </div>
+
+      <ExportReportModal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        initialFilters={{
+          course: filterCourse || "All",
+          year: filterYear || "All",
+          section: filterSection || "All",
+          dateRange: dateFrom || dateTo ? "custom" : "all",
+          dateFrom,
+          dateTo,
+          search,
+        }}
+        onExport={handleExport}
+        exporting={exporting}
+        options={{
+          typeTabs: [],
+          showSection: true,
+          sectionOptions: sections,
+          courseOptions: courses.length ? courses : undefined,
+          yearOptions: years.length ? years : undefined,
+        }}
+      />
     </div>
   );
 }

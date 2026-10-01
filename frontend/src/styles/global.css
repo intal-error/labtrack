@@ -23,6 +23,7 @@ ul{list-style:none}
 .btn-green{background:var(--green);color:#000}
 .btn-green:hover{background:var(--green-dark);color:#000}
 .btn-green:disabled{opacity:.6;cursor:not-allowed}
+.btn-primary:disabled{opacity:.6;cursor:not-allowed}
 body.dark .btn-green{color:#000}
 .btn-yellow{background:var(--yellow);color:#000}
 .btn-yellow:hover{background:var(--yellow-hover)}
@@ -48,6 +49,32 @@ body.dark input:focus,body.dark select:focus{box-shadow:0 0 3px rgba(67,160,71,.
 body.dark .modal-content h2{color:var(--green)}
 .modal-content form{display:flex;flex-direction:column;gap:12px}
 .modal-content form input,.modal-content form select{width:100%;padding:12px;font-size:15px}
+
+/* Export Report Modal - shared by transactions and attendance */
+.export-modal{display:flex;flex-direction:column;gap:16px;min-width:340px}
+.export-modal-hint{margin:0;font-size:13px;color:var(--text-muted)}
+.export-modal-field{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}
+.export-modal-row{display:flex;gap:12px;flex-wrap:wrap}
+.export-modal-label{font-size:12px;font-weight:600;color:var(--text-muted)}
+.export-modal-select{padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--bg-card);color:var(--text);cursor:pointer;width:100%;color-scheme:light;transition:border .2s}
+.export-modal-select:focus{outline:none;border-color:var(--green);box-shadow:0 0 3px rgba(46,125,50,.3)}
+.export-modal-tabs{display:flex;gap:4px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:4px}
+.export-modal-tab{flex:1;padding:8px 12px;border:none;border-radius:6px;background:transparent;color:var(--text-muted);font-size:13px;font-weight:500;cursor:pointer;transition:all .2s}
+.export-modal-tab:hover{color:var(--text);background:var(--bg-card)}
+.export-modal-tab.active{background:var(--green);color:#000;font-weight:600}
+.export-modal-note{margin:0;padding:10px 12px;border-radius:8px;background:var(--bg);font-size:12px;color:var(--text-muted)}
+.export-modal-note strong{color:var(--text)}
+.export-modal-actions{display:flex;justify-content:flex-end;gap:8px;padding-top:4px;border-top:1px solid var(--border)}
+.export-modal-actions .btn:disabled{opacity:.6;cursor:not-allowed}
+body.dark .export-modal-select{background:#0f0f0f;border-color:#264d35;color:#FFFFFF;color-scheme:dark}
+body.dark .export-modal-tabs{background:#0a0a0a;border-color:#264d35}
+body.dark .export-modal-tab:hover{background:#1a1a1a}
+body.dark .export-modal-tab.active{background:var(--green);color:#fff}
+body.dark .export-modal-note{background:#0a0a0a}
+body.dark .export-modal-note strong{color:#FFFFFF}
+body.dark .export-modal-actions{border-color:#2a2a2a}
+@media(max-width:480px){.export-modal{min-width:0}}
+
 .catalog-actions{display:flex;gap:10px;margin-top:10px}
 .catalog-actions button{flex:1}
 .empty-state{text-align:center;color:var(--text-muted);padding:20px}

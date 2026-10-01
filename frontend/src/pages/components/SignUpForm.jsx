@@ -4,11 +4,9 @@ import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../../services/firebase";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
-import { COURSES } from "../../constants/courses";
+import { COURSES, YEARS } from "../../constants/courses";
 import { MdSchool, MdPerson, MdVisibility, MdVisibilityOff, MdEmail, MdLock, MdBadge, MdBook, MdCalendarToday, MdAssignment, MdArrowForward, MdClose, MdCheckCircle } from "react-icons/md";
 import toast from "react-hot-toast";
-
-const YEARS = ["1st Year", "2nd Year", "3rd Year", "4th Year"];
 
 export default function SignUpForm({ onSwitchToSignIn }) {
   const [showPassword, setShowPassword] = useState(false);

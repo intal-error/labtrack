@@ -8,6 +8,7 @@ const {
   autoScan,
   getActiveStudents,
   getTodayAttendance,
+  getAttendanceFacets,
   getDailyLog,
   getAttendanceHistory,
   getStudentAttendance,
@@ -36,6 +37,7 @@ router.get("/my/:schoolId", verifyToken, getMyAttendance);
 
 // Admin-only routes
 router.get("/active", verifyToken, authorize("admin"), getActiveStudents);
+router.get("/facets", verifyToken, authorize("admin"), getAttendanceFacets);
 router.get("/today", verifyToken, authorize("admin"), getTodayAttendance);
 router.get("/daily-log/:date", verifyToken, authorize("admin"), getDailyLog);
 router.get("/history", verifyToken, authorize("admin"), getAttendanceHistory);

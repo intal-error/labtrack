@@ -4,6 +4,15 @@ const ExcelJS = require("exceljs");
 const QRCode = require("qrcode");
 const { randomUUID } = require("crypto");
 const { transformKeys } = require("../utils/transformKeys");
+const {
+  applyAttendanceFilters,
+  applyAssignedCourse,
+  sortAttendanceAsc,
+  facet,
+  describeAttendanceFilters,
+  normRoom,
+} = require("../utils/attendanceFilters");
+const { slug } = require("../utils/exportUtils");
 
 const USERS = "users";
 
@@ -253,6 +262,7 @@ const getActiveStudents = async (req, res) => {
 const getTodayAttendance = async (req, res) => {
   try {
     const today = getTodayString();
+    const { course, year, section, subject, professor, labRoom, roomCode, student } = req.query;
 
     const { data: records, error } = await supabase
       .from("lab_attendance")
@@ -260,11 +270,8 @@ const getTodayAttendance = async (req, res) => {
       .eq("date", today);
     if (error) throw error;
 
-    let result = records || [];
-
-    if (req.adminAssignment?.assignedCourse) {
-      result = result.filter((r) => r.course === req.adminAssignment.assignedCourse);
-    }
+    const scoped = applyAssignedCourse(records || [], req.adminAssignment);
+    const result = applyAttendanceFilters(scoped, { course, year, section, subject, professor, labRoom, roomCode, student });
 
     result.sort((a, b) => {
       const tA = new Date(a.time_in || 0).getTime();
@@ -307,9 +314,31 @@ const getDailyLog = async (req, res) => {
   }
 };
 
+const getAttendanceFacets = async (req, res) => {
+  try {
+    const { data: records, error } = await supabase
+      .from("lab_attendance")
+      .select("course,year,section,subject,professor,lab_room,room_code");
+    if (error) throw error;
+
+    const scoped = applyAssignedCourse(records || [], req.adminAssignment);
+
+    res.json({
+      courses: facet(scoped, "course"),
+      years: facet(scoped, "year"),
+      sections: facet(scoped, "section"),
+      subjects: facet(scoped, "subject"),
+      professors: facet(scoped, "professor"),
+      rooms: [...new Set(scoped.map((r) => r.lab_room || r.room_code).filter(Boolean))].sort(),
+    });
+  } catch (err) {
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
+  }
+};
+
 const getAttendanceHistory = async (req, res) => {
   try {
-    const { from, to, course, year, subject, professor, labRoom, student, page = 1, limit = 50 } = req.query;
+    const { from, to, course, year, section, subject, professor, labRoom, student, page = 1, limit = 50 } = req.query;
 
     let query = supabase.from("lab_attendance").select("*");
     if (from) query = query.gte("date", from);
@@ -318,25 +347,10 @@ const getAttendanceHistory = async (req, res) => {
     const { data: records, error: fetchError } = await query;
     if (fetchError) throw fetchError;
 
-    let result = records || [];
-
-    if (course) result = result.filter((r) => r.course === course);
-    if (year) result = result.filter((r) => r.year === year);
-    if (subject) result = result.filter((r) => r.subject === subject);
-    if (professor) result = result.filter((r) => r.professor === professor);
-    if (labRoom) result = result.filter((r) => r.lab_room === labRoom);
-    if (student) {
-      const s = student.toLowerCase();
-      result = result.filter((r) =>
-        (r.first_name || "").toLowerCase().includes(s) ||
-        (r.last_name || "").toLowerCase().includes(s) ||
-        (r.student_school_id || "").toLowerCase().includes(s)
-      );
-    }
-
-    if (req.adminAssignment?.assignedCourse) {
-      result = result.filter((r) => r.course === req.adminAssignment.assignedCourse);
-    }
+    const result = applyAssignedCourse(
+      applyAttendanceFilters(records || [], { from, to, course, year, section, subject, professor, labRoom, student }),
+      req.adminAssignment
+    );
 
     result.sort((a, b) => {
       const dA = a.date || "";
@@ -363,7 +377,7 @@ const getAttendanceHistory = async (req, res) => {
 const getRoomAttendanceHistory = async (req, res) => {
   try {
     const { roomId } = req.params;
-    const { from, to, student, year, course, page = 1, limit = 50 } = req.query;
+    const { from, to, student, year, course, section, page = 1, limit = 50 } = req.query;
 
     const { data: roomData, error: roomError } = await supabase
       .from("lab_rooms")
@@ -379,16 +393,19 @@ const getRoomAttendanceHistory = async (req, res) => {
       .select("*");
     if (fetchError) throw fetchError;
 
-    const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const norm = normRoom;
     let roomRecords = (allRecords || []).filter((r) => norm(r.room_code) === norm(roomCode));
 
-    const uniqueYears = [...new Set(roomRecords.map((r) => r.year).filter(Boolean))].sort();
-    const uniqueCourses = [...new Set(roomRecords.map((r) => r.course).filter(Boolean))].sort();
+    const uniqueYears = facet(roomRecords, "year");
+    const uniqueCourses = facet(roomRecords, "course");
+    const uniqueSections = facet(roomRecords, "section");
+    const uniqueSubjects = facet(roomRecords, "subject");
 
-    if (from) roomRecords = roomRecords.filter((r) => r.date >= from);
-    if (to) roomRecords = roomRecords.filter((r) => r.date <= to);
-    if (year) roomRecords = roomRecords.filter((r) => (r.year || "").toLowerCase() === year.toLowerCase());
-    if (course) roomRecords = roomRecords.filter((r) => (r.course || "").toLowerCase() === course.toLowerCase());
+    if (from) roomRecords = roomRecords.filter((r) => (r.date || "") >= from);
+    if (to) roomRecords = roomRecords.filter((r) => (r.date || "") <= to);
+    if (year) roomRecords = roomRecords.filter((r) => String(r.year || "").toLowerCase() === year.toLowerCase());
+    if (course) roomRecords = roomRecords.filter((r) => String(r.course || "").toLowerCase() === course.toLowerCase());
+    if (section) roomRecords = roomRecords.filter((r) => String(r.section || "").toLowerCase() === section.toLowerCase());
     if (student) {
       const s = student.toLowerCase();
       roomRecords = roomRecords.filter((r) =>
@@ -413,7 +430,7 @@ const getRoomAttendanceHistory = async (req, res) => {
     const start = (pageNum - 1) * limitNum;
     const paged = roomRecords.slice(start, start + limitNum);
 
-    res.json({ records: transformKeys(paged), total, page: pageNum, totalPages: Math.ceil(total / limitNum), roomName, years: uniqueYears, courses: uniqueCourses });
+    res.json({ records: transformKeys(paged), total, page: pageNum, totalPages: Math.ceil(total / limitNum), roomName, years: uniqueYears, courses: uniqueCourses, sections: uniqueSections, subjects: uniqueSubjects });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -635,7 +652,29 @@ const deleteRecord = async (req, res) => {
 
 const exportToExcel = async (req, res) => {
   try {
-    const { from, to, course, year, subject, professor, labRoom, student, date } = req.query;
+    const { from, to, course, year, section, subject, professor, labRoom, roomCode, roomId, student, date } = req.query;
+
+    // A room-scoped page must never export the whole dataset, so resolve the room
+    // server-side rather than trusting a client-supplied name. Only room_code is
+    // carried forward: the room table filters on that field alone, and the export
+    // has to return exactly the rows the table shows.
+    const codeFilters = [roomCode].filter(Boolean);
+    const nameFilters = [labRoom].filter(Boolean);
+    if (roomId && codeFilters.length === 0 && nameFilters.length === 0) {
+      const { data: roomRow } = await supabase
+        .from("lab_rooms")
+        .select("room_code,room_name")
+        .eq("id", roomId)
+        .maybeSingle();
+
+      // Fail closed. Without this, a stale/deleted room id silently degrades to
+      // "no room filter" and exports every room's attendance.
+      if (!roomRow) return res.status(404).json({ error: "Room not found" });
+
+      if (roomRow.room_code) codeFilters.push(roomRow.room_code);
+      else nameFilters.push(roomRow.room_name);
+    }
+    const roomFilter = codeFilters[0] || nameFilters[0] || "";
 
     const fromDate = date || from;
     const toDateVal = date || to;
@@ -647,34 +686,14 @@ const exportToExcel = async (req, res) => {
     const { data: records, error: fetchError } = await query;
     if (fetchError) throw fetchError;
 
-    let result = records || [];
-
-    if (course) result = result.filter((r) => r.course === course);
-    if (year) result = result.filter((r) => r.year === year);
-    if (subject) result = result.filter((r) => r.subject === subject);
-    if (professor) result = result.filter((r) => r.professor === professor);
-    if (labRoom) result = result.filter((r) => r.lab_room === labRoom);
-    if (student) {
-      const s = student.toLowerCase();
-      result = result.filter((r) =>
-        (r.first_name || "").toLowerCase().includes(s) ||
-        (r.last_name || "").toLowerCase().includes(s) ||
-        (r.student_school_id || "").toLowerCase().includes(s)
-      );
-    }
-
-    if (req.adminAssignment?.assignedCourse) {
-      result = result.filter((r) => r.course === req.adminAssignment.assignedCourse);
-    }
-
-    result.sort((a, b) => {
-      const dA = a.date || "";
-      const dB = b.date || "";
-      if (dA !== dB) return dA.localeCompare(dB);
-      const tA = new Date(a.time_in || 0).getTime();
-      const tB = new Date(b.time_in || 0).getTime();
-      return tA - tB;
-    });
+    const result = sortAttendanceAsc(
+      applyAssignedCourse(
+        // The from/to bounds are already applied by the query above; only the
+        // remaining column filters belong here.
+        applyAttendanceFilters(records || [], { course, year, section, subject, professor, roomCode: codeFilters, labRoom: nameFilters, student, date }),
+        req.adminAssignment
+      )
+    );
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Lab Attendance");
@@ -693,7 +712,7 @@ const exportToExcel = async (req, res) => {
 
     sheet.spliceRows(2, 0, []);
     const dateRow = sheet.getRow(2);
-    const filterDesc = date ? `Date: ${date}` : from || to ? `From: ${from || "N/A"} To: ${to || "N/A"}` : "All Records";
+    const filterDesc = describeAttendanceFilters({ ...req.query, roomCode: roomFilter || undefined });
     dateRow.getCell(1).value = `${filterDesc} | Generated: ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`;
     dateRow.getCell(1).font = { italic: true, size: 9, color: { argb: "FF888888" } };
     sheet.mergeCells(2, 1, 2, headers.length);
@@ -759,8 +778,12 @@ const exportToExcel = async (req, res) => {
     const summaryRow = sheet.addRow(["", `Total Records: ${result.length}`, ...Array(headers.length - 2).fill("")]);
     summaryRow.font = { bold: true, size: 10 };
 
+    const parts = [slug(course), slug(year), slug(section), slug(roomFilter)];
+    const when = date || [from, to].filter(Boolean).join("_");
+    if (when) parts.push(slug(when));
+
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename=lab_attendance_${date || "report"}.xlsx`);
+    res.setHeader("Content-Disposition", `attachment; filename=Attendance_${parts.filter(Boolean).join("_") || "report"}.xlsx`);
     await workbook.xlsx.write(res);
     res.end();
   } catch (err) {
@@ -1093,6 +1116,7 @@ module.exports = {
   autoScan,
   getActiveStudents,
   getTodayAttendance,
+  getAttendanceFacets,
   getDailyLog,
   getAttendanceHistory,
   getStudentAttendance,
