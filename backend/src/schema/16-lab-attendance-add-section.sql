@@ -1,0 +1,1 @@
+ALTER TABLE lab_attendance ADD COLUMN IF NOT EXISTS section TEXT;

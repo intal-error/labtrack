@@ -261,7 +261,7 @@ export default function AttendanceScanner() {
             <span className="logbook-entry-status-text">
               {resultData.status === "active" ? "Signed In" : "Signed Out"}
             </span>
-            <span className="logbook-entry-time">{timeAgo(resultData.timestamp)}</span>
+            <span className="logbook-entry-time">{timeAgo(resultData.timeIn)}</span>
           </div>
           <div className="logbook-entry-body">
             <div className="logbook-entry-row">
@@ -463,11 +463,11 @@ export default function AttendanceScanner() {
                 <div className="logbook-recent-entry-right">
                   <span className="logbook-recent-time">{formatTimeShort(log.timeIn)}</span>
                   {log.status === "active" ? (
-                    <span className="logbook-recent-badge active">Inside</span>
+                    <span className="logbook-recent-badge active">Signed In</span>
                   ) : log.totalDuration != null ? (
                     <span className="logbook-recent-duration">{formatDuration(log.totalDuration)}</span>
                   ) : (
-                    <span className="logbook-recent-badge out">Out</span>
+                    <span className="logbook-recent-badge out">Signed Out</span>
                   )}
                 </div>
               </div>

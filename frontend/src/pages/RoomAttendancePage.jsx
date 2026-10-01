@@ -175,7 +175,8 @@ export default function RoomAttendancePage() {
                   <tr>
                     <th>Student Name</th>
                     <th>Student ID</th>
-                    <th>Course/Section</th>
+                    <th>Course</th>
+                    <th>Section</th>
                     <th>Year</th>
                     <th>Subject</th>
                     <th>Professor</th>
@@ -191,8 +192,9 @@ export default function RoomAttendancePage() {
                     <tr key={r.id}>
                       <td style={{ textAlign: "left", fontWeight: 600 }}>{r.firstName} {r.lastName}</td>
                       <td>{r.studentSchoolId}</td>
-                      <td>{r.course}</td>
-                      <td>{r.year}</td>
+                      <td>{r.course || "—"}</td>
+                      <td>{r.section || "—"}</td>
+                      <td>{r.year || "—"}</td>
                       <td style={{ textAlign: "left" }}>{r.subject}</td>
                       <td style={{ textAlign: "left" }}>{r.professor}</td>
                       <td>{r.date}</td>
@@ -205,7 +207,7 @@ export default function RoomAttendancePage() {
                       </td>
                       <td>
                         <span className={`attendance-status-badge ${r.status}`}>
-                          {r.status === "active" ? "Inside" : "Timed Out"}
+                          {r.status === "active" ? "Signed In" : "Signed Out"}
                         </span>
                       </td>
                     </tr>

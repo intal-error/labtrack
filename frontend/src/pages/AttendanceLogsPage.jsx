@@ -294,6 +294,7 @@ export default function AttendanceLogsPage() {
                       <th>Student Name</th>
                       <th>Student ID</th>
                       <th>Course</th>
+                      <th>Section</th>
                       <th>Year</th>
                       <th>Subject</th>
                       <th>Professor</th>
@@ -311,6 +312,7 @@ export default function AttendanceLogsPage() {
                         <td className="cell-name">{r.firstName} {r.lastName}</td>
                         <td>{r.studentSchoolId}</td>
                         <td>{r.course}</td>
+                        <td>{r.section || "—"}</td>
                         <td>{r.year}</td>
                         <td className="cell-muted">{r.subject}</td>
                         <td className="cell-muted">{r.professor}</td>
@@ -322,7 +324,7 @@ export default function AttendanceLogsPage() {
                         </td>
                         <td>
                           <span className={`attendance-status-badge ${r.status}`}>
-                            {r.status === "active" ? "Inside" : "Timed Out"}
+                            {r.status === "active" ? "Signed In" : "Signed Out"}
                           </span>
                         </td>
                         <td>

@@ -186,6 +186,7 @@
   border-radius: 8px;
   text-transform: uppercase;
   letter-spacing: .3px;
+  white-space: nowrap;
 }
 .logbook-recent-badge.active {
   background: rgba(46,125,50,.12);

@@ -109,6 +109,7 @@ const timeIn = async (req, res) => {
       school_id: userData.schoolId || schoolId.trim(),
       course: userData.course || "",
       year: userData.year || "",
+      section: userData.section || "",
       subject,
       professor,
       lab_room: labRoom,
@@ -132,7 +133,7 @@ const timeIn = async (req, res) => {
     res.json({
       success: true,
       type: "time_in",
-      record: created,
+      record: transformKeys(created),
     });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
@@ -194,7 +195,7 @@ const timeOut = async (req, res) => {
       success: true,
       type: "time_out",
       record: {
-        ...activeDoc,
+        ...transformKeys(activeDoc),
         time_out: nowIso,
         total_duration: durationMinutes,
         status: "timed_out",
@@ -678,8 +679,8 @@ const exportToExcel = async (req, res) => {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Lab Attendance");
 
-    const headers = ["Date", "Student Name", "Student ID", "Course", "Year", "Subject", "Professor", "Lab Room", "Time-In", "Time-Out", "Total Duration", "Status"];
-    const colWidths = [14, 24, 14, 10, 8, 28, 22, 22, 14, 14, 16, 14];
+    const headers = ["Date", "Student Name", "Student ID", "Course", "Section", "Year", "Subject", "Professor", "Lab Room", "Time-In", "Time-Out", "Total Duration", "Status"];
+    const colWidths = [14, 24, 14, 10, 8, 8, 28, 22, 22, 14, 14, 16, 14];
     sheet.columns = headers.map((h, i) => ({ header: h, width: colWidths[i] }));
 
     // Title row
@@ -717,13 +718,14 @@ const exportToExcel = async (req, res) => {
     // Data rows
     result.forEach((r) => {
       const name = `${r.first_name || ""} ${r.last_name || ""}`.trim() || "-";
-      const status = r.status === "active" ? "Currently Inside" : "Timed Out";
+      const status = r.status === "active" ? "Signed In" : "Signed Out";
       const duration = r.total_duration != null ? formatDuration(r.total_duration) : "-";
       sheet.addRow([
         r.date || "-",
         name,
         r.student_school_id || "-",
         r.course || "-",
+        r.section || "-",
         r.year || "-",
         r.subject || "-",
         r.professor || "-",
@@ -754,7 +756,7 @@ const exportToExcel = async (req, res) => {
 
     // Summary row
     sheet.addRow([]);
-    const summaryRow = sheet.addRow(["", `Total Records: ${result.length}`, "", "", "", "", "", "", "", "", ""]);
+    const summaryRow = sheet.addRow(["", `Total Records: ${result.length}`, ...Array(headers.length - 2).fill("")]);
     summaryRow.font = { bold: true, size: 10 };
 
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");

@@ -39,7 +39,7 @@ export default function AttendancePanel() {
     const headers = ["Date", "Time-In", "Time-Out", "Subject", "Professor", "Room", "Duration (min)", "Status"];
     const rows = filteredRecords.map((r) => [
       r.date, formatTime(r.timeIn), formatTime(r.timeOut), r.subject, r.professor, r.labRoom,
-      r.totalDuration != null ? r.totalDuration : "", r.status === "active" ? "Inside" : "Signed Out",
+      r.totalDuration != null ? r.totalDuration : "", r.status === "active" ? "Signed In" : "Signed Out",
     ]);
     const csv = [headers, ...rows].map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -166,7 +166,7 @@ export default function AttendancePanel() {
                         </td>
                         <td>
                           <span className={`status-badge ${r.status}`}>
-                            {r.status === "active" ? "Inside" : "Signed Out"}
+                            {r.status === "active" ? "Signed In" : "Signed Out"}
                           </span>
                         </td>
                       </tr>
@@ -182,7 +182,7 @@ export default function AttendancePanel() {
                   <div className="mobile-record-header">
                     <span className="mobile-record-date">{r.date}</span>
                     <span className={`status-badge ${r.status}`}>
-                      {r.status === "active" ? "Inside" : "Signed Out"}
+                      {r.status === "active" ? "Signed In" : "Signed Out"}
                     </span>
                   </div>
                   <div className="mobile-record-body">
