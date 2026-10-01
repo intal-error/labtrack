@@ -9,7 +9,6 @@ import {
   MdMenuBook,
   MdNotifications,
   MdAssignment,
-  MdAssessment,
 } from "react-icons/md";
 import { FaExchangeAlt } from "react-icons/fa";
 import "../../styles/pages/bottomnav.css";
@@ -22,7 +21,6 @@ const NAV_ITEMS = [
   { path: "/borrow-requests", label: "Borrow Requests", icon: MdAssignment, roles: ["admin"] },
   { path: "/resources", label: "Resources", icon: MdMenuBook, roles: ["student", "admin"] },
   { path: "/notifications", label: "Notifications", icon: MdNotifications, roles: ["student"] },
-  { path: "/reports", label: "Reports", icon: MdAssessment, roles: ["admin"] },
 ];
 
 export default function BottomNav() {

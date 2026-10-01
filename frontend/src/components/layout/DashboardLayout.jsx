@@ -14,7 +14,7 @@ import {
   MdChevronLeft, MdChevronRight, MdExpandMore, MdExpandLess,
   MdBuild, MdWarning, MdMenuBook, MdHistory,
   MdAssignment, MdEventAvailable,
-  MdSearch, MdClose, MdCheckCircle, MdGavel, MdTune, MdAssessment,
+  MdSearch, MdClose, MdCheckCircle, MdGavel, MdTune,
 } from "react-icons/md";
 import PesoIcon from "../ui/PesoIcon";
 import { FaExchangeAlt } from "react-icons/fa";
@@ -36,7 +36,6 @@ const ROUTE_NAMES = {
   "/fines": "Fines",
   "/persona": "Persona",
   "/attendance": "Attendance Logs",
-  "/reports": "Reports",
 };
 
 function resolvePageTitle(pathname) {
@@ -51,7 +50,6 @@ const NAV_ITEMS = [
     items: [
       { path: "/dashboard", label: "Dashboard", icon: MdHome, roles: ["student", "admin"] },
       { path: "/my-activity", label: "My Activity", icon: MdHistory, roles: ["student"] },
-      { path: "/reports", label: "Reports", icon: MdAssessment, roles: ["admin"] },
       { path: "/notifications", label: "Notifications", icon: MdNotifications, roles: ["student", "admin"] },
     ],
   },

@@ -25,7 +25,6 @@ const MyActivityPage = lazy(() => import("./pages/MyActivityPage"));
 const ResourcesPage = lazy(() => import("./pages/ResourcesPage"));
 const NotificationsTab = lazy(() => import("./components/tabs/NotificationsTab"));
 const SettingsPage = lazy(() => import("./components/tabs/SettingsPage"));
-const ReportsTab = lazy(() => import("./components/tabs/ReportsTab"));
 const MaintenanceTab = lazy(() => import("./components/tabs/MaintenanceTab"));
 const FinesTab = lazy(() => import("./components/tabs/FinesTab"));
 const BorrowRequestsTab = lazy(() => import("./components/tabs/BorrowRequestsTab"));
@@ -140,7 +139,7 @@ function App() {
               <Route path="incidents" element={<Navigate to="/resources?tab=incidents" replace />} />
               <Route path="manuals" element={<Navigate to="/resources?tab=manuals" replace />} />
               <Route path="usage-logs" element={<Navigate to="/my-activity" replace />} />
-              <Route path="reports" element={<RoleRoute allowed={["admin"]}><ReportsTab /></RoleRoute>} />
+              <Route path="reports" element={<Navigate to="/dashboard" replace />} />
               <Route path="fines" element={<RoleRoute allowed={["admin"]} fallback="/my-activity?tab=fines"><FinesTab /></RoleRoute>} />
               <Route path="borrow-requests" element={<RoleRoute allowed={["admin"]} fallback="/my-activity?tab=requests"><BorrowRequestsTab /></RoleRoute>} />
               <Route path="attendance" element={<RoleRoute allowed={["admin"]}><AttendanceLogsPage /></RoleRoute>} />

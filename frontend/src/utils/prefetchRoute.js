@@ -8,7 +8,6 @@ const routePrefetchers = {
   "/persona": () => import("../pages/PersonaPage"),
   "/maintenance": () => import("../components/tabs/MaintenanceTab"),
   "/resources": () => import("../pages/ResourcesPage"),
-  "/reports": () => import("../components/tabs/ReportsTab"),
   "/fines": () => import("../components/tabs/FinesTab"),
   "/borrow-requests": () => import("../components/tabs/BorrowRequestsTab"),
   "/notifications": () => import("../components/tabs/NotificationsTab"),
