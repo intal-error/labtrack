@@ -3,7 +3,7 @@ const { supabase } = require("../config/supabase");
 const { parsePagination, paginatedResponse } = require("../middleware/pagination");
 const { randomUUID } = require("crypto");
 const { transformKeys } = require("../utils/transformKeys");
-const { getRemainingQuantity, isOpenBorrow, queryTransactions } = require("../utils/transactionFilters");
+const { getRemainingQuantity, isOpenBorrow, queryTransactions, sortTransactions } = require("../utils/transactionFilters");
 
 function numberOr(value, fallback = 0) {
   const parsed = Number(value);
@@ -142,9 +142,14 @@ const getMyBorrowed = async (req, res) => {
       .eq("user_id", uid);
     if (error) throw new Error(error.message);
 
-    let items = (data || [])
-      .filter((d) => isOpenBorrow(d))
-      .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+    // sortTransactions (not a hardcoded comparator) so ?sort= is honoured here
+    // exactly as it already is on the admin endpoints via queryTransactions.
+    // Without it the "Name A-Z" / "Qty" options could only ever reorder the one
+    // page the client had fetched.
+    let items = sortTransactions(
+      (data || []).filter((d) => isOpenBorrow(d)),
+      req.query.sort || "date-desc"
+    );
 
     if (req.query.search) {
       const q = req.query.search.toLowerCase();
@@ -179,8 +184,9 @@ const getMyReturned = async (req, res) => {
       .eq("user_id", uid);
     if (error) throw new Error(error.message);
 
-    let items = (data || [])
-      .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+    // See getMyBorrowed: honour ?sort= through the shared helper instead of a
+    // fixed newest-first comparator.
+    let items = sortTransactions(data || [], req.query.sort || "date-desc");
 
     const missingDates = items.filter((i) => !i.borrowed_at && i.original_transaction_id);
     if (missingDates.length > 0) {
