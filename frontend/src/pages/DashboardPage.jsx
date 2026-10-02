@@ -1,15 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import {
   useMyBorrowed,
+  useMyReturned,
   useMyBorrowRequests,
   useBorrowRequests,
   useReportSummary,
   useStudentAttendance,
   useMyFines,
+  useMyNotifications,
+  pickNotifications,
 } from "../hooks/useQueries";
-import { toDate, timeAgo } from "../utils/helpers";
+import { api } from "../services/api";
+import { toDate, timeAgo, getOverdueInfo } from "../utils/helpers";
 import DateRangeFilter from "../components/ui/DateRangeFilter";
 import { DEFAULT_RANGE, rangeToParams } from "../components/ui/dateRange";
 import EmptyChart from "../components/ui/EmptyChart";
@@ -29,6 +34,11 @@ import {
   MdEventAvailable,
   MdBuild,
   MdAttachMoney,
+  MdMenuBook,
+  MdError,
+  MdInfo,
+  MdCheckCircle,
+  MdNotificationsOff,
 } from "react-icons/md";
 import {
   PieChart,
@@ -65,12 +75,22 @@ function formatRangeDate(value) {
   });
 }
 
-const REQUEST_STATUS = {
-  pending: "Pending review",
-  approved: "Approved",
-  rejected: "Rejected",
-  cancelled: "Cancelled",
+/* Mirrors NotificationsTab.jsx so the dashboard strip and the full page agree. */
+const NOTIF_TYPE = {
+  alert: { Icon: MdError, tone: "red" },
+  overdue: { Icon: MdError, tone: "red" },
+  warning: { Icon: MdWarning, tone: "orange" },
+  success: { Icon: MdCheckCircle, tone: "green" },
+  info: { Icon: MdInfo, tone: "blue" },
 };
+
+function formatTableDate(value) {
+  const d = toDate(value);
+  if (!d) return "—";
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    + ", "
+    + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
 
 function LoadingState() {
   return (
@@ -87,17 +107,25 @@ function LoadingState() {
 /* ═══════════════════════════════════════════════ */
 function StudentDashboard() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { userProfile } = useAuth();
 
   const { data: borrowedData, isLoading: borrowedLoading } = useMyBorrowed();
+  const { data: returnedData } = useMyReturned({ limit: 8 });
   const { data: myRequestsData } = useMyBorrowRequests();
   const { data: finesData } = useMyFines();
   const { data: attendanceData } = useStudentAttendance(userProfile?.schoolId);
+  const { data: notifData } = useMyNotifications("limit=4");
 
   const borrowed = useMemo(() => borrowedData || [], [borrowedData]);
+  const returned = useMemo(
+    () => (Array.isArray(returnedData) ? returnedData : returnedData?.data || []),
+    [returnedData]
+  );
   const requests = useMemo(() => myRequestsData || [], [myRequestsData]);
   const fines = useMemo(() => finesData || [], [finesData]);
   const records = useMemo(() => attendanceData?.records || [], [attendanceData]);
+  const notifications = useMemo(() => pickNotifications(notifData), [notifData]);
 
   const overdueItems = useMemo(() => {
     const now = new Date();
@@ -160,104 +188,89 @@ function StudentDashboard() {
     },
   ];
 
-  const feed = useMemo(() => {
-    const items = [];
-
+  const recentTxns = useMemo(() => {
+    const rows = [];
     borrowed.forEach((t) => {
       const at = toDate(t.timestamp) || toDate(t.borrowedAt);
-      if (!at) return;
-      items.push({
+      const dueAt = toDate(t.dueDate);
+      rows.push({
         key: `borrow-${t.id}`,
-        icon: MdSwapHoriz,
-        title: `Borrowed ${t.itemName || "an item"}`,
-        detail: t.dueDate ? `Due ${formatShortDate(toDate(t.dueDate))}` : "Return at the lab counter",
+        item: t.itemName || "Unnamed item",
+        course: t.equipmentCourse || "—",
         at,
+        kind: "borrowed",
+        overdue: getOverdueInfo(dueAt),
+        due: dueAt ? `Due ${formatShortDate(dueAt)}` : null,
       });
     });
-
-    requests.forEach((r) => {
-      const at = toDate(r.createdAt);
-      if (!at) return;
-      items.push({
-        key: `request-${r.id}`,
-        icon: MdAssignment,
-        title: `Requested ${r.itemName || "an item"}`,
-        detail: REQUEST_STATUS[r.status] || r.status,
+    returned.forEach((t) => {
+      const at = toDate(t.timestamp) || toDate(t.returnedAt);
+      rows.push({
+        key: `return-${t.id}`,
+        item: t.itemName || "Unnamed item",
+        course: t.equipmentCourse || "—",
         at,
+        kind: "returned",
+        overdue: null,
+        due: null,
       });
     });
+    return rows
+      .sort((a, b) => (b.at?.getTime() || 0) - (a.at?.getTime() || 0))
+      .slice(0, 5);
+  }, [borrowed, returned]);
 
-    records.forEach((r) => {
-      const at = toDate(r.date ? `${r.date}T${r.timeIn || "00:00"}` : r.date);
-      if (!at) return;
-      items.push({
-        key: `attendance-${r.id || `${r.date}-${r.timeIn}`}`,
-        icon: MdEventAvailable,
-        title: r.status === "active" ? `Signed in · ${r.labRoom || "Lab"}` : `Attended · ${r.labRoom || "Lab"}`,
-        detail: r.subject || formatShortDate(at),
-        at,
-      });
-    });
-
-    return items
-      .sort((a, b) => b.at.getTime() - a.at.getTime())
-      .slice(0, 6);
-  }, [borrowed, requests, records]);
-
-  const quickActions = [
+  const recordRows = [
     {
-      label: "My Requests",
-      desc: `${pendingRequests.length} pending`,
-      icon: MdAssignment,
-      path: "/my-activity?tab=requests",
+      key: "attendance",
+      label: "Attendance Record",
+      desc: "View your lab attendance logs",
+      icon: MdEventAvailable,
+      tone: "blue",
+      path: "/my-activity?tab=attendance",
+      meta: `${totalSessions} session${totalSessions === 1 ? "" : "s"}`,
     },
     {
-      label: "Equipment Catalog",
-      desc: "Browse what you can borrow",
+      key: "borrowing",
+      label: "Borrowing History",
+      desc: "View borrowed and returned items",
       icon: MdInventory,
-      path: "/inventory",
+      tone: "teal",
+      path: "/my-activity?tab=borrowed",
+      meta: `${borrowed.length} out`,
     },
     {
+      key: "manuals",
+      label: "Laboratory Manuals",
+      desc: "View available lab manuals",
+      icon: MdMenuBook,
+      tone: "green",
+      path: "/resources?tab=manuals",
+      meta: null,
+    },
+    {
+      key: "incident",
       label: "Report Incident",
       desc: "Damaged or missing item",
       icon: MdWarning,
+      tone: "orange",
       path: "/resources?tab=incidents",
+      meta: null,
     },
   ];
+
+  function openNotification(n) {
+    if (!n?.read) {
+      api.markNotificationRead(n.id).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: ["myNotifications"] });
+    }
+    navigate(n?.link || "/notifications");
+  }
 
   if (borrowedLoading) return <LoadingState />;
 
   return (
     <div className="dash-page">
-      <div className="dash-hero-actions">
-        <button
-          className="dash-hero-action primary"
-          onClick={() => navigate("/scanner")}
-        >
-          <span className="dash-hero-icon">
-            <MdQrCodeScanner size={28} />
-          </span>
-          <div className="dash-hero-text">
-            <span className="dash-hero-label">Scan to Borrow</span>
-            <span className="dash-hero-desc">Scan equipment QR code</span>
-          </div>
-          <MdArrowForward size={18} className="dash-hero-arrow" />
-        </button>
-        <button
-          className="dash-hero-action secondary"
-          onClick={() => navigate("/scanner?tab=attendance")}
-        >
-          <span className="dash-hero-icon">
-            <MdEventAvailable size={28} />
-          </span>
-          <div className="dash-hero-text">
-            <span className="dash-hero-label">Log Attendance</span>
-            <span className="dash-hero-desc">Sign in to lab room</span>
-          </div>
-          <MdArrowForward size={18} className="dash-hero-arrow" />
-        </button>
-      </div>
-
       <div className="dash-status-bar">
         {statusItems.map(({ key, label, value, detail, tone, icon: Icon, path }) => (
           <button
@@ -277,60 +290,139 @@ function StudentDashboard() {
         ))}
       </div>
 
-      <div className="dash-overview">
-        <section className="dash-feed-card">
-          <div className="dash-section-head">
-            <h3>Recent activity</h3>
+      <div className="sd-grid">
+        {/* ── Scan QR ── */}
+        <section className="sd-card sd-scan">
+          <div className="sd-scan-frame">
+            <MdQrCodeScanner size={64} />
+          </div>
+          <h3 className="sd-scan-title">Scan QR Code</h3>
+          <p className="sd-scan-sub">Borrow &middot; Return &middot; Attendance</p>
+          <div className="sd-scan-actions">
+            <button
+              className="btn btn-primary sd-scan-btn"
+              onClick={() => navigate("/scanner")}
+            >
+              <MdQrCodeScanner size={18} /> Borrow &amp; Return
+            </button>
+            <button
+              className="btn btn-outline sd-scan-btn"
+              onClick={() => navigate("/scanner?tab=attendance")}
+            >
+              <MdEventAvailable size={18} /> Log Attendance
+            </button>
+          </div>
+        </section>
+
+        {/* ── My Records ── */}
+        <section className="sd-card sd-records">
+          <div className="sd-card-head">
+            <h3>My Records</h3>
+          </div>
+          <ul className="sd-record-list">
+            {recordRows.map(({ key, label, desc, icon: Icon, tone, path, meta }) => (
+              <li key={key}>
+                <button className="sd-record" onClick={() => navigate(path)}>
+                  <span className={`sd-record-icon ${tone}`}>
+                    <Icon size={20} />
+                  </span>
+                  <span className="sd-record-text">
+                    <span className="sd-record-label">{label}</span>
+                    <span className="sd-record-desc">{desc}</span>
+                  </span>
+                  {meta && <span className="sd-record-meta">{meta}</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {/* ── Recent Transactions ── */}
+        <section className="sd-card sd-txn">
+          <div className="sd-card-head">
+            <h3>Recent Transactions</h3>
             <button className="dash-section-link" onClick={() => navigate("/my-activity")}>
               View all <MdArrowForward size={14} />
             </button>
           </div>
-          {feed.length === 0 ? (
-            <div className="dash-feed-empty">
-              <MdHistory size={28} />
-              <p>No activity yet. Scan a QR code to borrow your first item.</p>
-              <button className="btn btn-primary btn-sm" onClick={() => navigate("/scanner")}>
-                Open Scanner
-              </button>
+          {recentTxns.length === 0 ? (
+            <div className="sd-empty">
+              <MdHistory size={26} />
+              <p>No transactions yet. Scan a QR code to borrow your first item.</p>
             </div>
           ) : (
-            <ul className="dash-feed">
-              {feed.map((item) => (
-                <li key={item.key} className="dash-feed-item">
-                  <span className="dash-feed-icon"><item.icon size={16} /></span>
-                  <span className="dash-feed-text">
-                    <span className="dash-feed-title">{item.title}</span>
-                    <span className="dash-feed-detail">{item.detail}</span>
-                  </span>
-                  <span className="dash-feed-time">{timeAgo(item.at)}</span>
-                </li>
-              ))}
-            </ul>
+            <div className="dash-table-wrap">
+              <table className="dash-table">
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th>Course</th>
+                    <th>Date</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentTxns.map((t) => (
+                    <tr key={t.key}>
+                      <td className="sd-txn-item">{t.item}</td>
+                      <td>{t.course}</td>
+                      <td>{formatTableDate(t.at)}</td>
+                      <td>
+                        {t.overdue ? (
+                          <span className="dash-badge overdue">{t.overdue.text}</span>
+                        ) : t.kind === "returned" ? (
+                          <span className="dash-badge returned">Returned</span>
+                        ) : (
+                          <span className="dash-badge borrowed">{t.due || "Borrowed"}</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
 
-        <section className="dash-quick-card">
-          <div className="dash-section-head">
-            <h3>Quick actions</h3>
+        {/* ── Notifications ── */}
+        <section className="sd-card sd-notif">
+          <div className="sd-card-head">
+            <h3>Notifications</h3>
+            <button className="dash-section-link" onClick={() => navigate("/notifications")}>
+              View all <MdArrowForward size={14} />
+            </button>
           </div>
-          <div className="dash-actions dash-actions-stack">
-            {quickActions.map(({ label, desc, icon: Icon, path }) => (
-              <button
-                key={path}
-                className="dash-action"
-                onClick={() => navigate(path)}
-              >
-                <span className="dash-action-icon">
-                  <Icon size={22} />
-                </span>
-                <span className="dash-action-text">
-                  <span className="dash-action-label">{label}</span>
-                  <span className="dash-action-desc">{desc}</span>
-                </span>
-                <MdArrowForward size={16} className="dash-action-arrow" />
-              </button>
-            ))}
-          </div>
+          {notifications.length === 0 ? (
+            <div className="sd-empty">
+              <MdNotificationsOff size={26} />
+              <p>You&apos;re all caught up — no notifications.</p>
+            </div>
+          ) : (
+            <ul className="sd-notif-list">
+              {notifications.map((n, idx) => {
+                const { Icon, tone } = NOTIF_TYPE[n.type] || NOTIF_TYPE.info;
+                return (
+                  <li key={n.id || `sd-notif-${idx}`}>
+                    <button
+                      className={`sd-notif-row ${n.read ? "" : "unread"}`}
+                      onClick={() => openNotification(n)}
+                    >
+                      <span className={`sd-notif-icon ${tone}`}>
+                        <Icon size={18} />
+                      </span>
+                      <span className="sd-notif-body">
+                        <span className="sd-notif-title">{n.title || "Notification"}</span>
+                        {n.message && (
+                          <span className="sd-notif-msg">{n.message}</span>
+                        )}
+                      </span>
+                      <span className="sd-notif-time">{timeAgo(n.createdAt)}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </section>
       </div>
     </div>
