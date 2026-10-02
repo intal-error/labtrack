@@ -45,12 +45,16 @@ const adminCreateSchema = z.object({
 const catalogCreateSchema = z.object({
   itemName: z.string().min(1, "Item name is required").max(200).trim(),
   category: z.string().min(1, "Category is required").max(100).trim(),
-  course: z.string().max(50).trim().optional().default(""),
+  course: z.string().min(1, "Course is required").max(50).trim(),
   quantity: z.number().int().min(1, "Quantity must be at least 1").max(10000),
   condition: z.string().min(1, "Condition is required").max(50).trim(),
   status: z.enum(["Available", "Borrowed"]).optional().default("Available"),
   imageUrl: z.string().url("Invalid image URL").max(500).trim().optional().default(""),
   barcode: z.string().max(100).trim().optional().default(""),
+  // Was missing here, so zod stripped it on every create (the controller reads
+  // data.assetTag at line 132). Update has no schema, which is why the field
+  // appeared to save there but silently vanished here.
+  assetTag: z.string().max(100).trim().optional().default(""),
 });
 
 const borrowRequestSchema = z.object({

@@ -31,6 +31,14 @@ const getAll = async (req, res) => {
       }
     }
 
+    if (req.query.category && req.query.category !== "All") {
+      result = result.filter((item) => item.category === req.query.category);
+    }
+
+    if (req.query.condition && req.query.condition !== "All") {
+      result = result.filter((item) => item.condition === req.query.condition);
+    }
+
     if (req.query.sort) {
       if (req.query.sort === "name") {
         result.sort((a, b) => (a.item_name || "").localeCompare(b.item_name || ""));
@@ -66,6 +74,7 @@ const getStats = async (req, res) => {
     const rows = items || [];
     const byCourseMap = new Map();
     const categories = new Set();
+    let totalQuantity = 0;
 
     for (const item of rows) {
       const course = item.course || "Unassigned";
@@ -79,10 +88,12 @@ const getStats = async (req, res) => {
       if (available) entry.available += 1;
 
       if (item.category) categories.add(item.category);
+      totalQuantity += Number(item.quantity) || 0;
     }
 
     res.json({
       total: rows.length,
+      totalQuantity,
       available: rows.filter((i) => i.status === "Available").length,
       borrowed: rows.filter((i) => i.status === "Borrowed").length,
       categories: categories.size,
