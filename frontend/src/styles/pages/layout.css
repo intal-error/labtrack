@@ -102,16 +102,6 @@
 .sidebar a .nav-label{white-space:nowrap;overflow:hidden}
 .sidebar.collapsed a .nav-label{display:none}
 
-/* Notification badge */
-.notif-badge{
-  margin-left:auto;padding:2px 7px;min-width:18px;height:18px;
-  background:#c62828;color:#fff;
-  border-radius:9px;font-size:10px;font-weight:700;
-  display:flex;align-items:center;justify-content:center;
-  line-height:1;letter-spacing:.3px;
-}
-.sidebar a.active .notif-badge{background:rgba(0,0,0,.75);color:#ef9a9a}
-
 /* Logbook status dot */
 .logbook-dot{
   margin-left:auto;width:8px;height:8px;border-radius:50%;
@@ -245,8 +235,6 @@ body.dark .main-wrap{background:var(--bg-card)}
 body.dark .burger-btn{background:var(--bg-card);color:#e0e0e0}
 body.dark .burger-btn:hover{background:rgba(255,255,255,.08)}
 body.dark .sidebar-overlay.active{background:rgba(0,0,0,.6)}
-body.dark .notif-badge{background:#b71c1c}
-body.dark .sidebar a.active .notif-badge{background:rgba(0,0,0,.9);color:#ef9a9a}
 body.dark .logbook-dot{background:rgba(255,255,255,.2)}
 body.dark .logbook-dot.active{background:#66bb6a}
 body.dark .sidebar a.active .logbook-dot{background:rgba(255,255,255,.35)}

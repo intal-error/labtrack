@@ -50,7 +50,6 @@ const NAV_ITEMS = [
     items: [
       { path: "/dashboard", label: "Dashboard", icon: MdHome, roles: ["student", "admin"] },
       { path: "/my-activity", label: "My Activity", icon: MdHistory, roles: ["student"] },
-      { path: "/notifications", label: "Notifications", icon: MdNotifications, roles: ["student", "admin"] },
     ],
   },
   {
@@ -261,9 +260,6 @@ export default function DashboardLayout() {
                             {!collapsed && <span className="nav-label">{label}</span>}
                             {path === "/scanner" && !collapsed && (
                               <span className={`logbook-dot ${logbookActive ? "active" : ""}`} />
-                            )}
-                            {path === "/notifications" && unreadCount > 0 && (
-                              <span className="notif-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>
                             )}
                           </NavLink>
                         </li>
