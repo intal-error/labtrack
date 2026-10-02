@@ -1,6 +1,11 @@
 .my-activity-page {
-  max-width: 1200px;
-  margin: 0 auto;
+  /* Was `max-width:1200px;margin:0 auto`, which re-introduced on this page the
+     exact side gaps the catalog/transactions redesign just removed: the panels
+     inside went full-width but were still being centred inside a 1200px parent.
+     This affects the Attendance and Fines tabs too, since they live here as
+     well. */
+  width: 100%;
+  min-width: 0;
 }
 
 .activity-panel {

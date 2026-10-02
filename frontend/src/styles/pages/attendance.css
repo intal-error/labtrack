@@ -40,6 +40,18 @@
   animation: attendFadeIn .35s ease both;
 }
 
+/* MyActivityPage renders this inside .my-activity-page, which is now full width
+   so its sibling tabs (Borrowed / Returned / Requests / Fines) all fill it. This
+   cap would leave the Attendance tab visibly narrower than the others, so lift
+   it for the embedded case only. AttendanceLogsPage and RoomAttendancePage keep
+   the 1200px standalone width. Horizontal padding is dropped too, since the
+   transaction panels rely on .main-content's padding instead. */
+.attendance-page.activity-panel {
+  max-width: none;
+  margin: 0;
+  padding: 0 0 24px;
+}
+
 /* ──────────────────────────────────
    Hero Header
    ────────────────────────────────── */

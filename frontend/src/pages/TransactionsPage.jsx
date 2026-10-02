@@ -1,141 +1,62 @@
-import { useState, useCallback, useMemo } from "react";
+import { useMemo, useState } from "react";
+import { MdPeople, MdCheckCircle, MdRefresh, MdDownload } from "react-icons/md";
 import { api } from "../services/api";
 import { useBorrowed, useReturned, useTransactionStats } from "../hooks/useQueries";
-import { COURSES, YEARS } from "../constants/courses";
-import { toDate, formatDate, getRemainingQuantity, timeAgo, getInitials, getAvatarColor, getOverdueInfo, sortTransactions as sortItems } from "../utils/helpers";
+import useTransactionFilters from "../hooks/useTransactionFilters";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Modal from "../components/ui/Modal";
-import Pagination from "../components/ui/Pagination";
 import LoadError from "../components/ui/LoadError";
 import StatStrip from "../components/ui/StatStrip";
 import ExportReportModal from "../components/ui/ExportReportModal";
-import { DATE_RANGE_OPTIONS, rangeToParams, buildExportQuery } from "../components/ui/exportReport";
+import { buildExportQuery } from "../components/ui/exportReport";
+import TransactionTable from "../components/transactions/TransactionTable";
+import TransactionCard from "../components/transactions/TransactionCard";
+import TransactionDetail from "../components/transactions/TransactionDetail";
+import TransactionToolbar from "../components/transactions/TransactionToolbar";
+import TransactionEmpty from "../components/transactions/TransactionEmpty";
+import { toTxnView } from "../components/transactions/txnView";
 import toast from "react-hot-toast";
 import "../styles/pages/tables.css";
-import ViewToggle from "../components/ui/ViewToggle";
+import "../styles/pages/transactions-browser.css";
 
-const PAGE_LIMIT = 25;
-
-const SORT_OPTIONS = [
-  { value: "date-desc", label: "Newest First" },
-  { value: "date-asc", label: "Oldest First" },
-  { value: "name-asc", label: "Name A-Z" },
-  { value: "name-desc", label: "Name Z-A" },
-  { value: "qty-desc", label: "Qty High-Low" },
-  { value: "qty-asc", label: "Qty Low-High" },
-];
+const normalize = (src) => (!src ? [] : Array.isArray(src) ? src : src.data || []);
+const toPagination = (src) => (!src || Array.isArray(src) ? null : src.pagination || null);
 
 export default function TransactionsPage() {
-  const [activeTab, setActiveTab] = useState("borrowed");
-  const [search, setSearch] = useState("");
-  const [filterCourse, setFilterCourse] = useState("All");
-  const [filterYear, setFilterYear] = useState("All");
-  const [sortBy, setSortBy] = useState("date-desc");
-  const [dateRange, setDateRange] = useState("all");
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
+  const { filters, params, setPage, setFilters, resetFilters, activeFilterCount } = useTransactionFilters();
+  const [tab, setTab] = useState("borrowed");
   const [viewMode, setViewMode] = useState("list");
-  const [selectedTransaction, setSelectedTransaction] = useState(null);
-  const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  const [prevResetKeys, setPrevResetKeys] = useState(
-    [activeTab, search, filterCourse, filterYear, dateRange, customFrom, customTo]
-  );
-  if (
-    prevResetKeys[0] !== activeTab ||
-    prevResetKeys[1] !== search ||
-    prevResetKeys[2] !== filterCourse ||
-    prevResetKeys[3] !== filterYear ||
-    prevResetKeys[4] !== dateRange ||
-    prevResetKeys[5] !== customFrom ||
-    prevResetKeys[6] !== customTo
-  ) {
-    setPrevResetKeys([activeTab, search, filterCourse, filterYear, dateRange, customFrom, customTo]);
-    setPage(1);
-  }
+  const borrowedQ = useBorrowed(params);
+  const returnedQ = useReturned(params);
 
-  const params = useMemo(() => {
-    const dateParams = rangeToParams(dateRange, customFrom, customTo);
-    const p = {
-      page: String(page),
-      limit: String(PAGE_LIMIT),
-      search: search || "",
-      course: filterCourse !== "All" ? filterCourse : "",
-      year: filterYear !== "All" ? filterYear : "",
-      ...dateParams,
-    };
-    return "?" + Object.entries(p)
-      .filter(([, v]) => v !== "")
-      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
-      .join("&");
-  }, [page, search, filterCourse, filterYear, dateRange, customFrom, customTo]);
+  const borrowed = useMemo(() => normalize(borrowedQ.data), [borrowedQ.data]);
+  const returned = useMemo(() => normalize(returnedQ.data), [returnedQ.data]);
 
-  const {
-    data: borrowedData,
-    isLoading: borrowedLoading,
-    isError: borrowedFailed,
-    error: borrowedError,
-    refetch: refetchBorrowed,
-  } = useBorrowed(params);
-  const {
-    data: returnedData,
-    isLoading: returnedLoading,
-    isError: returnedFailed,
-    error: returnedError,
-    refetch: refetchReturned,
-  } = useReturned(params);
+  const borrowedPagination = useMemo(() => toPagination(borrowedQ.data), [borrowedQ.data]);
+  const returnedPagination = useMemo(() => toPagination(returnedQ.data), [returnedQ.data]);
 
-  const borrowed = useMemo(() => {
-    if (!borrowedData) return [];
-    return Array.isArray(borrowedData) ? borrowedData : (borrowedData.data || []);
-  }, [borrowedData]);
+  const isBorrowedTab = tab === "borrowed";
+  const items = isBorrowedTab ? borrowed : returned;
+  const pagination = isBorrowedTab ? borrowedPagination : returnedPagination;
+  const activeQuery = isBorrowedTab ? borrowedQ : returnedQ;
 
-  const returned = useMemo(() => {
-    if (!returnedData) return [];
-    return Array.isArray(returnedData) ? returnedData : (returnedData.data || []);
-  }, [returnedData]);
+  // Sorted by the server now (?sort= is in params), so the rows arrive in the
+  // requested order across the whole result set rather than just this page.
+  const rows = useMemo(() => items.map((item) => toTxnView(item, tab)), [items, tab]);
 
-  const paginationData = useMemo(() => {
-    const src = activeTab === "borrowed" ? borrowedData : returnedData;
-    if (!src || Array.isArray(src)) return null;
-    return src.pagination || null;
-  }, [activeTab, borrowedData, returnedData]);
+  const { data: stats } = useTransactionStats();
 
-  const loading = borrowedLoading || returnedLoading;
+  const error = activeQuery.isError ? activeQuery.error : null;
+  const total = pagination?.total ?? items.length;
 
-  const { data: transactionStats, refetch: refetchTransactionStats } = useTransactionStats();
-
-  const load = useCallback(() => {
-    refetchBorrowed();
-    refetchReturned();
-    refetchTransactionStats();
-  }, [refetchBorrowed, refetchReturned, refetchTransactionStats]);
-
-  const activeItems = useMemo(() =>
-    activeTab === "borrowed" ? borrowed : returned,
-  [activeTab, borrowed, returned]);
-
-  const displayItems = useMemo(() => sortItems(activeItems, sortBy), [activeItems, sortBy]);
-
-  const paginationTotal = paginationData?.total ?? activeItems.length;
-
-  const activeError =
-    activeTab === "borrowed"
-      ? (borrowedFailed ? borrowedError : null)
-      : (returnedFailed ? returnedError : null);
-
-  const exportFilters = useMemo(() => ({
-    tab: activeTab,
-    course: filterCourse,
-    year: filterYear,
-    dateRange,
-    dateFrom: customFrom,
-    dateTo: customTo,
-    search,
-    sort: sortBy,
-  }), [activeTab, filterCourse, filterYear, dateRange, customFrom, customTo, search, sortBy]);
+  const refresh = () => {
+    borrowedQ.refetch();
+    returnedQ.refetch();
+  };
 
   const handleExport = async (draft) => {
     setExporting(true);
@@ -154,417 +75,119 @@ export default function TransactionsPage() {
     }
   };
 
-  function handleViewInfo(item) {
-    setSelectedTransaction(item);
-  }
+  // isPending (no data at all yet), not isLoading (which keepPreviousData now
+  // also reports while merely refetching).
+  if (borrowedQ.isPending && returnedQ.isPending) return <LoadingSpinner />;
 
-  if (loading) return <LoadingSpinner />;
-
-  if (activeError && activeItems.length === 0) {
+  if (error && rows.length === 0) {
     return (
       <section className="transactions-page">
-        <LoadError message={activeError?.message || "Couldn't load transactions."} onRetry={load} />
+        <LoadError message={error?.message || "Couldn't load transactions."} onRetry={refresh} />
       </section>
     );
   }
 
+  const exportFilters = {
+    tab,
+    course: filters.course,
+    year: filters.year,
+    dateRange: filters.dateRange,
+    dateFrom: filters.customFrom,
+    dateTo: filters.customTo,
+    search: filters.search,
+    sort: filters.sort,
+  };
+
   return (
     <section className="transactions-page">
-      <button className="hero-action-btn ghost" onClick={load}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-        Refresh
-      </button>
-      <button className="hero-action-btn primary" onClick={() => setExportOpen(true)}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Download Report
-      </button>
-
       <StatStrip
+        variant="stack"
+        /* These four are deliberately ALL-TIME figures and ignore the filter bar
+           below. Do not "unify" them with the tab badges, which count only what
+           the table currently shows. See the tabs prop below. */
         items={[
-          {
-            label: "Active Borrows",
-            value: transactionStats?.active ?? 0,
-            icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
-          },
-          {
-            label: "Total Borrowed",
-            value: transactionStats?.totalBorrowed ?? 0,
-            icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>,
-          },
-          {
-            label: "Total Returned",
-            value: transactionStats?.totalReturned ?? 0,
-            icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20,6 9,17 4,12"/></svg>,
-          },
-          {
-            label: "This Week",
-            value: transactionStats?.thisWeek ?? 0,
-            icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>,
-          },
+          { label: "Active Borrows", value: stats?.active ?? 0 },
+          { label: "Total Borrowed", value: stats?.totalBorrowed ?? 0 },
+          { label: "Total Returned", value: stats?.totalReturned ?? 0 },
+          { label: "This Week", value: stats?.thisWeek ?? 0 },
         ]}
       />
 
-      <div className="transactions-toolbar">
-        <div className="transactions-toolbar-left">
-          <div className="transactions-tabs">
-            <button className={`tab-btn ${activeTab === "borrowed" ? "active" : ""}`} onClick={() => setActiveTab("borrowed")}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-              Borrowed
-              <span className="tab-count">{borrowed.length}</span>
+      <TransactionToolbar
+        filters={filters}
+        onFilterChange={setFilters}
+        activeTab={tab}
+        onTabChange={setTab}
+        /* Badge counts come from the list endpoints' own pagination.total, not
+           from stats. Two reasons stats was wrong:
+             - stats.totalBorrowed counts every action="borrowed" row ever,
+               including loans already returned, while /transactions/borrowed
+               lists only open loans (isOpenBorrow). The badge could read 13
+               while the table showed 4.
+             - stats ignores the filter bar, so the badge stayed at the global
+               number after filtering.
+           pagination.total is computed after filtering, so it matches the rows on
+           screen exactly. Left undefined while loading rather than defaulted to
+           0: the toolbar omits the badge for a non-number, and the page is behind
+           <LoadingSpinner /> until a query resolves anyway, so there is no
+           window where a wrong or zero count would be visible. */
+        tabsLabel="Borrowed or returned"
+        tabs={[
+          { value: "borrowed", label: "Borrowed", icon: <MdPeople size={15} />, count: borrowedPagination?.total },
+          { value: "returned", label: "Returned", icon: <MdCheckCircle size={15} />, count: returnedPagination?.total },
+        ]}
+        resultCount={rows.length}
+        total={total}
+        showCourseFilter
+        showYearFilter
+        showDateFilter
+        viewMode={viewMode}
+        onViewChange={setViewMode}
+        viewStorageKey="labtrack-transactions-view"
+        pagination={pagination}
+        onPageChange={setPage}
+        actions={
+          <>
+            <button className="btn btn-green" onClick={() => setExportOpen(true)}>
+              <MdDownload size={16} /> Report
             </button>
-            <button className={`tab-btn ${activeTab === "returned" ? "active" : ""}`} onClick={() => setActiveTab("returned")}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20,6 9,17 4,12"/></svg>
-              Returned
-              <span className="tab-count">{returned.length}</span>
+            <button className="btn btn-outline" onClick={refresh} aria-label="Refresh">
+              <MdRefresh size={16} /> Refresh
             </button>
-          </div>
-          <div className="transactions-result-count">
-            Showing {displayItems.length} of {paginationTotal}
-          </div>
-        </div>
-        <div className="transactions-toolbar-right">
-          <ViewToggle value={viewMode} onChange={setViewMode} localStorageKey="labtrack-transactions-view" />
-          <select className="transactions-sort-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-            {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-          <select className="transactions-date-filter" value={dateRange} onChange={(e) => setDateRange(e.target.value)}>
-            {DATE_RANGE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-          </select>
-          {dateRange === "custom" && (
-            <>
-              <input
-                type="date"
-                className="transactions-custom-date"
-                aria-label="From date"
-                value={customFrom}
-                max={customTo || undefined}
-                onChange={(e) => setCustomFrom(e.target.value)}
-              />
-              <input
-                type="date"
-                className="transactions-custom-date"
-                aria-label="To date"
-                value={customTo}
-                min={customFrom || undefined}
-                onChange={(e) => setCustomTo(e.target.value)}
-              />
-            </>
-          )}
-          <select className="transactions-course-filter" value={filterCourse} onChange={(e) => setFilterCourse(e.target.value)}>
-            <option value="All">All Courses</option>
-            {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <select className="transactions-year-filter" value={filterYear} onChange={(e) => setFilterYear(e.target.value)}>
-            <option value="All">All Years</option>
-            {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
-          </select>
-          <div className="transactions-search">
-            <svg className="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            <input placeholder="Search name, ID, item..." value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
-      {displayItems.length === 0 ? (
-        <div className="transactions-empty">
-          <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            {activeTab === "borrowed" ? (
-              <>
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                <circle cx="9" cy="7" r="4"/>
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-              </>
-            ) : (
-              <>
-                <polyline points="20,6 9,17 4,12"/>
-                <circle cx="12" cy="12" r="10"/>
-              </>
-            )}
-          </svg>
-          <h3>No {activeTab} records found</h3>
-          <p>{search || filterCourse !== "All" || filterYear !== "All" || dateRange !== "all" ? "Try adjusting your filters" : `No ${activeTab} transactions yet`}</p>
-        </div>
-      ) : viewMode === "grid" ? (
-        <div className="transactions-grid">
-          {displayItems.map((item) => {
-            const date = toDate(item.timestamp);
-            const isBorrowed = activeTab === "borrowed";
-            const remaining = isBorrowed ? getRemainingQuantity(item) : null;
-            const fullName = `${item.firstName || ""} ${item.lastName || ""}`.trim();
-            const color = getAvatarColor(fullName);
-            const overdue = isBorrowed ? getOverdueInfo(toDate(item.dueDate)) : null;
-            const returnDate = !isBorrowed ? toDate(item.returnedAt || item.timestamp) : null;
-
-            return (
-              <div className={`transaction-card ${overdue?.className || ""}`} key={item.id} onClick={() => handleViewInfo(item)} style={{cursor:"pointer"}}>
-                <div className={`transaction-card-accent ${isBorrowed ? "accent-borrowed" : "accent-returned"}`} />
-                <div className="transaction-card-body">
-                  <div className="transaction-card-top">
-                    <div className="transaction-avatar" style={item.profileURL ? { background: "transparent" } : { background: color }}>
-                      {item.profileURL ? (
-                        <img src={item.profileURL} alt={fullName} loading="lazy" width="40" height="40" decoding="async" />
-                      ) : (
-                        getInitials(item.firstName, item.lastName)
-                      )}
-                    </div>
-                    <div className="transaction-card-info">
-                      <h4 className="transaction-name">{fullName || "-"}</h4>
-                      <p className="transaction-school-id">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
-                        {item.schoolId || "-"}
-                      </p>
-                    </div>
-                    <div className="transaction-card-badges">
-                      {overdue && <span className={`overdue-badge ${overdue.className}`}>{overdue.text}</span>}
-                      <span className={`transaction-status-badge ${isBorrowed ? "status-borrowed" : "status-returned"}`}>
-                        {isBorrowed ? "Borrowed" : (item.status || "Returned")}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="transaction-card-details">
-                    <div className="transaction-detail">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-                      <span>{item.itemName || "-"}</span>
-                    </div>
-                    <div className="transaction-detail">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-                      <span>Qty: {isBorrowed ? `${remaining} / ${item.quantity || 0}` : (item.quantity || 0)}</span>
-                    </div>
-                    <div className="transaction-detail">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
-                      <span>{date ? timeAgo(date) : "-"}</span>
-                    </div>
-                    {isBorrowed && item.dueDate && (
-                      <div className="transaction-detail">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                        <span style={{ color: overdue ? "var(--red)" : undefined }}>Due: {formatDate(toDate(item.dueDate))}</span>
-                      </div>
-                    )}
-                    {!isBorrowed && returnDate && (
-                      <div className="transaction-detail">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                        <span>Returned: {formatDate(returnDate)}</span>
-                      </div>
-                    )}
-                  </div>
-                  {item.course && <span className="transaction-course-tag">{item.course}{item.year ? ` - ${item.year}` : ""}</span>}
-                  {item.equipment_course && item.equipment_course !== item.course && (
-                    <span className="transaction-course-tag" style={{ marginLeft: 4, background: "#f57c0020", color: "#f57c00" }}>
-                      Equipment: {item.equipment_course}
-                    </span>
-                  )}
-                  {isBorrowed && item.quantity > 0 && remaining >= 0 && (
-                    <div className="transaction-progress">
-                      <div className="progress-bar">
-                        <div className="progress-fill" style={{ width: `${item.quantity > 0 ? Math.max(0, ((item.quantity - remaining) / item.quantity) * 100) : 0}%` }} />
-                      </div>
-                      <span className="progress-label">{Math.max(0, item.quantity - remaining)} of {item.quantity} returned</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="transactions-table-wrapper">
-          <table className="transactions-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>School ID</th>
-                <th>Item</th>
-                <th>Qty</th>
-                <th>Equipment Course</th>
-                <th>{activeTab === "returned" ? "Borrowed" : "Date"}</th>
-                {activeTab === "borrowed" && <th>Due Date</th>}
-                {activeTab === "returned" && <th>Returned</th>}
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {displayItems.map((item) => {
-                const date = toDate(item.timestamp);
-                const isBorrowed = activeTab === "borrowed";
-                const remaining = isBorrowed ? getRemainingQuantity(item) : null;
-                const fullName = `${item.firstName || ""} ${item.lastName || ""}`.trim();
-                const overdue = isBorrowed ? getOverdueInfo(toDate(item.dueDate)) : null;
-                const returnDate = !isBorrowed ? toDate(item.returnedAt || item.timestamp) : null;
-
-                return (
-                  <tr key={item.id} className={overdue?.className || ""} onClick={() => handleViewInfo(item)} style={{cursor:"pointer"}}>
-                    <td className="table-name-cell">
-                      <div className="table-user">
-                        <div className="transaction-avatar-sm" style={item.profileURL ? { background: "transparent" } : { background: getAvatarColor(fullName) }}>
-                          {item.profileURL ? (
-                            <img src={item.profileURL} alt={fullName} loading="lazy" width="40" height="40" decoding="async" />
-                          ) : (
-                            getInitials(item.firstName, item.lastName)
-                          )}
-                        </div>
-                        <span>{fullName || "-"}</span>
-                      </div>
-                    </td>
-                    <td>{item.schoolId || "-"}</td>
-                    <td>{item.itemName || "-"}</td>
-                    <td>{isBorrowed ? `${remaining} / ${item.quantity || 0}` : (item.quantity || 0)}</td>
-                    <td>
-                      {item.equipment_course ? (
-                        <span style={item.equipment_course !== item.course ? { color: "#f57c00", fontWeight: 600 } : {}}>
-                          {item.equipment_course}
-                        </span>
-                      ) : "-"}
-                    </td>
-                    <td>{date ? timeAgo(date) : "-"}</td>
-                    {isBorrowed && (
-                      <td style={{ color: overdue ? "var(--red)" : undefined, fontWeight: overdue ? 600 : undefined }}>
-                        {item.dueDate ? formatDate(toDate(item.dueDate)) : "-"}
-                      </td>
-                    )}
-                    {!isBorrowed && (
-                      <td>{returnDate ? formatDate(returnDate) : "-"}</td>
-                    )}
-                    <td>
-                      <div className="table-status-cell">
-                        {overdue && <span className={`overdue-badge-sm ${overdue.className}`}>{overdue.text}</span>}
-                        <span className={`transaction-status-badge-sm ${isBorrowed ? "status-borrowed" : "status-returned"}`}>
-                          {isBorrowed ? "Borrowed" : (item.status || "Returned")}
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {paginationData && paginationData.totalPages > 1 && (
-        <Pagination
-          currentPage={paginationData.page}
-          totalPages={paginationData.totalPages}
-          totalItems={paginationData.total}
-          pageSize={paginationData.limit}
-          onPageChange={setPage}
+      {rows.length === 0 ? (
+        <TransactionEmpty
+          mode={tab}
+          title={`No ${tab} records found`}
+          message={activeFilterCount > 0 ? "No transaction matches the current filters." : `No ${tab} transactions yet.`}
+          action={
+            activeFilterCount > 0 ? (
+              <button className="btn btn-green" onClick={resetFilters}>
+                Clear filters
+              </button>
+            ) : null
+          }
         />
+      ) : (
+        <div className={`tx-results${activeQuery.isFetching ? " tx-results--busy" : ""}`}>
+          {viewMode === "grid" ? (
+            <div className="tx-grid">
+              {rows.map((view) => (
+                <TransactionCard key={view.id} view={view} onSelect={setSelected} />
+              ))}
+            </div>
+          ) : (
+            <TransactionTable rows={rows} onSelect={setSelected} showReturnedColumn={!isBorrowedTab} />
+          )}
+        </div>
       )}
 
-      {selectedTransaction && (
-        <Modal title="Borrower Details" onClose={() => setSelectedTransaction(null)}>
-          {(() => {
-            const item = selectedTransaction;
-            const isBorrowed = item.action === "borrowed" || item.status === "borrowed";
-            const fullName = `${item.firstName || ""} ${item.lastName || ""}`.trim();
-            const color = getAvatarColor(fullName);
-            const borrowDate = isBorrowed
-              ? toDate(item.timestamp || item.borrowedAt)
-              : toDate(item.borrowedAt);
-            const dueDate = toDate(item.dueDate);
-            const returnDate = toDate(item.returnedAt || item.lastReturnedAt || (!isBorrowed ? item.timestamp : null));
-            const remaining = isBorrowed ? getRemainingQuantity(item) : null;
-
-            return (
-              <div className="txn-detail-modal">
-                <div className="txn-detail-borrower">
-                  <div className="txn-detail-avatar" style={item.profileURL ? { background: "transparent" } : { background: color }}>
-                    {item.profileURL ? (
-                      <img src={item.profileURL} alt={fullName} loading="lazy" width="40" height="40" decoding="async" />
-                    ) : (
-                      getInitials(item.firstName, item.lastName)
-                    )}
-                  </div>
-                  <div className="txn-detail-borrower-info">
-                    <h4>{fullName || "-"}</h4>
-                    <p>{item.schoolId || "-"}</p>
-                    {item.course && <span className="txn-detail-course">{item.course}{item.year ? ` - ${item.year}` : ""}</span>}
-                    {item.email && <span className="txn-detail-email">{item.email}</span>}
-                    {item.role && <span className={`txn-detail-role ${item.role}`}>{item.role}</span>}
-                  </div>
-                </div>
-
-                <div className="txn-detail-section">
-                  <h5>Transaction Details</h5>
-                  <div className="txn-detail-grid">
-                    <div className="txn-detail-row">
-                      <span className="txn-detail-label">Item</span>
-                      <span className="txn-detail-value">{item.itemName || "-"}</span>
-                    </div>
-                    {item.equipment_course && (
-                      <div className="txn-detail-row">
-                        <span className="txn-detail-label">Equipment Course</span>
-                        <span className="txn-detail-value">
-                          {item.equipment_course}
-                          {item.equipment_course !== item.course && (
-                            <span style={{ color: "#f57c00", fontSize: 11, marginLeft: 6 }}>(Cross-course)</span>
-                          )}
-                        </span>
-                      </div>
-                    )}
-                    <div className="txn-detail-row">
-                      <span className="txn-detail-label">Quantity</span>
-                      <span className="txn-detail-value">
-                        {isBorrowed && remaining !== null
-                          ? `${remaining} / ${item.quantity || 0}`
-                          : (item.quantity || 0)}
-                      </span>
-                    </div>
-                    <div className="txn-detail-row">
-                      <span className="txn-detail-label">Status</span>
-                      <span className={`txn-detail-value status-${isBorrowed ? "borrowed" : "returned"}`}>
-                        {isBorrowed ? "Borrowed" : (item.status || "Returned")}
-                      </span>
-                    </div>
-                    <div className="txn-detail-row">
-                      <span className="txn-detail-label">Borrowed</span>
-                      <span className="txn-detail-value">{borrowDate ? formatDate(borrowDate) : "-"}</span>
-                    </div>
-                    <div className="txn-detail-row">
-                      <span className="txn-detail-label">Due Date</span>
-                      <span className="txn-detail-value">{dueDate ? formatDate(dueDate) : "-"}</span>
-                    </div>
-                    <div className="txn-detail-row">
-                      <span className="txn-detail-label">Returned</span>
-                      <span className="txn-detail-value">{returnDate ? formatDate(returnDate) : "-"}</span>
-                    </div>
-                    {item.conditionOnBorrow && (
-                      <div className="txn-detail-row">
-                        <span className="txn-detail-label">Condition (Borrow)</span>
-                        <span className="txn-detail-value">{item.conditionOnBorrow}</span>
-                      </div>
-                    )}
-                    {item.conditionOnReturn && (
-                      <div className="txn-detail-row">
-                        <span className="txn-detail-label">Condition (Return)</span>
-                        <span className="txn-detail-value">{item.conditionOnReturn}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {(item.borrowPhotoURL || item.returnPhotoURL) && (
-                  <div className="txn-detail-section">
-                    <h5>Condition Photos</h5>
-                    <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                      {item.borrowPhotoURL && (
-                        <div style={{ textAlign: "center" }}>
-                          <img src={item.borrowPhotoURL} alt="Borrow condition" loading="lazy" width="200" height="200" decoding="async" style={{ maxWidth: 200, borderRadius: 8, border: "1px solid var(--border)" }} />
-                          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>At Borrow</div>
-                        </div>
-                      )}
-                      {item.returnPhotoURL && (
-                        <div style={{ textAlign: "center" }}>
-                          <img src={item.returnPhotoURL} alt="Return condition" loading="lazy" width="200" height="200" decoding="async" style={{ maxWidth: 200, borderRadius: 8, border: "1px solid var(--border)" }} />
-                          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>At Return</div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
+      {selected && (
+        <Modal title={selected.fullName || "Transaction Details"} onClose={() => setSelected(null)}>
+          <TransactionDetail view={selected} />
         </Modal>
       )}
 

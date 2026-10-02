@@ -22,12 +22,16 @@ export function useCatalogStats() {
 }
 
 // ── Transactions ──
+// All four carry placeholderData:keepPreviousData so changing a filter or page
+// dims the existing rows instead of replacing the list with a full-height
+// spinner (which is what isLoading did on every keystroke).
 export function useBorrowed(params, { enabled } = {}) {
   return useQuery({
     queryKey: ["borrowed", params],
     queryFn: () => api.getBorrowed(params),
     staleTime: 2 * 60 * 1000,
     enabled,
+    placeholderData: keepPreviousData,
   });
 }
 export function useMyBorrowed(params, { enabled } = {}) {
@@ -36,6 +40,7 @@ export function useMyBorrowed(params, { enabled } = {}) {
     queryFn: () => api.getMyBorrowed(params),
     staleTime: 2 * 60 * 1000,
     enabled,
+    placeholderData: keepPreviousData,
   });
 }
 export function useReturned(params, { enabled } = {}) {
@@ -44,6 +49,7 @@ export function useReturned(params, { enabled } = {}) {
     queryFn: () => api.getReturned(params),
     staleTime: 2 * 60 * 1000,
     enabled,
+    placeholderData: keepPreviousData,
   });
 }
 export function useMyReturned(params, { enabled } = {}) {
@@ -52,6 +58,7 @@ export function useMyReturned(params, { enabled } = {}) {
     queryFn: () => api.getMyReturned(params),
     staleTime: 2 * 60 * 1000,
     enabled,
+    placeholderData: keepPreviousData,
   });
 }
 export function useTransactionStats() {
