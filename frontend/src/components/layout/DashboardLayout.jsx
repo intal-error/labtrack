@@ -14,7 +14,7 @@ import {
   MdChevronLeft, MdChevronRight, MdExpandMore, MdExpandLess,
   MdBuild, MdWarning, MdMenuBook, MdHistory,
   MdAssignment, MdEventAvailable,
-  MdSearch, MdClose, MdCheckCircle, MdGavel, MdTune,
+  MdClose, MdCheckCircle, MdGavel, MdTune,
 } from "react-icons/md";
 import PesoIcon from "../ui/PesoIcon";
 import { FaExchangeAlt } from "react-icons/fa";
@@ -104,7 +104,6 @@ export default function DashboardLayout() {
   const [logbookActive, setLogbookActive] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const notifRef = useRef(null);
   const userRef = useRef(null);
   const { user, role, userProfile, logout, loading } = useAuth();
@@ -150,14 +149,6 @@ export default function DashboardLayout() {
 
   const toggleSection = (label) => {
     setOpenSections((prev) => ({ ...prev, [label]: !prev[label] }));
-  };
-
-  const handleSearch = (e) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      const path = role === "admin" ? "/catalog" : "/my-activity";
-      navigate(`${path}?search=${encodeURIComponent(searchQuery.trim())}`);
-    }
   };
 
   const handleMarkAllRead = async () => {
@@ -310,16 +301,6 @@ export default function DashboardLayout() {
               {new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" })}
             </span>
           </div>
-
-          <form className="dash-header-search" onSubmit={handleSearch}>
-            <MdSearch size={18} />
-            <input
-              type="text"
-              placeholder={role === "admin" ? "Search equipment catalog..." : "Search borrowed items..."}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </form>
 
           <div className="dash-header-right">
             <div className="dash-header-bell-wrap" ref={notifRef}>

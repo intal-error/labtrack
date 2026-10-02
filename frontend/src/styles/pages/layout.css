@@ -284,42 +284,6 @@ body.dark .sidebar.collapsed .sidebar-bottom-item[data-label]::after{
   white-space: nowrap;
 }
 
-/* ── Search Bar ── */
-.dash-header-search {
-  position: relative;
-  z-index: 1;
-  flex: 1;
-  max-width: 420px;
-}
-.dash-header-search input {
-  width: 100%;
-  padding: 9px 14px 9px 38px;
-  border-radius: 10px;
-  border: 1.5px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
-  font-size: 13px;
-  font-family: inherit;
-  outline: none;
-  transition: all 0.2s;
-}
-.dash-header-search input::placeholder {
-  color: rgba(255, 255, 255, 0.4);
-}
-.dash-header-search input:focus {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(102, 187, 106, 0.4);
-  box-shadow: 0 0 0 3px rgba(102, 187, 106, 0.08);
-}
-.dash-header-search svg {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: rgba(255, 255, 255, 0.4);
-  pointer-events: none;
-}
-
 .dash-header-right {
   position: relative;
   z-index: 1;
@@ -766,9 +730,6 @@ body.dark .dash-ud-menu-item.danger:hover {
   .dash-header-user-info {
     display: none;
   }
-  .dash-header-search {
-    max-width: 200px;
-  }
   .dash-notif-dropdown {
     position: fixed;
     top: calc(62px + env(safe-area-inset-top, 0px));
@@ -789,12 +750,6 @@ body.dark .dash-ud-menu-item.danger:hover {
     overflow-y: auto;
   }
 }
-@media (max-width: 480px) {
-  .dash-header-search {
-    display: none;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .sidebar,
   .sidebar a,

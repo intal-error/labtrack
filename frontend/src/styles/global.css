@@ -108,7 +108,6 @@ body.dark .card:hover{box-shadow:0 4px 16px rgba(0,0,0,.25)}
   input,select,textarea,
   input[class],select[class],textarea[class],
   .modal-content form input,.modal-content form select,
-  .dash-header-search input,
   .catalog-search-box input,.catalog-course-filter,.catalog-sort select,
   .tables-course-filter,
   .transactions-sort-select,.transactions-date-filter,.transactions-course-filter,.transactions-search input,
