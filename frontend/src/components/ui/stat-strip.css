@@ -7,14 +7,33 @@
 .stat-strip-card.tone-warn .stat-strip-icon{background:rgba(245,124,0,.08);color:#f57c00}
 .stat-strip-card.tone-alert .stat-strip-icon{background:rgba(211,47,47,.08);color:#d32f2f}
 
+/* ── stack variant: label above a large number, no icon tile ──
+   column-reverse on .stat-strip-info flips the source order (value, label)
+   into label-then-value without duplicating markup, and align-items:flex-start
+   makes the tiles shrink-to-fit instead of stretching to the card width. */
+.stat-strip--stack{gap:14px;margin-bottom:0;flex-shrink:0}
+.stat-strip--stack .stat-strip-card{padding:16px 18px}
+.stat-strip--stack .stat-strip-icon{display:none}
+.stat-strip--stack .stat-strip-info{flex-direction:column-reverse;align-items:flex-start;gap:4px}
+.stat-strip--stack .stat-strip-value{font-size:1.65rem;font-weight:700;letter-spacing:-.03em}
+.stat-strip--stack .stat-strip-label{font-size:10.5px;font-weight:600;letter-spacing:.07em;margin-top:0}
+
 @media(max-width:768px){
   .stat-strip{gap:12px;margin-bottom:20px}
+  /* Must be restated here: this block comes after .stat-strip--stack at equal
+     specificity, so without it the tablet breakpoint re-adds the 24px/20px
+     margin the stack variant zeroes out (the catalog supplies its own 16px
+     flex gap instead). Mirrors the <=600px block below. */
+  .stat-strip--stack{margin-bottom:0}
 }
 @media(max-width:600px){
   .stat-strip{gap:8px;margin-bottom:16px}
   .stat-strip-card{padding:12px 14px;gap:10px}
   .stat-strip-icon{width:36px;height:36px}
   .stat-strip-value{font-size:1.2rem}
+  .stat-strip--stack{gap:8px;margin-bottom:0}
+  .stat-strip--stack .stat-strip-card{padding:12px 13px}
+  .stat-strip--stack .stat-strip-value{font-size:1.3rem}
 }
 
 body.dark .stat-strip-card{border-color:rgba(255,255,255,.1);background:#131313}

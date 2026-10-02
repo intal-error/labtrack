@@ -1,43 +1,23 @@
-.catalog-page{max-width:1200px;margin:0 auto;display:flex;flex-direction:column;height:calc(100vh - 48px);min-height:calc(100vh - 48px)}
+/* NOTE ON WIDTH: this used to be `max-width:1200px;margin:0 auto`, which was
+   the sole cause of the dead space on both sides at wide viewports — on a
+   1920px screen the shell offers ~1612px and 1200px was centered inside it,
+   leaving ~206px per side. The page now fills the available width (the new
+   toolbar/table live in catalog-browser.css under .cx-* class names, because
+   .catalog-table/.catalog-card/.category-pill etc. below are ALSO used by
+   BorrowRequestsTab, MaintenanceTab and RequestsPanel).
+   Height: the old `calc(100vh - 48px)` ignored the .dash-header entirely, so
+   the page was ~28px taller than .main-content and always forced a scrollbar.
+   --hdr-h is published on .app-layout (see layout.css); 44px covers
+   .main-content's 24px top padding + 20px of breathing room at the bottom. */
+.catalog-page{width:100%;display:flex;flex-direction:column;gap:16px;min-width:0;height:calc(100dvh - var(--hdr-h, 74px) - 44px)}
 @media(max-width:1024px){
-  .catalog-page{height:auto;min-height:calc(100dvh - 120px)}
+  .catalog-page{height:auto;min-height:0}
   .catalog-table-wrapper,.catalog-grid{max-height:none}
 }
 
-.catalog-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;flex-wrap:wrap;gap:16px;flex-shrink:0}
-.catalog-header-left h1{font-size:1.6rem;color:var(--dark-green);margin-bottom:4px}
-.catalog-subtitle{font-size:13px;color:var(--text-muted);margin:0}
-.catalog-header-actions{display:flex;gap:10px;flex-wrap:wrap}
-.catalog-header-actions .btn{display:flex;align-items:center;gap:6px}
-
-.catalog-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;flex-shrink:0}
-.catalog-filter-pills{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.catalog-search-box{position:relative;display:flex;align-items:center;min-width:200px}
-.catalog-search-box svg{position:absolute;left:12px;color:var(--text-muted);pointer-events:none}
-.catalog-search-box input{width:100%;padding:8px 12px 8px 36px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg-card);color:var(--text);transition:all .2s}
-.catalog-search-box input:focus{outline:none;border-color:var(--green);box-shadow:0 0 3px rgba(46,125,50,.3)}
-.catalog-search-box input::placeholder{color:var(--text-muted)}
-.filter-pill{display:inline-flex;align-items:center;gap:5px;padding:8px 16px;border:1px solid var(--border);border-radius:20px;background:var(--bg-card);color:var(--text);font-size:13px;font-weight:500;cursor:pointer;transition:all .2s}
-.filter-pill:hover{border-color:var(--green);color:var(--green)}
-.filter-pill.active{background:var(--green);color:#000;border-color:var(--green)}
-.filter-pill.active svg{stroke:#000}
-.catalog-course-filter{padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg-card);color:var(--text);cursor:pointer;min-width:160px}
-.catalog-course-filter:focus{outline:none;border-color:var(--green);box-shadow:0 0 3px rgba(46,125,50,.3)}
-.catalog-course-tabs{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px;flex-shrink:0}
-.course-tab{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:1px solid var(--border);border-radius:20px;background:var(--bg-card);color:var(--text);font-size:13px;font-weight:500;cursor:pointer;transition:all .2s;white-space:nowrap}
-.course-tab:hover{border-color:var(--green);color:var(--green)}
-.course-tab.active{background:var(--green);color:#000;border-color:var(--green)}
-.course-tab-count{display:inline-flex;align-items:center;justify-content:center;min-width:22px;padding:1px 7px;border-radius:10px;background:var(--bg);color:var(--text-muted);font-size:11px;font-weight:600}
-.course-tab.active .course-tab-count{background:rgba(0,0,0,.15);color:#000}
-.catalog-sort{display:flex;align-items:center;gap:8px;color:var(--text-muted)}
-.catalog-sort select{padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg-card);color:var(--text);cursor:pointer}
-.catalog-sort select:focus{outline:none;border-color:var(--green);box-shadow:0 0 3px rgba(46,125,50,.3)}
-
-.catalog-view-toggle{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
-.catalog-view-toggle .view-btn{display:flex;align-items:center;justify-content:center;width:40px;height:40px;border:none;background:var(--bg-card);color:var(--text-muted);cursor:pointer;transition:all .2s}
-.catalog-view-toggle .view-btn:hover{color:var(--text);background:var(--bg)}
-.catalog-view-toggle .view-btn.active{background:var(--green);color:#000}
-.catalog-view-toggle .view-btn + .view-btn{border-left:1px solid var(--border)}
+/* Cards / toolbar / table / grid / badges for the redesigned catalog live in
+   catalog-browser.css. What remains below is only what BorrowRequestsTab,
+   MaintenanceTab and RequestsPanel still render, plus .catalog-page itself. */
 
 .catalog-table-wrapper{background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:var(--card-shadow);flex:1;overflow-y:auto;overflow-x:auto;max-height:calc(100vh - 280px);scrollbar-width:none}
 .catalog-table-wrapper::-webkit-scrollbar{width:0}
@@ -48,9 +28,6 @@
 .catalog-table th:nth-child(2),.catalog-table td:nth-child(2){text-align:center}
 .catalog-table tbody tr:hover{background:var(--bg)}
 .table-name-cell{min-width:160px}
-.table-item-name{display:flex;align-items:center;gap:10px}
-.table-item-thumb{width:32px;height:32px;border-radius:6px;object-fit:cover;cursor:pointer;flex-shrink:0}
-.table-item-thumb-placeholder{width:32px;height:32px;border-radius:6px;background:var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-muted);flex-shrink:0}
 
 .catalog-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;padding-bottom:8px;max-height:calc(100vh - 280px);overflow-y:auto;scrollbar-width:none}
 .catalog-grid::-webkit-scrollbar{width:0}
@@ -60,14 +37,11 @@
 .catalog-card-image{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;border-radius:10px 10px 0 0;background:#f0f4f1}
 .catalog-card-image img{width:100%;height:100%;object-fit:cover;cursor:pointer;transition:transform .3s}
 .catalog-card-image img:hover{transform:scale(1.05)}
-.item-placeholder{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--text-muted);opacity:.5}
-.card-status-badge{position:absolute;top:8px;right:8px;padding:3px 8px;border-radius:20px;font-size:10px;font-weight:600;backdrop-filter:blur(8px)}
-.status-available{background:rgba(200,230,201,.9);color:#2e7d32}
-.status-borrowed{background:rgba(255,224,178,.9);color:#ef6c00}
 .catalog-card-body{padding:10px}
 .catalog-card-title{font-size:13px;font-weight:600;color:var(--text);margin:0 0 6px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.catalog-card-meta{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px}
 .category-pill{display:inline-block;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:600;background:linear-gradient(135deg,#e3f2fd,#bbdefb);color:#1565c0}
+/* .cond-* are emitted at runtime by conditionClass() in utils/helpers.js, so a
+   grep for the class name in JSX finds nothing. Do not "clean up" these. */
 .condition-badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:600}
 .cond-excellent{background:linear-gradient(135deg,#e8f5e9,#c8e6c9);color:#2e7d32}
 .cond-good{background:linear-gradient(135deg,#e3f2fd,#bbdefb);color:#1565c0}
@@ -75,12 +49,6 @@
 .cond-damaged{background:linear-gradient(135deg,#fff3e0,#ffe0b2);color:#ef6c00}
 .cond-repair{background:linear-gradient(135deg,#f3e5f5,#e1bee7);color:#6a1b9a}
 .cond-missing{background:linear-gradient(135deg,#ffebee,#ffcdd2);color:#c62828}
-.catalog-card-quantity{margin-bottom:6px}
-.qty-info{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px}
-.qty-info svg{opacity:.5}
-.qty-bar{height:2px;background:var(--border);border-radius:3px;overflow:hidden}
-.qty-bar-fill{height:100%;background:linear-gradient(90deg,var(--green),var(--green-light));border-radius:4px;transition:width .4s ease}
-.catalog-card-actions{display:flex;gap:6px;padding-top:8px;border-top:1px solid var(--border)}
 .catalog-kebab-wrap{position:relative}
 .catalog-kebab-btn{width:40px;height:40px;border-radius:8px;border:none;background:transparent;color:var(--text-muted);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s}
 .catalog-kebab-btn:hover{background:var(--bg);color:var(--text)}
@@ -97,10 +65,6 @@
 .catalog-empty p{font-size:13px;color:var(--text-muted);margin:0 0 16px 0}
 .catalog-empty .btn{display:inline-flex;align-items:center;gap:6px}
 
-.image-upload-row{display:flex;align-items:center;gap:10px}
-.image-upload-row input{flex:1}
-.text-btn{background:none;border:none;color:var(--green);font-weight:bold;cursor:pointer;font-size:14px;text-decoration:underline}
-.text-btn:hover{color:var(--green-dark)}
 .image-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);display:flex;justify-content:center;align-items:center;z-index:9999}
 .image-overlay-content{position:relative;text-align:center;animation:fadeInScale .3s ease}
 .image-overlay-content img{max-width:90vw;max-height:85vh;border-radius:10px;box-shadow:0 0 15px rgba(0,0,0,.6)}
@@ -112,51 +76,18 @@
   .catalog-grid{grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}
   .catalog-table-wrapper{overflow-x:auto}
   .catalog-table{min-width:640px}
-  .catalog-header{margin-bottom:14px}
-  .catalog-toolbar{margin-bottom:12px}
 }
 @media(max-width:600px){
-  .catalog-page{height:auto;min-height:calc(100dvh - 120px)}
-  .catalog-header{flex-direction:column;align-items:stretch;margin-bottom:10px;gap:10px}
-  .catalog-header-left h1{font-size:1.3rem}
-  .catalog-header-actions{flex-direction:row;gap:8px}
-  .catalog-header-actions .btn{justify-content:center;font-size:12px;padding:8px 12px}
-  .catalog-toolbar{flex-direction:column;align-items:stretch;gap:8px;margin-bottom:10px}
-  .catalog-filter-pills{justify-content:center;gap:6px}
-  .catalog-filter-pills .filter-pill{padding:6px 12px;font-size:11px}
-  .catalog-search-box{min-width:0;width:100%}
-  .catalog-course-filter{min-width:0;width:100%}
-  .catalog-course-tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-bottom:12px}
-  .catalog-course-tabs::-webkit-scrollbar{display:none}
-  .course-tab{padding:6px 12px;font-size:12px}
-  .catalog-sort{justify-content:center}
+  .catalog-page{height:auto;min-height:0}
   .catalog-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
   .catalog-card-body{padding:8px}
   .catalog-card-title{font-size:12px}
-  .catalog-card-meta{gap:4px;margin-bottom:4px}
-  .catalog-card-quantity{margin-bottom:4px}
-  .catalog-card-actions{padding-top:6px;gap:5px}
   .catalog-empty{padding:40px 16px}
 }
 @media(max-width:480px){
   .catalog-grid{grid-template-columns:1fr}
-  .catalog-header-actions{flex-direction:column}
 }
 
-body.dark .catalog-page h1{color:#FFFFFF}
-body.dark .catalog-subtitle{color:#888}
-body.dark .filter-pill{background:#131313;border-color:#2a2a2a;color:#FFFFFF}
-body.dark .filter-pill:hover{border-color:var(--green);color:var(--green)}
-body.dark .filter-pill.active{background:var(--green);color:#fff;border-color:var(--green)}
-body.dark .course-tab{background:#131313;border-color:#2a2a2a;color:#FFFFFF}
-body.dark .course-tab:hover{border-color:var(--green);color:var(--green)}
-body.dark .course-tab.active{background:var(--green);color:#fff;border-color:var(--green)}
-body.dark .course-tab-count{background:#1e1e1e;color:#999}
-body.dark .course-tab.active .course-tab-count{background:rgba(255,255,255,.2);color:#fff}
-body.dark .catalog-search-box input{background:#0f0f0f;border-color:#2a2a2a;color:#FFFFFF}
-body.dark .catalog-search-box input:focus{border-color:var(--green);box-shadow:0 0 3px rgba(76,175,80,.3)}
-body.dark .catalog-search-box svg{color:#888}
-body.dark .catalog-sort select{background:#0f0f0f;border-color:#2a2a2a;color:#FFFFFF}
 body.dark .catalog-card{border-color:rgba(255,255,255,.1);background:#131313}
 body.dark .catalog-card:hover{box-shadow:0 12px 28px rgba(0,0,0,.3)}
 body.dark .catalog-card-image{background:#0a0a0a}
@@ -168,26 +99,13 @@ body.dark .condition-badge.cond-fair{background:linear-gradient(135deg,#1a1a1a,#
 body.dark .condition-badge.cond-damaged{background:linear-gradient(135deg,#1a1a1a,#1a1a1a);color:#ccc}
 body.dark .condition-badge.cond-repair{background:linear-gradient(135deg,#1a1a1a,#1a1a1a);color:#aaa}
 body.dark .condition-badge.cond-missing{background:linear-gradient(135deg,#1a1a1a,#1a1a1a);color:#aaa}
-body.dark .card-btn-qr{background:#1b2a3a;color:#aaa;border-color:#1a1a1a}
-body.dark .card-btn-qr:hover{background:#1a1a1a;border-color:#aaa}
-body.dark .card-btn-edit{background:#1a1a1a;color:#ccc;border-color:#1a1a1a}
-body.dark .card-btn-edit:hover{background:#1a1a1a;border-color:#ccc}
-body.dark .card-btn-delete{background:#1a1a1a;color:#aaa;border-color:#1a1a1a}
-body.dark .card-btn-delete:hover{background:#1a1a1a;border-color:#aaa}
 body.dark .catalog-empty{border-color:rgba(255,255,255,.1);background:#131313}
 body.dark .image-overlay{background:rgba(0,0,0,.95)}
 body.dark .btn-close{background:#c62828}
-body.dark .catalog-header-actions .btn-outline{border-color:var(--green);color:var(--green)}
-body.dark .catalog-view-toggle{border-color:#264d35}
-body.dark .catalog-view-toggle .view-btn{background:#131313;color:#888}
-body.dark .catalog-view-toggle .view-btn:hover{color:#FFFFFF;background:#1a1a1a}
-body.dark .catalog-view-toggle .view-btn.active{background:var(--green);color:#fff}
-body.dark .catalog-view-toggle .view-btn + .view-btn{border-color:#264d35}
 body.dark .catalog-table-wrapper{border-color:rgba(255,255,255,.1);background:#131313}
 body.dark .catalog-table thead th{background:#1a3a2a}
 body.dark .catalog-table tbody td{border-color:rgba(255,255,255,.1);color:#FFFFFF}
 body.dark .catalog-table tbody tr:hover{background:#1a1a1a}
-body.dark .table-item-thumb-placeholder{background:#2a2a2a;color:#888}
 body.dark .catalog-kebab-btn{color:#888}
 body.dark .catalog-kebab-btn:hover{background:#1a1a1a;color:#fff}
 body.dark .catalog-kebab-dropdown{background:#131313;border-color:rgba(255,255,255,.1);box-shadow:0 8px 24px rgba(0,0,0,.4)}

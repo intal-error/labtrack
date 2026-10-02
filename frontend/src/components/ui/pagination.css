@@ -39,8 +39,8 @@
 
 .pagination-btn:hover:not(:disabled):not(.active) {
   background: var(--bg-hover);
-  border-color: var(--primary);
-  color: var(--primary);
+  border-color: var(--green);
+  color: var(--green);
 }
 
 .pagination-btn:disabled {
@@ -48,11 +48,38 @@
   cursor: not-allowed;
 }
 
+/* --green, not --primary: --primary is not defined in global.css, so the
+   active page button previously resolved to an invalid background and rendered
+   as a plain outline with no fill. */
 .pagination-btn.active {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: #fff;
+  background: var(--green);
+  border-color: var(--green);
+  color: #000;
   font-weight: 600;
+}
+body.dark .pagination-btn.active {
+  color: #fff;
+}
+
+.pagination-info strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+/* ── compact: sits inline in a toolbar, so drop the padding/rule of the
+      standalone footer variant and keep everything on one line. ── */
+.pagination--compact {
+  padding: 0;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+.pagination--compact .pagination-info {
+  font-size: 12px;
+}
+.pagination--compact .pagination-btn {
+  min-width: 28px;
+  height: 30px;
+  font-size: 12px;
 }
 
 .pagination-ellipsis {

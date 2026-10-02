@@ -1,0 +1,675 @@
+/* ==========================================================================
+   Catalog browser (redesign)
+   --------------------------------------------------------------------------
+   Namespaced .cx-* on purpose. The legacy .catalog-table / .catalog-card /
+   .category-pill / .condition-badge classes in catalog.css are also rendered by
+   BorrowRequestsTab, MaintenanceTab and RequestsPanel, so they are reused here
+   only where the styling is identical (.category-pill, .condition-badge cond-*,
+   .catalog-kebab-*, .catalog-empty) and never redefined.
+
+   Layout contract: .catalog-page (catalog.css) is a definite-height flex column,
+   so .cx-results takes the leftover space and scrolls internally. That keeps the
+   KPI tiles, the toolbar and the pagination pinned while only the rows move.
+   ========================================================================== */
+
+/* ── Restriction banner ────────────────────────────────────────────────── */
+/* Was a long inline-style block on the page; promoted to a class so the theme
+   can be handled once, here. */
+.catalog-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex-shrink: 0;
+  padding: 13px 16px;
+  border: 1px solid rgba(211, 47, 47, 0.22);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(211, 47, 47, 0.07), rgba(211, 47, 47, 0.02));
+}
+.catalog-alert > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--red);
+}
+.catalog-alert-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--red);
+  margin-bottom: 2px;
+}
+.catalog-alert-body {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+body.dark .catalog-alert {
+  border-color: rgba(239, 154, 154, 0.24);
+  background: linear-gradient(135deg, rgba(239, 154, 154, 0.08), rgba(239, 154, 154, 0.02));
+}
+body.dark .catalog-alert-title {
+  color: #ef9a9a;
+}
+
+/* ── Toolbar ───────────────────────────────────────────────────────────── */
+.cx-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  padding: 10px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--card-shadow);
+}
+
+.cx-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 200px;
+  min-width: 170px;
+  max-width: 320px;
+}
+.cx-search svg {
+  position: absolute;
+  left: 11px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.cx-search-input {
+  width: 100%;
+  padding: 8px 12px 8px 34px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  font-size: 12.5px;
+  font-family: inherit;
+  background: var(--bg-card);
+  color: var(--text);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.cx-search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+.cx-search-input:focus {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.14);
+}
+.cx-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.cx-select {
+  padding: 8px 26px 8px 11px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  font-size: 12.5px;
+  font-family: inherit;
+  font-weight: 500;
+  background-color: var(--bg-card);
+  color: var(--text);
+  cursor: pointer;
+  max-width: 190px;
+  /* The search box is the only element allowed to absorb slack; a squashed
+     select clips its own label ("All Condition…"). */
+  flex-shrink: 0;
+  text-overflow: ellipsis;
+  /* Native chevron, so it inherits the OS light/dark rendering via color-scheme */
+  color-scheme: light;
+  transition: border-color 0.16s ease;
+}
+.cx-select:hover {
+  border-color: var(--green);
+}
+.cx-select:focus {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.14);
+}
+.cx-select--sort {
+  margin-right: 2px;
+}
+
+.cx-toolbar-tail {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+.cx-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+}
+.cx-toolbar-actions .btn,
+.cx-toolbar-actions .hero-action-btn {
+  white-space: nowrap;
+}
+
+/* ── Results shell ─────────────────────────────────────────────────────── */
+.cx-results {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* keepPreviousData keeps the old rows mounted while a filter refetches; fade
+   them slightly so it is obvious the list is stale rather than frozen. */
+.cx-results--busy {
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.cx-table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: none;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--card-shadow);
+}
+.cx-table-wrap::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.cx-table {
+  width: 100%;
+  /* tables.css ships bare `table{table-layout:fixed}` (line 10) and
+     `table td{text-align:center}` (line 14) element selectors. Element
+     specificity beats any class rule, so whichever page happened to load
+     tables.css silently restyled this table: cells rendered centered under
+     left-aligned headers, and fixed layout collapsed the Actions column to
+     ~1% and clipped the kebab. Both properties are now declared explicitly so
+     the table is immune to CSS loaded by other routes. */
+  table-layout: auto;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.cx-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 11px 14px;
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+/* Neutralize tables.css's `table thead th:first/last-child{border-top-*-radius:12px}`
+   — 12px inside a wrapper clipped to 14px leaves a 2px sliver on the corners. */
+.cx-table thead th:first-child,
+.cx-table thead th:last-child {
+  border-radius: 0;
+}
+.cx-table tbody td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  vertical-align: middle;
+  white-space: nowrap;
+  /* Must be explicit: tables.css's bare `table td{text-align:center}` wins
+     whenever this declaration is absent, which desynced every cell from its
+     header. */
+  text-align: left;
+}
+.cx-table tbody tr:last-child td {
+  border-bottom: none;
+}
+/* tables.css:15 `table tbody tr:nth-child(even){background:#fafafa}` is
+   specificity (0,1,3) and beats a plain `.cx-table tbody tr` (0,1,2), so the
+   even-row stripe needs the :nth-child(even) form to be overridden. It was
+   invisible in dark mode only because tables.css:205 resets it there. */
+.cx-table tbody tr,
+.cx-table tbody tr:nth-child(even) {
+  background: transparent;
+  transition: background 0.14s ease;
+}
+.cx-table tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+/* Auto layout sizes columns from content, so these are floors rather than
+   fixed tracks: Item is the only elastic column (its name truncates via
+   .cx-item-name's ellipsis) and everything else stays content-width. */
+.cx-th-item,
+.cx-td-item {
+  min-width: 260px;
+}
+.cx-th-avail {
+  min-width: 132px;
+}
+/* A real width, not the `width:1%` shrink-to-fit idiom — under the inherited
+   fixed layout that idiom collapsed the column to ~18px and clipped the 40px
+   kebab button out of view. */
+.cx-th-actions,
+.cx-td-actions {
+  width: 56px;
+  text-align: right;
+}
+
+.cx-none {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+/* ── Item cell ─────────────────────────────────────────────────────────── */
+.cx-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.cx-thumb {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+.cx-thumb--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  opacity: 0.55;
+  cursor: default;
+}
+.cx-item-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.cx-item-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cx-item-sub {
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+/* ── Status pill ───────────────────────────────────────────────────────── */
+.cx-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.cx-status--available {
+  background: rgba(46, 125, 50, 0.12);
+  color: #2e7d32;
+}
+.cx-status--borrowed {
+  background: rgba(239, 108, 0, 0.13);
+  color: #ef6c00;
+}
+
+/* ── Availability ──────────────────────────────────────────────────────── */
+.cx-avail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cx-avail-num {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.cx-avail-sep {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.cx-avail-bar {
+  height: 3px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+.cx-avail-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--green), var(--green-light));
+  transition: width 0.3s ease;
+}
+
+.cx-pill-course {
+  background: rgba(25, 118, 210, 0.12);
+  color: #1565c0;
+}
+
+/* ── Kebab meta rows (barcode / asset tag) ──────────────────────────────── */
+/* Sized with an explicit width rather than by overriding catalog.css's
+   `.catalog-kebab-dropdown{min-width:140px}` — that rule and this file have
+   equal specificity, so who wins would depend on chunk CSS order. A fixed width
+   on the meta block makes the dropdown size itself deterministically. */
+.cx-kebab-meta {
+  width: 186px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 10px 7px;
+}
+.cx-kebab-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cx-kebab-meta-label {
+  flex: 0 0 auto;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.cx-kebab-meta-value {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cx-kebab-meta-value.empty {
+  font-family: inherit;
+  font-weight: 500;
+  font-style: italic;
+  color: var(--text-muted);
+  opacity: 0.75;
+}
+.cx-kebab-divider {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
+}
+
+/* ── Grid view ─────────────────────────────────────────────────────────── */
+.cx-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 14px;
+  /* Shrink-to-fit inside the .cx-results flex column so overflow-y actually
+     engages; without these the grid sized to content and pushed past the
+     panel instead of scrolling. */
+  flex: 1 1 auto;
+  min-height: 0;
+  align-content: start;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+.cx-grid::-webkit-scrollbar {
+  width: 0;
+}
+.cx-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--card-shadow);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.cx-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--green);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+}
+.cx-card-image {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background: var(--bg);
+}
+.cx-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  cursor: pointer;
+  transition: transform 0.25s ease;
+}
+.cx-card-image img:hover {
+  transform: scale(1.04);
+}
+.cx-card-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--text-muted);
+  opacity: 0.5;
+  font-size: 11.5px;
+}
+.cx-card-status {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+/* Only the dark theme needs a scrim: the pill's own tint is already opaque
+   enough over a light photo, and forcing a dark background there left dark
+   green text on near-black. */
+.cx-card-status .cx-status {
+  backdrop-filter: blur(8px);
+}
+.cx-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 11px 12px 12px;
+  flex: 1;
+}
+.cx-card-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cx-card-meta {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.cx-card-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+}
+.cx-card-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.16s ease;
+}
+.cx-card-btn:hover {
+  border-color: var(--green);
+  color: var(--green);
+  background: var(--accent-glow);
+}
+.cx-card-btn--danger:hover {
+  border-color: var(--red);
+  color: var(--red);
+  background: rgba(211, 47, 47, 0.08);
+}
+
+/* ── Responsive ────────────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  /* Below this the four filter selects plus sort plus view toggle stop fitting
+     on one line at full width; letting them wrap is cheaper than a dropdown
+     that needs its own menu state. */
+  .cx-select {
+    flex: 0 1 auto;
+  }
+  .cx-toolbar-tail {
+    margin-left: 0;
+  }
+}
+@media (max-width: 1024px) {
+  /* Scroll the table rather than let auto layout crush the columns. The wrapper
+     already has overflow:auto; the hidden scrollbar keeps the chrome clean. */
+  .cx-table {
+    min-width: 820px;
+  }
+}
+@media (max-width: 768px) {
+  .cx-th-item,
+  .cx-td-item {
+    min-width: 190px;
+  }
+  .cx-toolbar-actions {
+    border-left: none;
+    padding-left: 0;
+    width: 100%;
+  }
+  .cx-toolbar-actions .btn,
+  .cx-toolbar-actions .hero-action-btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+  .cx-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+  }
+}
+@media (max-width: 480px) {
+  .cx-grid {
+    grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
+  }
+  .cx-card-body {
+    padding: 9px 10px 10px;
+  }
+  .cx-search {
+    max-width: none;
+  }
+}
+
+/* ── Dark mode ─────────────────────────────────────────────────────────── */
+body.dark .cx-search-input,
+body.dark .cx-select {
+  background: #0f0f0f;
+  border-color: #2a2a2a;
+  color: #ffffff;
+  color-scheme: dark;
+}
+body.dark .cx-search-input:focus,
+body.dark .cx-select:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(67, 160, 71, 0.16);
+}
+body.dark .cx-search-input::placeholder {
+  color: #777;
+}
+body.dark .cx-table-wrap,
+body.dark .cx-toolbar,
+body.dark .cx-card {
+  background: #131313;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+body.dark .cx-table thead th {
+  background: #0d0d0d;
+  color: #8a8a8a;
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+body.dark .cx-table tbody td {
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+}
+body.dark .cx-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.045);
+}
+body.dark .cx-thumb {
+  background: #0a0a0a;
+  border-color: #2a2a2a;
+}
+body.dark .cx-thumb--empty {
+  color: #777;
+}
+body.dark .cx-toolbar-actions {
+  border-left-color: rgba(255, 255, 255, 0.08);
+}
+body.dark .cx-status--available {
+  background: rgba(67, 160, 71, 0.16);
+  color: var(--green-light);
+}
+body.dark .cx-status--borrowed {
+  background: rgba(255, 183, 77, 0.16);
+  color: #ffb74d;
+}
+body.dark .cx-card-status .cx-status {
+  background: rgba(0, 0, 0, 0.7);
+}
+body.dark .cx-pill-course {
+  background: rgba(100, 181, 246, 0.14);
+  color: #64b5f6;
+}
+body.dark .cx-card-image,
+body.dark .cx-avail-bar {
+  background: #0a0a0a;
+}
+body.dark .cx-avail-bar {
+  background: #2a2a2a;
+}
+body.dark .cx-card-btn {
+  background: #131313;
+  border-color: #2a2a2a;
+}
+body.dark .cx-card-actions {
+  border-top-color: rgba(255, 255, 255, 0.07);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cx-card,
+  .cx-card-image img,
+  .cx-results--busy {
+    transition: none;
+  }
+  .cx-card:hover {
+    transform: none;
+  }
+}

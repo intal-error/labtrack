@@ -2,10 +2,9 @@ import { useMemo } from "react";
 import { MdChevronLeft, MdChevronRight, MdFirstPage, MdLastPage } from "react-icons/md";
 import "./pagination.css";
 
-export default function Pagination({ currentPage, totalPages, totalItems, pageSize, onPageChange }) {
+export default function Pagination({ currentPage, totalPages, totalItems, pageSize, onPageChange, compact, maxVisible = 7 }) {
   const pageNumbers = useMemo(() => {
     const pages = [];
-    const maxVisible = 7;
 
     if (totalPages <= maxVisible) {
       for (let i = 1; i <= totalPages; i++) pages.push(i);
@@ -22,7 +21,7 @@ export default function Pagination({ currentPage, totalPages, totalItems, pageSi
     }
 
     return pages;
-  }, [currentPage, totalPages]);
+  }, [currentPage, totalPages, maxVisible]);
 
   const startItem = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
   const endItem = Math.min(currentPage * pageSize, totalItems);
@@ -30,9 +29,15 @@ export default function Pagination({ currentPage, totalPages, totalItems, pageSi
   if (totalPages <= 1) return null;
 
   return (
-    <div className="pagination">
+    <div className={`pagination${compact ? " pagination--compact" : ""}`}>
       <span className="pagination-info">
-        Showing {startItem}–{endItem} of {totalItems}
+        {compact ? (
+          <>
+            Page <strong>{currentPage}</strong> of {totalPages}
+          </>
+        ) : (
+          `Showing ${startItem}–${endItem} of ${totalItems}`
+        )}
       </span>
       <div className="pagination-controls">
         <button

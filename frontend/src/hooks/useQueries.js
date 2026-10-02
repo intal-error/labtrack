@@ -7,6 +7,10 @@ export function useCatalog(params) {
     queryKey: ["catalog", params],
     queryFn: () => api.getCatalog(params),
     staleTime: 5 * 60 * 1000,
+    // Keep the previous page on screen while a new filter/page is in flight.
+    // Without this, every keystroke flipped `isLoading` true and the page
+    // replaced the whole catalog with a full-height spinner.
+    placeholderData: keepPreviousData,
   });
 }
 export function useCatalogStats() {

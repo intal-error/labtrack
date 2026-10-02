@@ -1,5 +1,9 @@
 /* Layout */
-.app-layout{display:flex;height:100vh;height:100dvh;background:var(--bg)}
+/* --hdr-h is published here (the layout ROOT) rather than on .dash-header so
+   pages can read it: .dash-header is a *sibling* of .main-content, and custom
+   properties only inherit down the tree, never sideways. Desktop: 14px pad top
+   + 14px pad bottom + 46px tallest child (.dash-header-user) = 74px. */
+.app-layout{display:flex;height:100vh;height:100dvh;background:var(--bg);--hdr-h:74px}
 .main-wrap{flex:1;display:flex;flex-direction:column;min-height:100vh;min-height:100dvh;overflow-x:hidden}
 .main-content{flex:1;padding:24px 24px 0;overflow-y:auto;overflow-x:hidden;position:relative;scrollbar-width:none}
 .main-content::-webkit-scrollbar{width:0}
@@ -726,9 +730,13 @@ body.dark .dash-ud-menu-item.danger:hover {
      10px pad + 46px (.dash-header-user = 5px + 36px avatar + 5px) + 10px pad
      = 66px, plus the notch inset that the old `padding:12px 16px` dropped.
      `height` (not min-height) keeps the rendered bar and --hdr-h identical even
-     if a child ever measures differently. */
-  .dash-header {
+     if a child ever measures differently.
+     Republished on .app-layout as well, because .dash-header is a sibling of
+     .main-content and custom properties never inherit sideways. */
+  .app-layout {
     --hdr-h: calc(66px + env(safe-area-inset-top, 0px));
+  }
+  .dash-header {
     height: var(--hdr-h);
     min-height: var(--hdr-h);
     padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px;

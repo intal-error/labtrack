@@ -299,6 +299,93 @@
   font-size: 13px;
 }
 
+/* =============================================
+   Inline validation
+   ============================================= */
+/* The catalog item form validates per field on submit (and clears a field's
+   error as soon as it is edited). Errors stay attached to the control they
+   belong to instead of surfacing only as a toast, which is the failure mode
+   this replaced: one `if (!itemName || !imageUrl)` check. */
+.lab-form-field--invalid .lab-input-wrap input,
+.lab-form-field--invalid .lab-input-wrap select {
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px rgba(211, 47, 47, .1);
+}
+.lab-form-field--invalid .lab-input-wrap svg {
+  color: var(--red);
+}
+.lab-field-error {
+  display: block;
+  margin-top: 5px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--red);
+  line-height: 1.35;
+}
+body.dark .lab-field-error {
+  color: #ef9a9a;
+}
+.lab-form-field--invalid > label {
+  color: var(--red);
+}
+.lab-form-field--invalid .lab-required {
+  background: var(--red);
+}
+
+/* =============================================
+   Image upload row (catalog item photo)
+   ============================================= */
+/* The catalog item photo field. Its previous home was a catalog-only
+   .image-upload-row / .text-btn pair, both now removed from catalog.css. */
+.lab-image-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lab-image-row .lab-input-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.lab-upload-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border: 1.5px solid var(--green);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--green);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all .2s;
+}
+.lab-upload-btn:hover:not(:disabled) {
+  background: var(--green);
+  color: #000;
+}
+.lab-upload-btn:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+.lab-image-preview {
+  display: block;
+  width: 100%;
+  max-height: 190px;
+  object-fit: contain;
+  margin-top: 10px;
+  padding: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+body.dark .lab-upload-btn:hover:not(:disabled) {
+  color: #fff;
+}
+
 /* Section divider */
 .lab-form-divider {
   height: 1px;
