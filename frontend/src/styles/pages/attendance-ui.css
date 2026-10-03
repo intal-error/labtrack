@@ -1,0 +1,785 @@
+/* ==========================================================================
+   Attendance UI — primitives shared by the admin attendance screens
+   --------------------------------------------------------------------------
+   Imported by:
+     · pages/AttendanceLogsPage.jsx   (/attendance)
+     · pages/RoomAttendancePage.jsx   (/attendance/room/:roomId)
+
+   Prefixed `.au-` ("attendance ui") rather than `.al-` because these rules are
+   not the logs page's property any more — naming them after one consumer would
+   make the other page look like it is borrowing someone else's stylesheet.
+   Page-specific rules stay in attendance-logs.css (.al-*) and
+   attendance-room.css (.rh-*).
+
+   Nothing here may be renamed to a bare class name. attendance.css still serves
+   RoomAttendancePage's siblings — the student AttendancePanel and the kiosk —
+   plus RoomManagementTab, and it owns .attendance-page, .attendance-table,
+   .attendance-empty and .attendance-date-filter. Those are different selectors
+   for different markup; only the deliberate reuse listed below is shared.
+
+   Layout contract, inherited from .catalog-page / .cx-results:
+   .au-page is a definite-height flex column, so .au-results takes the leftover
+   space and scrolls internally. The hero, KPI strip and toolbar stay pinned
+   while only the rows move.
+
+   Reused from elsewhere, deliberately NOT redefined:
+     · .stat-strip--stack      (stat-strip.css)  KPI tiles
+     · .tab-strip*             (tab-strip.css)   logs page only
+     · .pagination*            (pagination.css)  via the shared Pagination
+     · .btn / .btn-green / .btn-outline (global.css)
+     · .modal-overlay / .modal-content   (global.css, via the shared Modal)
+   ========================================================================== */
+
+/* ── Page shell ────────────────────────────────────────────────────────── */
+/* NOTE ON WIDTH: no max-width and no horizontal padding. The old
+   `.attendance-page` these pages shared was capped at 1200px and centred, which
+   on a 1920px viewport left ~206px of dead space per side; and its
+   `padding:0 20px` stacked on top of .main-content's own 24px.
+
+   NOTE ON HEIGHT: --hdr-h is published on .app-layout (layout.css:6) and
+   inherits down the tree; .dash-header is a *sibling* of .main-content, which
+   is why the variable lives on the root. 44px covers .main-content's 24px top
+   padding plus 20px of breathing room at the bottom. */
+.au-page {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  height: calc(100dvh - var(--hdr-h, 74px) - 44px);
+}
+/* Below 1024px the sidebar becomes a fixed overlay and .main-content scrolls as
+   a whole. A definite height here would trap the results panel in its own nested
+   scroller on top of the page scroll. */
+@media (max-width: 1024px) {
+  .au-page {
+    height: auto;
+    min-height: 0;
+  }
+}
+
+/* ── Toolbar ───────────────────────────────────────────────────────────── */
+.au-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  padding: 10px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--card-shadow);
+}
+.au-toolbar-tail {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+.au-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+}
+.au-toolbar-actions .btn {
+  white-space: nowrap;
+}
+
+.au-count {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ── Select ────────────────────────────────────────────────────────────── */
+/* Mirrors .cx-select so the catalog and both attendance screens read as one
+   system. */
+.au-select {
+  padding: 8px 26px 8px 11px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  font-size: 12.5px;
+  font-family: inherit;
+  font-weight: 500;
+  background-color: var(--bg-card);
+  color: var(--text);
+  cursor: pointer;
+  max-width: 190px;
+  /* A squashed select clips its own label ("All Course…"), so never let flex
+     absorb slack here — only the count/tail may. */
+  flex-shrink: 0;
+  text-overflow: ellipsis;
+  /* Native chevron, so it follows the OS light/dark rendering. */
+  color-scheme: light;
+  transition: border-color 0.16s ease;
+}
+/* `:hover` still matches a DISABLED select in CSS, so the accent border and the
+   focus ring are gated on :not(:disabled) — otherwise a facet with nothing in it
+   looks interactive and invites a click that cannot do anything. */
+.au-select:not(:disabled):hover {
+  border-color: var(--green);
+}
+.au-select:focus {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.14);
+}
+
+/* Rendered in place of the allLabel row when a facet has no values in the current
+   scope — a room with no attendance history. The control stays in the toolbar so
+   its shape does not change from room to room; it just cannot be used. */
+.au-select--empty {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.au-select--empty option {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ── Search ────────────────────────────────────────────────────────────── */
+/* Mirrors .cx-search. Only the room history page renders a search box today;
+   it lives here so every toolbar control is styled in one place, which is what
+   makes the row look like a single set of controls rather than a mix. */
+.au-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 200px;
+  /* Wide enough for "Search student name or ID…" to render in full. The old
+     .attendance-search used min-width:170px and clipped it mid-word. */
+  min-width: 210px;
+  max-width: 320px;
+}
+.au-search svg {
+  position: absolute;
+  left: 11px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.au-search-input {
+  width: 100%;
+  padding: 8px 12px 8px 34px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  font-size: 12.5px;
+  font-family: inherit;
+  background: var(--bg-card);
+  color: var(--text);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.au-search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+.au-search-input:focus {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.14);
+}
+.au-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* ── Date range fields ─────────────────────────────────────────────────── */
+/* Metrics are copied from .au-select on purpose. The old page wrapped the
+   native inputs in .attendance-date-filter, whose border, radius and padding
+   did not match the selects beside it, so the toolbar read as two mismatched
+   controls. Only the room history page uses these today. */
+.au-date {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex-shrink: 0;
+}
+.au-date-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  padding-left: 1px;
+}
+.au-date input {
+  /* Deliberately NOT `appearance:none` — on WebKit that strips the calendar
+     affordance from date inputs. Only the indicator glyph is restyled. */
+  padding: 7px 8px 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  font-size: 12.5px;
+  font-family: inherit;
+  font-weight: 500;
+  background-color: var(--bg-card);
+  color: var(--text);
+  color-scheme: light;
+  cursor: pointer;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+.au-date input:hover {
+  border-color: var(--green);
+}
+.au-date input:focus {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.14);
+}
+/* The default glyph is ~20px and dominates the control; this keeps the calendar
+   affordance without letting it outweigh the value next to it. */
+.au-date input::-webkit-calendar-picker-indicator {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  margin-left: 4px;
+  cursor: pointer;
+  opacity: 0.5;
+  transition: opacity 0.16s ease;
+}
+.au-date input::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+.au-date input::-moz-calendar-picker-indicator {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  opacity: 0.5;
+}
+
+/* Inline warning for an inverted range (from after to). The min/max attributes
+   stop this from the picker, but the fields are still typeable. */
+.au-range-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--red);
+  white-space: nowrap;
+}
+
+/* ── Results panel ─────────────────────────────────────────────────────── */
+.au-results {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* keepPreviousData keeps the previous rows mounted while a filter refetches;
+   fade them so it reads as "refreshing", not "frozen".
+
+   pointer-events is deliberately NOT disabled here. It used to be, which made an
+   open row menu inert *and* undismissable mid-refetch: the mousedown handler
+   that closes the menu could no longer receive the event either, so the popup
+   stranded itself until the request landed. refetchOnWindowFocus triggers exactly
+   this on tab return. Opacity alone communicates the same thing. */
+.au-results--busy {
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
+}
+
+/* ── Table ─────────────────────────────────────────────────────────────── */
+.au-table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: none;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--card-shadow);
+}
+.au-table-wrap::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.au-table {
+  width: 100%;
+  /* Declared explicitly, not inherited. tables.css ships bare
+     `table{table-layout:fixed}` (tables.css:18) and is imported by five other
+     chunks — TransactionsPage, TransactionsPanel, RequestsPanel,
+     BorrowRequestsTab, MaintenanceTab. Vite keeps a loaded chunk's CSS in the
+     document for the rest of the session, so an element selector outranks any
+     class rule and would silently crush this table into equal columns the
+     moment an admin visited /transactions first. */
+  table-layout: auto;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.au-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 11px 14px;
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+/* Neutralises tables.css:20-21
+   `thead th:first/last-child{border-top-*-radius:12px}` — 12px inside a wrapper
+   clipped to 14px leaves a 2px sliver on the corners. */
+.au-table thead th:first-child,
+.au-table thead th:last-child {
+  border-radius: 0;
+}
+.au-table tbody td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  vertical-align: middle;
+  white-space: nowrap;
+  /* Also explicit: tables.css:22 `table td{text-align:center}` is an element
+     selector, so omitting this desyncs every cell from its header. The old
+     room page carried `style={{textAlign:"left"}}` on two cells purely to
+     paper over this; declaring it here removes the need for those. */
+  text-align: left;
+}
+.au-table tbody tr:last-child td {
+  border-bottom: none;
+}
+/* tables.css:23 `table tbody tr:nth-child(even){background:#fafafa}` is
+   specificity (0,1,3) and beats a plain `.au-table tbody tr` (0,1,2), so the
+   override needs the :nth-child(even) form too. */
+.au-table tbody tr,
+.au-table tbody tr:nth-child(even) {
+  background: transparent;
+  transition: background 0.14s ease;
+}
+.au-table tbody tr:hover {
+  background: var(--bg-hover);
+}
+/* A real width, not the `width:1%` shrink-to-fit idiom — under the inherited
+   fixed layout that idiom collapsed the column to ~18px and clipped the kebab
+   out of view. */
+.au-th-actions,
+.au-td-actions {
+  width: 52px;
+  text-align: right;
+}
+.au-th-student {
+  min-width: 220px;
+}
+.au-none {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+.au-time {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+/* Sticky date column: on a wide screen Date drifts far from Student and the eye
+   loses the row. Kept adjacent to the times it belongs with instead. */
+.au-date-col {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Two-line cell, matching the catalog's .cx-item pattern. */
+.au-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.au-cell-primary {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.au-cell-sub {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Duration + status pills ───────────────────────────────────────────── */
+.au-duration {
+  display: inline-flex;
+  padding: 3px 9px;
+  border-radius: 7px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.au-duration--running {
+  background: rgba(46, 125, 50, 0.1);
+  border-color: transparent;
+  color: #2e7d32;
+}
+
+.au-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.au-status--active {
+  background: rgba(46, 125, 50, 0.12);
+  color: #2e7d32;
+}
+.au-status--done {
+  background: rgba(21, 101, 192, 0.1);
+  color: #1565c0;
+}
+
+/* ── Row actions (own kebab, not .catalog-kebab-*) ─────────────────────── */
+/* catalog.css cannot be imported by either attendance page: it also defines
+   .catalog-table, .catalog-card and .category-pill, which BorrowRequestsTab,
+   MaintenanceTab and RequestsPanel render *without* importing it. Pulling the
+   file in would restyle those three screens the moment an admin visited
+   /attendance first. */
+.au-kebab {
+  position: relative;
+}
+.au-kebab-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.au-kebab-btn:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+/* Positioned by RowActionMenu, which renders this into document.body via a
+   portal and supplies top/left inline. It MUST be fixed, not absolute: the menu
+   used to live inside .au-table-wrap, which is overflow:auto so rows can scroll,
+   and a z-index cannot escape an ancestor's overflow — the menu was clipped by
+   the wrapper on any row near the bottom of the viewport, putting Delete out of
+   reach. */
+.au-kebab-menu {
+  position: fixed;
+  z-index: 1001;
+  min-width: 148px;
+  padding: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  animation: auDropIn 0.14s ease both;
+}
+@keyframes auDropIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.au-kebab-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s ease;
+}
+/* Keyboard focus lands on the first item when the menu opens, so it has to be
+   visible rather than relying on the UA default against a transparent
+   background. */
+.au-kebab-menu button:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: -2px;
+}
+.au-kebab-menu button:hover {
+  background: var(--bg);
+}
+.au-kebab-menu button.danger {
+  color: #c62828;
+}
+.au-kebab-menu button.danger:hover {
+  background: rgba(211, 47, 47, 0.08);
+}
+
+/* ── Edit record dialog ────────────────────────────────────────────────── */
+/* Both attendance screens correct a record through the shared Modal, so only
+   the field layout is defined here. */
+.au-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 4px;
+}
+.au-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.au-field label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.au-field input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+.au-field input:focus {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.14);
+}
+.au-form-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.au-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+/* ── Empty / error / loading ───────────────────────────────────────────── */
+.au-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-height: 220px;
+  padding: 48px 20px;
+  text-align: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--card-shadow);
+}
+.au-empty-icon {
+  width: 52px;
+  height: 52px;
+  margin-bottom: 12px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(46, 125, 50, 0.08);
+  color: #2e7d32;
+  opacity: 0.85;
+}
+.au-empty h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.au-empty p {
+  margin: 0;
+  max-width: 340px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+.au-empty .btn {
+  margin-top: 14px;
+}
+.au-empty--error .au-empty-icon {
+  background: rgba(211, 47, 47, 0.09);
+  color: #c62828;
+}
+
+/* ── Dark mode ─────────────────────────────────────────────────────────── */
+body.dark .au-select,
+body.dark .au-search-input,
+body.dark .au-date input {
+  background: #0f0f0f;
+  border-color: #2a2a2a;
+  color: #ffffff;
+  color-scheme: dark;
+}
+body.dark .au-select:focus,
+body.dark .au-search-input:focus,
+body.dark .au-date input:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(67, 160, 71, 0.16);
+}
+body.dark .au-select--empty option {
+  color: #666;
+}
+body.dark .au-search-input::placeholder {
+  color: #777;
+}
+body.dark .au-date input::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.55;
+}
+body.dark .au-toolbar-actions {
+  border-left-color: rgba(255, 255, 255, 0.08);
+}
+body.dark .au-toolbar,
+body.dark .au-table-wrap,
+body.dark .au-empty {
+  background: #131313;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+body.dark .au-table thead th {
+  background: #0d0d0d;
+  color: #8a8a8a;
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+body.dark .au-table tbody td {
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+}
+body.dark .au-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.045);
+}
+body.dark .au-cell-primary,
+body.dark .au-duration {
+  color: #ffffff;
+}
+body.dark .au-duration {
+  background: #0a0a0a;
+  border-color: #2a2a2a;
+}
+body.dark .au-duration--running {
+  background: rgba(67, 160, 71, 0.16);
+  border-color: transparent;
+  color: var(--green-light);
+}
+body.dark .au-status--active {
+  background: rgba(67, 160, 71, 0.16);
+  color: var(--green-light);
+}
+body.dark .au-status--done {
+  background: rgba(100, 181, 246, 0.14);
+  color: #64b5f6;
+}
+body.dark .au-empty-icon {
+  background: rgba(67, 160, 71, 0.14);
+  color: var(--green-light);
+}
+body.dark .au-empty--error .au-empty-icon {
+  background: rgba(239, 154, 154, 0.14);
+  color: #ef9a9a;
+}
+body.dark .au-kebab-btn:hover {
+  background: #1a1a1a;
+  color: #fff;
+}
+body.dark .au-kebab-menu {
+  background: #131313;
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+body.dark .au-kebab-menu button {
+  color: #ccc;
+}
+body.dark .au-kebab-menu button:hover {
+  background: #1a1a1a;
+  color: #fff;
+}
+body.dark .au-kebab-menu button.danger {
+  color: #ef9a9a;
+}
+body.dark .au-kebab-menu button.danger:hover {
+  background: #3a1b1b;
+}
+body.dark .au-field input {
+  background: #0f0f0f;
+  border-color: #2a2a2a;
+  color: #fff;
+}
+body.dark .au-form-actions {
+  border-top-color: rgba(255, 255, 255, 0.07);
+}
+
+/* ── Responsive ────────────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .au-toolbar-tail {
+    margin-left: 0;
+  }
+}
+@media (max-width: 1024px) {
+  /* Scroll the table rather than let auto layout crush the columns. The wrapper
+     already has overflow:auto; the hidden scrollbar keeps the chrome clean. */
+  .au-table {
+    min-width: 760px;
+  }
+}
+@media (max-width: 768px) {
+  .au-toolbar-actions {
+    border-left: none;
+    padding-left: 0;
+    width: 100%;
+  }
+  .au-toolbar-actions .btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+  .au-th-student {
+    min-width: 180px;
+  }
+  .au-search {
+    max-width: none;
+    flex: 1 1 100%;
+  }
+  .au-empty {
+    min-height: 180px;
+    padding: 36px 16px;
+  }
+}
+@media (max-width: 480px) {
+  .au-select,
+  .au-date {
+    flex: 1 1 132px;
+    max-width: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .au-results--busy,
+  .au-table tbody tr,
+  .au-kebab-menu {
+    transition: none;
+    animation: none;
+  }
+}

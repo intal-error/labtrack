@@ -1,8 +1,9 @@
 import "./stat-strip.css";
 
 // `variant="stack"` renders the compact label-over-value tile used by the
-// catalog. It is opt-in so the other four call sites (TransactionsPage,
-// AttendanceLogsPage, activity/TransactionsPanel) keep the icon-led layout.
+// catalog, inventory and attendance-logs pages. It is opt-in so the two
+// call sites that still want the icon-led layout (TransactionsPage and
+// activity/TransactionsPanel) are unaffected.
 export default function StatStrip({ items, variant }) {
   return (
     <div className={`stat-strip${variant ? ` stat-strip--${variant}` : ""}`}>

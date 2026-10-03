@@ -1,14 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../services/api";
-import { formatDuration, formatTime } from "../utils/attendanceHelpers";
-import ExportReportModal from "../components/ui/ExportReportModal";
-import { buildAttendanceQuery } from "../components/ui/exportReport";
-import RoomManagementTab from "../components/tabs/RoomManagementTab";
-import StatStrip from "../components/ui/StatStrip";
-import toast from "react-hot-toast";
-import "../styles/pages/attendance.css";
-
 import {
   MdPeople,
   MdEventNote,
@@ -17,10 +9,33 @@ import {
   MdFileDownload,
   MdEdit,
   MdDelete,
-  MdAccessTime,
-  MdGroup,
   MdMeetingRoom,
+  MdLocationOn,
+  MdQrCode,
+  MdErrorOutline,
 } from "react-icons/md";
+import { formatDuration, formatTime } from "../utils/attendanceHelpers";
+import {
+  useAttendanceFacets,
+  useAttendanceRooms,
+  useAttendanceStats,
+  useActiveStudents,
+  useDeleteAttendance,
+  useTodayAttendance,
+  useUpdateAttendance,
+} from "../hooks/useQueries";
+import ExportReportModal from "../components/ui/ExportReportModal";
+import { buildAttendanceQuery } from "../components/ui/exportReport";
+import Modal from "../components/ui/Modal";
+import RoomManagementTab from "../components/tabs/RoomManagementTab";
+import StatStrip from "../components/ui/StatStrip";
+import useRowMenu from "../hooks/useRowMenu";
+import AttendanceFilterSelect from "../components/attendance/AttendanceFilterSelect";
+import RowActions from "../components/attendance/RowActions";
+import toast from "react-hot-toast";
+import "../styles/pages/attendance-ui.css";
+import "../styles/pages/attendance-logs.css";
+import "../styles/pages/tab-strip.css";
 
 const TABS = [
   { key: "active", label: "Currently Inside", icon: MdPeople },
@@ -29,114 +44,132 @@ const TABS = [
   { key: "rooms", label: "Room QR Codes", icon: MdQrCodeScanner },
 ];
 
-export default function AttendanceLogsPage() {
-  const [searchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "active");
-  const [stats, setStats] = useState(null);
-  const [activeStudents, setActiveStudents] = useState([]);
-  const [todayRecords, setTodayRecords] = useState([]);
-  // Room filter for Currently Inside
-  const [rooms, setRooms] = useState([]);
-  const [filterRoom, setFilterRoom] = useState("");
-  const filterRoomRef = useRef("");
-  useEffect(() => { filterRoomRef.current = filterRoom; }, [filterRoom]);
+const TAB_KEYS = TABS.map((t) => t.key);
+const DEFAULT_TAB = "active";
 
-  // Edit modal
-  const [editModal, setEditModal] = useState(null);
+const NO_FILTER = Object.freeze({ course: "", year: "", section: "", professor: "" });
+const EMPTY_FACETS = Object.freeze({ courses: [], years: [], sections: [], subjects: [], professors: [] });
+
+const DASH = "\u2014";
+
+// The backend writes exactly two statuses: "active" (still inside,
+// total_duration null) and "timed_out" (the kiosk signed them out,
+// total_duration set) — see attendanceController.js timeIn/timeOut/autoScan.
+// Anything else is mapped to the completed state rather than falling through
+// to the "Inside" pill, so a future status value can never be misread as a
+// student still in the building.
+function statusMeta(status) {
+  return status === "active" ? { key: "active", label: "Inside" } : { key: "done", label: "Signed Out" };
+}
+
+function initials(record) {
+  const first = (record.firstName || "").trim();
+  const last = (record.lastName || "").trim();
+  if (!first && !last) return "?";
+  return `${first.charAt(0)}${last.charAt(0)}`.toUpperCase();
+}
+
+function fullName(record) {
+  return [record.firstName, record.lastName].filter(Boolean).join(" ") || DASH;
+}
+
+function PanelMessage({ icon: Icon, title, message, action, error = false }) {
+  return (
+    <div className={`au-empty${error ? " au-empty--error" : ""}`}>
+      <span className="au-empty-icon">
+        <Icon size={24} />
+      </span>
+      <h3>{title}</h3>
+      {message && <p>{message}</p>}
+      {action}
+    </div>
+  );
+}
+
+function LoadingPanel({ label = "Loading records" }) {
+  return (
+    <div className="au-empty">
+      <div className="spinner-lg" />
+      <h3>{label}...</h3>
+    </div>
+  );
+}
+
+export default function AttendanceLogsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Validate against TAB_KEYS. This used to be a bare
+  // `searchParams.get("tab") || "active"` seed, so any hand-edited or stale
+  // link (?tab=rooomLogs, ?tab=roomss) matched no tab and rendered a blank page
+  // below the tab strip with no way to tell that anything was wrong.
+  const requested = searchParams.get("tab");
+  const activeTab = TAB_KEYS.includes(requested) ? requested : DEFAULT_TAB;
+
+  const switchTab = useCallback(
+    (key) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (key === DEFAULT_TAB) next.delete("tab");
+          else next.set("tab", key);
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
+
+  const [filterRoom, setFilterRoom] = useState("");
+  const [filters, setFilters] = useState(NO_FILTER);
+  const hasFilters = Boolean(filters.course || filters.year || filters.section || filters.professor);
+  const setFilter = useCallback((key) => (value) => {
+    setFilters((prev) => (prev[key] === value ? prev : { ...prev, [key]: value }));
+  }, []);
+  const clearFilters = useCallback(() => setFilters(NO_FILTER), []);
+
+  const [editRecord, setEditRecord] = useState(null);
   const [editSubject, setEditSubject] = useState("");
   const [editProfessor, setEditProfessor] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
 
-  // Report export
-  const [facets, setFacets] = useState({ courses: [], years: [], sections: [] });
-  const [filterCourse, setFilterCourse] = useState("");
-  const [filterYear, setFilterYear] = useState("");
-  const [filterSection, setFilterSection] = useState("");
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  useEffect(() => {
-    // Full-table scan -- only pay for it when the Today tab actually shows filters.
-    if (activeTab !== "today") return;
-    let cancelled = false;
-    api.getAttendanceFacets()
-      .then((data) => { if (!cancelled && data) setFacets(data); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [activeTab]);
+  // The StatStrip renders on every tab, so the tiles have to keep refreshing
+  // wherever time-sensitive figures are on screen: Currently Inside, and
+  // Today's Log where scans are actively landing. Previously the poll was gated
+  // to the live tab alone, so "Today's Sessions" froze on the one tab that exists
+  // to watch scans arrive. The live list only refreshes while its own tab shows.
+  const live = activeTab === "active" || activeTab === "today";
 
-  const loadStats = useCallback(async () => {
-    try {
-      const data = await api.getAttendanceStats();
-      setStats(data);
-    } catch (err) {
-      console.error("Failed to load stats:", err);
-    }
-  }, []);
+  const { data: stats } = useAttendanceStats(live);
+  const { data: activeData, isFetching: activeFetching, isError: activeError, refetch: refetchActive } = useActiveStudents(
+    filterRoom,
+    activeTab === "active"
+  );
+  const { data: todayData, isFetching: todayFetching, isError: todayError, refetch: refetchToday } = useTodayAttendance(
+    filters,
+    { enabled: activeTab === "today" }
+  );
+  // A full-table scan; only requested once the Today tab actually shows the
+  // dropdowns that consume it.
+  const { data: facets } = useAttendanceFacets({ enabled: activeTab === "today" });
+  const { data: roomsData } = useAttendanceRooms();
 
-  const loadActive = useCallback(async () => {
-    try {
-      const params = new URLSearchParams();
-      if (filterRoomRef.current) params.set("room", filterRoomRef.current);
-      const data = await api.getActiveStudents(params.toString());
-      setActiveStudents(data);
-    } catch (err) {
-      console.error("Failed to load active students:", err);
-    }
-  }, []);
+  const activeStudents = useMemo(() => (Array.isArray(activeData) ? activeData : []), [activeData]);
+  const todayRecords = useMemo(() => (Array.isArray(todayData) ? todayData : []), [todayData]);
+  const rooms = useMemo(() => (Array.isArray(roomsData) ? roomsData : []), [roomsData]);
+  const facetsData = facets || EMPTY_FACETS;
 
-  const loadToday = useCallback(async () => {
-    try {
-      const params = new URLSearchParams();
-      if (filterCourse) params.set("course", filterCourse);
-      if (filterYear) params.set("year", filterYear);
-      if (filterSection) params.set("section", filterSection);
-      const data = await api.getTodayAttendance(params.toString());
-      setTodayRecords(data);
-    } catch (err) {
-      console.error("Failed to load today records:", err);
-    }
-  }, [filterCourse, filterYear, filterSection]);
+  const updateAttendance = useUpdateAttendance();
+  const deleteAttendance = useDeleteAttendance();
 
-  useEffect(() => {
-    api.getAttendanceStats()
-      .then(setStats)
-      .catch((err) => console.error("Failed to load stats:", err));
-    (async () => {
-      try {
-        const params = new URLSearchParams();
-        if (filterRoomRef.current) params.set("room", filterRoomRef.current);
-        const data = await api.getActiveStudents(params.toString());
-        setActiveStudents(data);
-      } catch (err) {
-        console.error("Failed to load active students:", err);
-      }
-    })();
-    api.getRooms()
-      .then(setRooms)
-      .catch((err) => console.error("Failed to load rooms:", err));
-  }, []);
-
-  // Loads today on mount and again whenever a today-tab filter changes.
-  // Deferred so rapid filter changes settle before hitting the API.
-  useEffect(() => {
-    const timer = setTimeout(loadToday, 0);
-    return () => clearTimeout(timer);
-  }, [loadToday]);
-
-  // Refetch rooms when switching to active tab (picks up newly created rooms)
-  useEffect(() => {
-    if (activeTab !== "active") return;
-    api.getRooms()
-      .then(setRooms)
-      .catch((err) => console.error("Failed to load rooms:", err));
-  }, [activeTab]);
-
-  // Auto-refresh active every 30s
-  useEffect(() => {
-    if (activeTab !== "active") return;
-    const interval = setInterval(loadActive, 30000);
-    return () => clearInterval(interval);
-  }, [activeTab, loadActive]);
+  // Row popup + Escape handling, shared with the room history page so neither
+  // re-implements the same document listeners. Escape abandons the edit dialog
+  // as well as closing the popup.
+  const closeEdit = useCallback(() => setEditRecord(null), []);
+  const [openRowMenu, rowMenu] = useRowMenu({ containerClass: "au-kebab", onEscape: closeEdit });
 
   async function handleExport(draft) {
     setExporting(true);
@@ -155,308 +188,183 @@ export default function AttendanceLogsPage() {
     }
   }
 
-  async function openEditModal(record) {
-    setEditModal(record);
+  function openEditModal(record) {
+    rowMenu.close();
+    setEditRecord(record);
     setEditSubject(record.subject || "");
     setEditProfessor(record.professor || "");
   }
 
   async function saveEdit() {
-    if (!editModal) return;
+    if (!editRecord) return;
+    setSavingEdit(true);
     try {
-      await api.updateAttendance(editModal.id, { subject: editSubject, professor: editProfessor });
+      await updateAttendance.mutateAsync({
+        id: editRecord.id,
+        data: { subject: editSubject, professor: editProfessor },
+      });
       toast.success("Record updated");
-      setEditModal(null);
-      loadToday();
+      setEditRecord(null);
     } catch (err) {
       toast.error(err.message || "Failed to update");
+    } finally {
+      setSavingEdit(false);
     }
   }
 
   async function handleDeleteRecord(id) {
+    rowMenu.close();
     if (!window.confirm("Delete this attendance record?")) return;
     try {
-      await api.deleteAttendance(id);
+      await deleteAttendance.mutateAsync(id);
       toast.success("Record deleted");
-      loadToday();
-      loadStats();
     } catch (err) {
       toast.error(err.message || "Failed to delete");
     }
   }
 
   return (
-    <div className="attendance-page">
-      <div className="attendance-shell">
-        {/* Stats */}
-        {stats && (
-          <StatStrip
-            items={[
-              { label: "Currently Inside", value: stats.currentlyInside, icon: <MdPeople size={20} /> },
-              { label: "Today's Sessions", value: stats.totalToday, icon: <MdEventNote size={20} /> },
-              { label: "Total Hours Today", value: formatDuration(stats.totalMinutesToday), icon: <MdAccessTime size={20} /> },
-              { label: "Students This Week", value: stats.uniqueStudentsThisWeek, icon: <MdGroup size={20} /> },
-            ]}
+    <section className="au-page">
+      <StatStrip
+        variant="stack"
+        items={[
+          { label: "Currently Inside", value: stats?.currentlyInside ?? 0 },
+          { label: "Today's Sessions", value: stats?.totalToday ?? 0 },
+          { label: "Hours Today", value: formatDuration(stats?.totalMinutesToday ?? 0) },
+          { label: "Students This Week", value: stats?.uniqueStudentsThisWeek ?? 0 },
+        ]}
+      />
+
+      {/* key={activeTab} remounts the panel on every switch so the fade replays
+          as a transition. Without it the animation only ever ran on first mount,
+          which is why tab switches used to feel like an instant cut. */}
+      <div className="tab-strip-panel" key={activeTab}>
+        <div className="tab-strip" role="tablist" aria-label="Attendance views">
+          {TABS.map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              id={`tab-${key}`}
+              // aria-controls + the panel's aria-labelledby are what tie a tab to
+              // its content; without the pairing a screen reader announces the
+              // tablist but no relationship to the panel below it.
+              aria-controls={`tabpanel-${key}`}
+              aria-selected={activeTab === key}
+              // Roving tabindex: only the selected tab is reachable with Tab, so
+              // the strip is one stop in the tab order rather than four.
+              tabIndex={activeTab === key ? 0 : -1}
+              className={`tab-strip-btn ${activeTab === key ? "active" : ""}`}
+              onClick={() => switchTab(key)}
+            >
+              <Icon size={16} />
+              <span>{label}</span>
+              {key === "active" && activeStudents.length > 0 && (
+                <span className="al-tab-count">{activeStudents.length}</span>
+              )}
+              {key === "today" && todayRecords.length > 0 && <span className="al-tab-count">{todayRecords.length}</span>}
+            </button>
+          ))}
+        </div>
+
+        <div
+          role="tabpanel"
+          id={`tabpanel-${activeTab}`}
+          aria-labelledby={`tab-${activeTab}`}
+          // The panel is re-created on every tab change (see key above), so it
+          // needs its own flex-column context rather than inheriting one.
+          className="tab-panel-body"
+        >
+
+        {activeTab === "active" && (
+          <ActiveTab
+            students={activeStudents}
+            rooms={rooms}
+            filterRoom={filterRoom}
+            onFilterRoom={setFilterRoom}
+            busy={activeFetching}
+            error={activeError}
+            onRetry={refetchActive}
+            onGoToRooms={() => switchTab("rooms")}
           />
         )}
 
-        {/* Tabs */}
-        <div className="attendance-tabs">
-          {TABS.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.key}
-                className={`attendance-tab ${activeTab === tab.key ? "active" : ""}`}
-                onClick={() => setActiveTab(tab.key)}
-              >
-                <Icon size={16} />
-                {tab.label}
-                {tab.key === "active" && activeStudents.length > 0 && (
-                  <span className="tab-count">{activeStudents.length}</span>
-                )}
-                {tab.key === "today" && todayRecords.length > 0 && (
-                  <span className="tab-count">{todayRecords.length}</span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Currently Inside Tab */}
-        {activeTab === "active" && (
-          <>
-            <div className="attendance-toolbar">
-              <div className="attendance-toolbar-left">
-                <span className="attendance-live-badge">
-                  <span className="attendance-live-dot" />
-                  Live
-                </span>
-                {rooms.length > 0 && (
-                  <select
-                    className="attendance-filter-select"
-                    value={filterRoom}
-                    onChange={(e) => setFilterRoom(e.target.value)}
-                  >
-                    <option value="">All Rooms</option>
-                    {rooms.map((r) => (
-                      <option key={r.id} value={r.roomCode}>{r.roomName}</option>
-                    ))}
-                  </select>
-                )}
-                <span className="attendance-result-count">
-                  {activeStudents.length} student{activeStudents.length !== 1 ? "s" : ""} currently inside
-                </span>
-              </div>
-              <div className="attendance-toolbar-right">
-                <button className="btn btn-primary" onClick={loadActive}>
-                  <MdRefresh size={14} /> Refresh
-                </button>
-              </div>
-            </div>
-            {activeStudents.length === 0 ? (
-              <div className="attendance-empty">
-                <div className="attendance-empty-icon">
-                  <MdPeople size={28} />
-                </div>
-                <h3>No Students Inside</h3>
-                <p>Students will appear here after scanning their QR code to time in</p>
-              </div>
-            ) : (
-              <div className="attendance-active-list">
-                {activeStudents.map((s) => (
-                  <div key={s.id} className="attendance-active-card">
-                    <div className="attendance-active-card-header">
-                      <div className="attendance-active-avatar">
-                        {(s.firstName || "?")[0]}{(s.lastName || "?")[0]}
-                      </div>
-                      <div>
-                        <p className="attendance-active-name">{s.firstName} {s.lastName}</p>
-                        <p className="attendance-active-id">{s.studentSchoolId}</p>
-                      </div>
-                    </div>
-                    <div className="attendance-active-meta">
-                      <span className="attendance-active-tag">{s.course} {s.year}</span>
-                      <span className="attendance-active-tag">{s.subject}</span>
-                    </div>
-                    <div className="attendance-active-details">
-                      <div className="attendance-active-detail">
-                        <strong>Professor:</strong> {s.professor}
-                      </div>
-                      <div className="attendance-active-detail">
-                        <strong>Room:</strong> {s.labRoom}
-                      </div>
-                      <div className="attendance-active-detail">
-                        <strong>Time-In:</strong> {formatTime(s.timeIn)}
-                      </div>
-                    </div>
-                    <div className="attendance-active-timer">
-                      <span className="timer-value">{formatDuration(s.currentDuration || 0)}</span>
-                      <span className="timer-label">Inside for</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Today's Log Tab */}
         {activeTab === "today" && (
-          <>
-            <div className="attendance-toolbar">
-              <div className="attendance-toolbar-left">
-                {facets.courses.length > 0 && (
-                  <select
-                    className="attendance-filter-select"
-                    value={filterCourse}
-                    onChange={(e) => setFilterCourse(e.target.value)}
-                  >
-                    <option value="">All Courses</option>
-                    {facets.courses.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                )}
-                {facets.years.length > 0 && (
-                  <select
-                    className="attendance-filter-select"
-                    value={filterYear}
-                    onChange={(e) => setFilterYear(e.target.value)}
-                  >
-                    <option value="">All Years</option>
-                    {facets.years.map((y) => <option key={y} value={y}>{y}</option>)}
-                  </select>
-                )}
-                {facets.sections.length > 0 && (
-                  <select
-                    className="attendance-filter-select"
-                    value={filterSection}
-                    onChange={(e) => setFilterSection(e.target.value)}
-                  >
-                    <option value="">All Sections</option>
-                    {facets.sections.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                )}
-                {(filterCourse || filterYear || filterSection) && (
-                  <button className="btn btn-secondary" onClick={() => { setFilterCourse(""); setFilterYear(""); setFilterSection(""); }}>
-                    Clear Filters
-                  </button>
-                )}
-                <span className="attendance-result-count">
-                  {todayRecords.length} record{todayRecords.length !== 1 ? "s" : ""} today
-                </span>
-              </div>
-              <div className="attendance-toolbar-right">
-                <button className="btn btn-primary" onClick={() => setExportOpen(true)}>
-                  <MdFileDownload size={14} /> Download Report
-                </button>
-              </div>
-            </div>
-            {todayRecords.length === 0 ? (
-              <div className="attendance-empty">
-                <div className="attendance-empty-icon">
-                  <MdEventNote size={28} />
-                </div>
-                <h3>No Records Today</h3>
-                <p>Attendance records for today will appear here once students start scanning in</p>
-              </div>
-            ) : (
-              <div className="attendance-table-wrapper">
-                <table className="attendance-table">
-                  <thead>
-                    <tr>
-                      <th>Time-In</th>
-                      <th>Time-Out</th>
-                      <th>Student Name</th>
-                      <th>Student ID</th>
-                      <th>Course</th>
-                      <th>Section</th>
-                      <th>Year</th>
-                      <th>Subject</th>
-                      <th>Professor</th>
-                      <th>Room</th>
-                      <th>Duration</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {todayRecords.map((r) => (
-                      <tr key={r.id}>
-                        <td>{formatTime(r.timeIn)}</td>
-                        <td>{formatTime(r.timeOut)}</td>
-                        <td className="cell-name">{r.firstName} {r.lastName}</td>
-                        <td>{r.studentSchoolId}</td>
-                        <td>{r.course}</td>
-                        <td>{r.section || "—"}</td>
-                        <td>{r.year}</td>
-                        <td className="cell-muted">{r.subject}</td>
-                        <td className="cell-muted">{r.professor}</td>
-                        <td>{r.labRoom}</td>
-                        <td>
-                          {r.totalDuration != null ? (
-                            <span className="duration-badge">{formatDuration(r.totalDuration)}</span>
-                          ) : "-"}
-                        </td>
-                        <td>
-                          <span className={`attendance-status-badge ${r.status}`}>
-                            {r.status === "active" ? "Signed In" : "Signed Out"}
-                          </span>
-                        </td>
-                        <td>
-                          <div className="attendance-actions-cell">
-                            <button className="attendance-action-btn" title="Edit" onClick={() => openEditModal(r)}>
-                              <MdEdit size={14} />
-                            </button>
-                            <button className="attendance-action-btn danger" title="Delete" onClick={() => handleDeleteRecord(r.id)}>
-                              <MdDelete size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </>
+          <TodayTab
+            records={todayRecords}
+            facets={facetsData}
+            filters={filters}
+            setFilter={setFilter}
+            hasFilters={hasFilters}
+            onClearFilters={clearFilters}
+            busy={todayFetching}
+            error={todayError}
+            onRetry={refetchToday}
+openRowMenu={openRowMenu}
+          toggleRowMenu={rowMenu.toggle}
+          closeRowMenu={rowMenu.close}
+            onEdit={openEditModal}
+            onDelete={handleDeleteRecord}
+            onExport={() => setExportOpen(true)}
+          />
         )}
 
-        {/* Room Logs Tab */}
-        {activeTab === "roomLogs" && <RoomAttendanceView />}
+        {activeTab === "roomLogs" && <RoomLogsTab />}
 
-        {/* Room Management Tab */}
         {activeTab === "rooms" && <RoomManagementTab />}
+        </div>
       </div>
 
-      {/* Edit Modal */}
-      {editModal && (
-        <div className="attendance-modal-overlay" onClick={() => setEditModal(null)}>
-          <div className="attendance-modal" onClick={(e) => e.stopPropagation()}>
-            <h2>Edit Attendance Record</h2>
-            <p className="edit-modal-subtitle">
-              {editModal.firstName} {editModal.lastName} &mdash; {editModal.date}
+      {/* Gated on editRecord: Modal has no `open` prop — it renders whenever it
+          is mounted, and its mount effect pins body scroll to hidden. Rendered
+          unconditionally it would cover the page on arrival and freeze
+          scrolling for the whole session. ExportReportModal guards itself the
+          same way. */}
+      {editRecord && (
+        <Modal title="Edit Attendance Record" onClose={() => setEditRecord(null)}>
+          <div className="au-form">
+            <p className="au-form-note">
+              {fullName(editRecord)} — {editRecord.date || DASH}
             </p>
-            <div className="attendance-edit-form">
-              <label>Subject</label>
-              <input type="text" value={editSubject} onChange={(e) => setEditSubject(e.target.value)} placeholder="e.g. Computer Programming 1" />
-              <label>Professor</label>
-              <input type="text" value={editProfessor} onChange={(e) => setEditProfessor(e.target.value)} />
-              <div className="attendance-edit-actions">
-                <button className="btn btn-outline" onClick={() => setEditModal(null)}>Cancel</button>
-                <button className="btn btn-primary" onClick={saveEdit}>Save Changes</button>
-              </div>
+            <div className="au-field">
+              <label htmlFor="al-edit-subject">Subject</label>
+              <input
+                id="al-edit-subject"
+                type="text"
+                value={editSubject}
+                onChange={(e) => setEditSubject(e.target.value)}
+                placeholder="e.g. Computer Programming 1"
+              />
+            </div>
+            <div className="au-field">
+              <label htmlFor="al-edit-professor">Professor</label>
+              <input
+                id="al-edit-professor"
+                type="text"
+                value={editProfessor}
+                onChange={(e) => setEditProfessor(e.target.value)}
+              />
+            </div>
+            <div className="au-form-actions">
+              <button type="button" className="btn btn-outline" onClick={() => setEditRecord(null)} disabled={savingEdit}>
+                Cancel
+              </button>
+              <button type="button" className="btn btn-green" onClick={saveEdit} disabled={savingEdit}>
+                {savingEdit ? "Saving..." : "Save Changes"}
+              </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       <ExportReportModal
         open={exportOpen}
         onClose={() => setExportOpen(false)}
         initialFilters={{
-          course: filterCourse || "All",
-          year: filterYear || "All",
-          section: filterSection || "All",
+          course: filters.course || "All",
+          year: filters.year || "All",
+          section: filters.section || "All",
+          professor: filters.professor || "All",
           dateRange: "today",
         }}
         onExport={handleExport}
@@ -464,65 +372,394 @@ export default function AttendanceLogsPage() {
         options={{
           typeTabs: [],
           showSection: true,
-          sectionOptions: facets.sections,
-          courseOptions: facets.courses.length ? facets.courses : undefined,
-          yearOptions: facets.years.length ? facets.years : undefined,
+          // Professor is a filter on this tab, so the download has to be able to
+          // express it too — otherwise the XLSX silently ignores it.
+          showProfessor: true,
+          sectionOptions: facetsData.sections,
+          professorOptions: facetsData.professors,
+          courseOptions: facetsData.courses.length ? facetsData.courses : undefined,
+          yearOptions: facetsData.years.length ? facetsData.years : undefined,
         }}
       />
-    </div>
+    </section>
   );
 }
 
-function RoomAttendanceView() {
-  const navigate = useNavigate();
-  const [rooms, setRooms] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api.getRooms().then((data) => {
-      setRooms(Array.isArray(data) ? data : []);
-    }).catch(() => {}).finally(() => setLoading(false));
-  }, []);
-
-  if (loading) {
-    return <div className="attendance-empty"><div className="spinner-lg" /><h3>Loading rooms...</h3></div>;
-  }
-
-  if (rooms.length === 0) {
-    return (
-      <div className="attendance-empty">
-        <div className="attendance-empty-icon"><MdMeetingRoom size={28} /></div>
-        <h3>No Rooms Found</h3>
-        <p>Add laboratory rooms in the &quot;Room QR Codes&quot; tab first</p>
-      </div>
-    );
-  }
+/* ── Currently Inside ────────────────────────────────────────────────────── */
+function ActiveTab({ students, rooms, filterRoom, onFilterRoom, busy, error, onRetry, onGoToRooms }) {
+  // The select is keyed by roomCode (what the API filters on) but must display
+  // roomName. Built once per rooms change so the memoised FilterSelect isn't
+  // handed a fresh array on every render.
+  const roomOptions = useMemo(
+    () =>
+      rooms
+        .filter((r) => r.roomCode)
+        .map((r) => ({ value: r.roomCode, label: r.roomName || r.roomCode })),
+    [rooms]
+  );
 
   return (
     <>
-      <div className="attendance-toolbar">
-        <div className="attendance-toolbar-left">
-          <span className="attendance-result-count">
-            {rooms.length} room{rooms.length !== 1 ? "s" : ""} — Click a room to view its attendance
+      <div className="au-toolbar">
+        <span className="al-live">
+          <span className="al-live-dot" />
+          Live
+        </span>
+        {rooms.length > 0 && (
+          <AttendanceFilterSelect
+            label="Room"
+            allLabel="All Rooms"
+            value={filterRoom}
+            onChange={onFilterRoom}
+            options={roomOptions}
+          />
+        )}
+        <span className="al-live-note">Refreshes every 30 seconds</span>
+
+        <div className="au-toolbar-tail">
+          <span className="au-count">
+            {students.length} student{students.length !== 1 ? "s" : ""} inside
           </span>
         </div>
       </div>
-      <div className="room-attendance-grid">
-        {rooms.map((room) => (
-          <div key={room.id} className="room-attendance-card" onClick={() => navigate(`/attendance/room/${room.id}`)}>
-            <div className="room-attendance-card-header">
-              <MdMeetingRoom size={24} />
-              <div>
-                <h3>{room.roomName}</h3>
-                {room.location && <p>{room.location}</p>}
-              </div>
-            </div>
-            <div className="room-attendance-card-footer">
-              <span className={`room-status-badge ${room.status || "active"}`}>{room.status || "active"}</span>
-              <span className="room-view-link">View Attendance →</span>
-            </div>
+
+      <div className="au-results">
+        {error ? (
+          <PanelMessage
+            error
+            icon={MdErrorOutline}
+            title="Couldn't load the live list"
+            message="The server didn't respond. Check the backend is running, then try again."
+            action={
+              <button type="button" className="btn btn-green" onClick={onRetry}>
+                <MdRefresh size={15} /> Try again
+              </button>
+            }
+          />
+        ) : students.length === 0 ? (
+          <PanelMessage
+            icon={MdPeople}
+            title={filterRoom ? "No students inside this room" : "Nobody is signed in"}
+            message={
+              filterRoom
+                ? "Pick All Rooms to see everyone currently in the building."
+                : "Students appear here the moment they scan the QR code at a room's kiosk."
+            }
+            action={
+              filterRoom ? (
+                <button type="button" className="btn btn-outline" onClick={() => onFilterRoom("")}>
+                  Show all rooms
+                </button>
+              ) : (
+                <button type="button" className="btn btn-green" onClick={onGoToRooms}>
+                  <MdQrCode size={15} /> Room QR Codes
+                </button>
+              )
+            }
+          />
+        ) : (
+          <div className={`al-live-grid${busy ? " au-results--busy" : ""}`}>
+            {students.map((s) => (
+              <article key={s.id} className="al-student">
+                <div className="al-student-top">
+                  <span className="al-avatar">{initials(s)}</span>
+                  <span className="al-student-text">
+                    <span className="al-student-name">{fullName(s)}</span>
+                    <span className="al-student-id">{s.studentSchoolId || DASH}</span>
+                  </span>
+                </div>
+
+                <div className="al-student-tags">
+                  {[s.course, s.year].filter(Boolean).length > 0 && (
+                    <span className="al-tag al-tag--strong">
+                      {[s.course, s.year].filter(Boolean).join(" · ")}
+                    </span>
+                  )}
+                  {s.subject && <span className="al-tag">{s.subject}</span>}
+                </div>
+
+                <div className="al-student-meta">
+                  <div className="al-meta-row">
+                    <span className="al-meta-label">Professor</span>
+                    <span className="al-meta-value">{s.professor || DASH}</span>
+                  </div>
+                  <div className="al-meta-row">
+                    <span className="al-meta-label">Room</span>
+                    <span className="al-meta-value">{s.labRoom || DASH}</span>
+                  </div>
+                  <div className="al-meta-row">
+                    <span className="al-meta-label">Time in</span>
+                    <span className="al-meta-value">{formatTime(s.timeIn)}</span>
+                  </div>
+                </div>
+
+                <div className="al-timer">
+                  <span className="al-timer-value">{formatDuration(s.currentDuration || 0)}</span>
+                  <span className="al-timer-label">Inside for</span>
+                </div>
+              </article>
+            ))}
           </div>
-        ))}
+        )}
+      </div>
+    </>
+  );
+}
+
+/* ── Today's Log ─────────────────────────────────────────────────────────── */
+function TodayTab({
+  records,
+  facets,
+  filters,
+  setFilter,
+  hasFilters,
+  onClearFilters,
+  busy,
+  error,
+  onRetry,
+  openRowMenu,
+  toggleRowMenu,
+  closeRowMenu,
+  onEdit,
+  onDelete,
+  onExport,
+}) {
+  return (
+    <>
+      <div className="au-toolbar">
+        {/* Always rendered, never conditionally: a facet that came back empty used to
+            remove its own control, so the toolbar changed shape depending on what
+            was in the data. It now renders disabled and reads "None yet". */}
+        <AttendanceFilterSelect
+          label="Course"
+          allLabel="All Courses"
+          value={filters.course}
+          onChange={setFilter("course")}
+          options={facets.courses}
+        />
+        <AttendanceFilterSelect
+          label="Year"
+          allLabel="All Years"
+          value={filters.year}
+          onChange={setFilter("year")}
+          options={facets.years}
+        />
+        <AttendanceFilterSelect
+          label="Section"
+          allLabel="All Sections"
+          value={filters.section}
+          onChange={setFilter("section")}
+          options={facets.sections}
+        />
+        <AttendanceFilterSelect
+          label="Professor"
+          allLabel="All Professors"
+          value={filters.professor}
+          onChange={setFilter("professor")}
+          options={facets.professors}
+        />
+        {hasFilters && (
+          <button type="button" className="btn btn-outline" onClick={onClearFilters}>
+            Clear Filters
+          </button>
+        )}
+
+        <div className="au-toolbar-tail">
+          <span className="au-count">
+            {records.length} record{records.length !== 1 ? "s" : ""} today
+          </span>
+        </div>
+
+        <div className="au-toolbar-actions">
+          <button type="button" className="btn btn-green" onClick={onExport}>
+            <MdFileDownload size={15} /> Download Report
+          </button>
+        </div>
+      </div>
+
+      <div className="au-results">
+        {error ? (
+          <PanelMessage
+            error
+            icon={MdErrorOutline}
+            title="Couldn't load today's log"
+            message="The server didn't respond. Check the backend is running, then try again."
+            action={
+              <button type="button" className="btn btn-green" onClick={onRetry}>
+                <MdRefresh size={15} /> Try again
+              </button>
+            }
+          />
+        ) : records.length === 0 ? (
+          <PanelMessage
+            icon={MdEventNote}
+            title={hasFilters ? "No records match these filters" : "No records yet today"}
+            message={
+              hasFilters
+                ? "Try clearing a filter, or widen the date range in the report download."
+                : "Sessions show up here as soon as students start scanning in at a room kiosk."
+            }
+            action={
+              hasFilters ? (
+                <button type="button" className="btn btn-outline" onClick={onClearFilters}>
+                  Clear filters
+                </button>
+              ) : (
+                <button type="button" className="btn btn-green" onClick={onExport}>
+                  <MdFileDownload size={15} /> Download Report
+                </button>
+              )
+            }
+          />
+        ) : (
+          <div className={`au-table-wrap${busy ? " au-results--busy" : ""}`}>
+            <table className="au-table">
+              <thead>
+                <tr>
+                  <th scope="col" className="au-th-student">Student</th>
+                  <th scope="col">Course</th>
+                  <th scope="col">Subject</th>
+                  <th scope="col">Room</th>
+                  <th scope="col">Time In</th>
+                  <th scope="col">Time Out</th>
+                  <th scope="col">Duration</th>
+                  <th scope="col">Status</th>
+                  <th scope="col" className="au-th-actions">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {records.map((r) => {
+                  const status = statusMeta(r.status);
+                  const running = r.totalDuration == null;
+                  return (
+                    <tr key={r.id}>
+                      <td>
+                        <span className="au-cell">
+                          <span className="au-cell-primary">{fullName(r)}</span>
+                          <span className="au-cell-sub">{r.studentSchoolId || DASH}</span>
+                        </span>
+                      </td>
+                      <td>
+                        <span className="au-cell">
+                          <span className="au-cell-primary">{r.course || DASH}</span>
+                          <span className="au-cell-sub">
+                            {[r.year, r.section].filter(Boolean).join(" · ") || DASH}
+                          </span>
+                        </span>
+                      </td>
+                      <td>
+                        <span className="au-cell">
+                          <span className="au-cell-primary">{r.subject || DASH}</span>
+                          <span className="au-cell-sub">{r.professor || DASH}</span>
+                        </span>
+                      </td>
+                      <td>{r.labRoom || <span className="au-none">{DASH}</span>}</td>
+                      <td className="au-time">{formatTime(r.timeIn)}</td>
+                      <td className="au-time">{formatTime(r.timeOut)}</td>
+                      <td>
+                        <span className={`au-duration${running ? " au-duration--running" : ""}`}>
+                          {running ? "running" : formatDuration(r.totalDuration)}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`au-status au-status--${status.key}`}>{status.label}</span>
+                      </td>
+<td className="au-td-actions">
+                        <RowActions
+                          label={`Actions for ${fullName(r)}`}
+                          open={openRowMenu === r.id}
+                          onToggle={() => toggleRowMenu(r.id)}
+                          onClose={closeRowMenu}
+                        >
+                          <button type="button" role="menuitem" onClick={() => onEdit(r)}>
+                            <MdEdit size={14} /> Edit
+                          </button>
+                          <button type="button" role="menuitem" className="danger" onClick={() => onDelete(r.id)}>
+                            <MdDelete size={14} /> Delete
+                          </button>
+                        </RowActions>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+/* ── Room Logs ───────────────────────────────────────────────────────────── */
+function RoomLogsTab() {
+  const navigate = useNavigate();
+  const { data, isPending, isError, refetch } = useAttendanceRooms();
+
+  const rooms = useMemo(() => (Array.isArray(data) ? data : []), [data]);
+
+  return (
+    <>
+      <div className="au-toolbar">
+        <span className="au-count">
+          {rooms.length} room{rooms.length !== 1 ? "s" : ""} configured
+        </span>
+        <div className="au-toolbar-tail">
+          <span className="al-live-note">Select a room to open its attendance history</span>
+        </div>
+      </div>
+
+      <div className="au-results">
+        {isPending ? (
+          <LoadingPanel label="Loading rooms" />
+        ) : isError ? (
+          <PanelMessage
+            error
+            icon={MdErrorOutline}
+            title="Couldn't load rooms"
+            message="The server didn't respond. Check the backend is running, then try again."
+            action={
+              <button type="button" className="btn btn-green" onClick={refetch}>
+                <MdRefresh size={15} /> Try again
+              </button>
+            }
+          />
+        ) : rooms.length === 0 ? (
+          <PanelMessage
+            icon={MdMeetingRoom}
+            title="No rooms configured yet"
+            message="Attendance is recorded per room, so add at least one room and print its QR code for the kiosk."
+          />
+        ) : (
+          <div className="al-room-grid">
+            {rooms.map((room) => (
+              <button
+                key={room.id}
+                type="button"
+                className="al-room"
+                onClick={() => navigate(`/attendance/room/${room.id}`)}
+              >
+                <span className="al-room-top">
+                  <MdMeetingRoom size={22} />
+                  <span className="al-room-text">
+                    <span className="al-room-name">{room.roomName || DASH}</span>
+                    {room.location && (
+                      <span className="al-room-location">
+                        <MdLocationOn size={10} /> {room.location}
+                      </span>
+                    )}
+                  </span>
+                </span>
+                <span className="al-room-foot">
+                  <span className={`au-status au-status--${room.status === "active" ? "active" : "done"}`}>
+                    {room.status === "active" ? "Active" : room.status || "Inactive"}
+                  </span>
+                  <span className="al-room-link">View attendance</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </>
   );

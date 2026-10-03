@@ -234,6 +234,27 @@ console.log("--- disabled button is styled, not just inert ---");
     /\.btn-primary:disabled\s*\{[^}]*not-allowed/.test(css), true);
 }
 
+console.log("--- a refreshing results panel must stay interactive ---");
+
+{
+  // .au-results--busy faded the rows while a filter refetched, and also set
+  // pointer-events:none. That made an open row menu inert AND undismissable
+  // mid-request, because the mousedown handler that closes the menu could not
+  // receive the event either -- it stranded itself until the request landed.
+  // refetchOnWindowFocus triggers exactly that on tab return. Opacity alone
+  // communicates "refreshing".
+  const css = fs.readFileSync(
+    path.resolve(__dirname, "../../frontend/src/styles/pages/attendance-ui.css"),
+    "utf8"
+  );
+  const busyRule = /\.au-results--busy\s*\{[^}]*\}/.exec(css);
+  check("attendance-ui.css has a .au-results--busy rule", busyRule !== null, true);
+  check("the busy rule still fades the panel",
+    busyRule !== null && /opacity:\s*0?\.\d+/.test(busyRule[0]), true);
+  check("the busy rule must NOT disable pointer events",
+    busyRule !== null && !/pointer-events/.test(busyRule[0]), true);
+}
+
 console.log("--- date bounds are calendar-day safe ---");
 
 const dated = [

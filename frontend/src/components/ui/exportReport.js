@@ -1,4 +1,8 @@
-import { localDayKey } from "./dateRange";
+// Explicit ".js" so this module can be imported by Node's ESM resolver, which is
+// what lets tests/exportReport.verify.js exercise buildAttendanceQuery directly.
+// The rest of src/ uses extensionless relative imports because only Vite ever
+// loads them; Node requires the extension for relative ESM specifiers.
+import { localDayKey } from "./dateRange.js";
 
 export const DATE_RANGE_OPTIONS = [
   { value: "all", label: "All Time" },
@@ -104,11 +108,16 @@ export function buildAttendanceQuery({ course, year, section, subject, professor
     if (bounds.to) params.to = bounds.to;
   }
 
+  // Every field is guarded against the "All" sentinel, which is what the dialog
+  // seeds an untouched select to. Miss one and the backend receives it as a real
+  // filter value: applyAttendanceFilters does eqInsensitive(r.subject, "All"),
+  // false for every genuine row, so the export silently returns zero records
+  // while reporting success.
   if (course && course !== "All") params.course = course;
   if (year && year !== "All") params.year = year;
   if (section && section !== "All") params.section = section;
-  if (subject) params.subject = subject;
-  if (professor) params.professor = professor;
+  if (subject && subject !== "All") params.subject = subject;
+  if (professor && professor !== "All") params.professor = professor;
   if (roomCode) params.roomCode = roomCode;
   if (roomId) params.roomId = roomId;
   if (search) params.student = search;

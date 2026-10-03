@@ -1,0 +1,464 @@
+/* ==========================================================================
+   Attendance Logs (/attendance) — page-specific rules
+   --------------------------------------------------------------------------
+   Only what the logs page renders on its own. Everything it shares with
+   /attendance/room/:roomId lives in attendance-ui.css under `.au-*`: the page
+   shell (.au-page), the toolbar and its controls, .au-results, the .au-table
+   family, the duration/status pills and .au-empty.
+
+   What is here: the tab strip integration, the live badge, the signed-in
+   student cards, the row-action kebab, the room grid, the edit dialog, and the
+   two overrides that retarget RoomManagementTab's own markup.
+
+   attendance.css is deliberately not imported by this page. It still serves the
+   student AttendancePanel and the kiosk, and it owns .attendance-page,
+   .attendance-table, .attendance-empty and .attendance-date-filter — none of
+   which the redesigned page renders. RoomManagementTab imports what it needs
+   itself; see the note on the .rooms-header block below.
+   ========================================================================== */
+
+/* ── Tab strip ─────────────────────────────────────────────────────────── */
+/* .tab-strip is the app-wide strip (My Activity, Resources, Settings), imported
+   as-is. The old .attendance-tabs was a weaker duplicate of it — 10px vs 12px
+   radius, font-weight 500 vs 600, and no overflow-x:auto, so the fourth tab
+   clipped on narrow screens. Two adjustments are needed here.
+
+   First, tab-strip.css ships `margin-bottom:20px` for the block-flow pages it
+   was written for. This page is a flex column that already has a 16px gap;
+   leaving both would put 36px under the strip.
+
+   Second, the panel wrapper MUST become a flex column rather than staying the
+   plain block tab-strip.css declares. It is the direct child that fills what
+   the KPI strip leaves over, and .au-results / .al-live-grid / .au-table-wrap
+   all rely on `flex:1; min-height:0` plus `overflow-y:auto` to scroll
+   internally. Under a block parent those declarations resolve against no flex
+   context, the grids size to their content, and the whole page falls back to
+   scrolling .main-content instead of just the rows — which is precisely the
+   dead-space behaviour this rewrite exists to remove. */
+.au-page .tab-strip-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 16px;
+}
+.au-page .tab-strip {
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+
+/* Wraps the active tab's content so it can carry role="tabpanel" (and so the
+   aria-controls/aria-labelledby pairing has something to point at). It must
+   reproduce the flex-column growth of its parent: without this the toolbar and
+   results below lose their flex context and the panel stops scrolling
+   internally. */
+.au-page .tab-panel-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 16px;
+}
+
+/* Count bubble on the active/today tabs. Not the legacy .tab-count: that one
+   is defined in attendance.css for .attendance-tab, which this page no longer
+   renders, and its colours only had a dark-mode override for the old strip. */
+.al-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: var(--bg);
+  color: var(--text-muted);
+}
+.tab-strip-btn.active .al-tab-count {
+  background: rgba(0, 0, 0, 0.16);
+  color: #000;
+}
+body.dark .al-tab-count {
+  background: #1a1a1a;
+  color: #aaa;
+}
+body.dark .tab-strip-btn.active .al-tab-count {
+  background: rgba(0, 0, 0, 0.2);
+  color: #000;
+}
+
+/* ── Live indicator ────────────────────────────────────────────────────── */
+.al-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 8px;
+  border-radius: 20px;
+  background: rgba(46, 125, 50, 0.1);
+  color: #2e7d32;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.al-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #2e7d32;
+  animation: alPulse 2s ease-in-out infinite;
+}
+@keyframes alPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.al-live-note {
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+/* ── Live student cards ────────────────────────────────────────────────── */
+/* Replaces the .attendance-active-* grid. The stagger-per-nth-child entrance is
+   gone: it replayed whenever a single student timed in or out and shifted every
+   card after them, which read as flicker rather than motion. */
+.al-live-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(290px, 100%), 1fr));
+  gap: 12px;
+  align-content: start;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+.al-live-grid::-webkit-scrollbar {
+  width: 0;
+}
+
+.al-student {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 13px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--card-shadow);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.al-student:hover {
+  border-color: var(--green);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.09);
+}
+.al-student-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.al-avatar {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  background: rgba(46, 125, 50, 0.1);
+  color: #2e7d32;
+}
+.al-student-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.al-student-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.al-student-id {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.al-student-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.al-tag {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.al-tag--strong {
+  background: rgba(46, 125, 50, 0.09);
+  border-color: transparent;
+  color: #2e7d32;
+}
+.al-student-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+}
+.al-meta-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+.al-meta-label {
+  flex: 0 0 62px;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.al-meta-value {
+  min-width: 0;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.al-timer {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: rgba(46, 125, 50, 0.06);
+}
+.al-timer-value {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #2e7d32;
+  font-variant-numeric: tabular-nums;
+}
+.al-timer-label {
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+/* ── Room grid (Room Logs tab) ─────────────────────────────────────────── */
+.al-room-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
+  gap: 12px;
+  align-content: start;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+.al-room-grid::-webkit-scrollbar {
+  width: 0;
+}
+.al-room {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--card-shadow);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.al-room:hover {
+  border-color: var(--green);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.09);
+}
+.al-room-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: var(--green);
+}
+.al-room-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.al-room-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.al-room-location {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+.al-room-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+}
+.al-room-link {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--green);
+}
+
+/* ── Room QR Codes tab ─────────────────────────────────────────────────── */
+/* RoomManagementTab renders its own .rooms-header, a bare h3 + button that
+   duplicated the toolbar, and it imports attendance.css itself for
+   .room-card / .room-add-card / .qr-placeholder / .attendance-modal-overlay.
+   Only its header is restyled here — scoping under .au-page so the class keeps
+   working anywhere else it appears, and doing it in CSS rather than in the
+   component so its state logic stays untouched. */
+.au-page .rooms-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--card-shadow);
+}
+.au-page .rooms-header h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+.au-page .rooms-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.au-page .rooms-grid {
+  align-content: start;
+  overflow-y: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+.au-page .rooms-grid::-webkit-scrollbar {
+  width: 0;
+}
+
+/* ── Dark mode ─────────────────────────────────────────────────────────── */
+body.dark .al-live {
+  background: rgba(67, 160, 71, 0.14);
+  color: var(--green-light);
+}
+body.dark .al-live-dot {
+  background: var(--green-light);
+}
+body.dark .al-student,
+body.dark .al-room,
+body.dark .au-page .rooms-header {
+  background: #131313;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+body.dark .al-student:hover,
+body.dark .al-room:hover {
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+body.dark .al-avatar {
+  background: rgba(67, 160, 71, 0.16);
+  color: var(--green-light);
+}
+body.dark .al-student-name {
+  color: #ffffff;
+}
+body.dark .al-tag {
+  background: #0a0a0a;
+  border-color: #2a2a2a;
+}
+body.dark .al-tag--strong {
+  background: rgba(67, 160, 71, 0.14);
+  border-color: transparent;
+  color: var(--green-light);
+}
+body.dark .al-student-meta,
+body.dark .al-room-foot {
+  border-top-color: rgba(255, 255, 255, 0.07);
+}
+body.dark .al-timer {
+  background: rgba(67, 160, 71, 0.12);
+}
+body.dark .al-timer-value {
+  color: var(--green-light);
+}
+
+/* ── Responsive ────────────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .al-live-grid,
+  .al-room-grid {
+    overflow-y: visible;
+    padding-bottom: 0;
+  }
+  /* The page stops being a definite-height column here, so nothing inside it
+     needs to grow. */
+  .au-page .tab-strip-panel {
+    min-height: auto;
+  }
+}
+@media (max-width: 768px) {
+  .al-live-note {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .al-student,
+  .al-room {
+    transition: none;
+    animation: none;
+  }
+  .al-live-dot {
+    animation: none;
+  }
+}

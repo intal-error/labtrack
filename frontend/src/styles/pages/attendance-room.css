@@ -1,0 +1,196 @@
+/* ==========================================================================
+   Room Attendance History (/attendance/room/:roomId) — page-specific rules
+   --------------------------------------------------------------------------
+   Prefixed `.rh-*`. The shared primitives this page also uses — .au-page, the
+   .au-toolbar and its controls, .au-results, the .au-table family, the
+   duration/status pills and .au-empty — live in attendance-ui.css. Only what is
+   unique to this screen is defined here.
+
+   attendance.css is deliberately NOT imported. This page used to share
+   .attendance-page with the logs page, which is where its 1200px centred cap
+   came from. The classes it needed from that file — .admin-back-btn (shared with
+   AdminPage) and the date/pagination chrome — are either defined in admin.css
+   and globals, or replaced here by the shared primitives.
+   ========================================================================== */
+
+/* ── Refined hero ──────────────────────────────────────────────────────── */
+/* The gradient banner is kept as the page's identity anchor, but trimmed:
+   padding 28px 32px -> 20px 26px, h1 1.5rem -> 1.2rem.
+
+   The two radial-gradient "orb" pseudo-elements (.attendance-header::before /
+   ::after, animating glowOrb on 5s and 7s infinite loops) are dropped. They
+   cost two permanently composited layers, they never carried information, and
+   an always-animating background is the clearest tell that a page was dressed
+   up rather than designed.
+
+   The old rules live in attendance.css as .attendance-header. They are simply
+   not imported by this page any more — it defines its own .rh-hero on top of
+   the shared .au-page — so there is nothing to override and no risk of leaking
+   these onto the kiosk or the student panel, which still use the legacy
+   .attendance-header. */
+.rh-hero {
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+  padding: 20px 26px;
+  border-radius: 16px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--green) 0%, var(--dark-green) 100%);
+}
+.rh-hero-main {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+/* .admin-back-btn is defined in admin.css and also used by AdminPage; restyled
+   here only for its appearance against the green field. */
+.rh-back {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+.rh-back:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+.rh-hero-text {
+  min-width: 0;
+}
+.rh-hero h1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #fff;
+}
+.rh-hero-sub {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.72);
+}
+/* Location + status sit under the title as quiet chips; they were previously
+   only reachable by opening the Room QR Codes tab. */
+.rh-hero-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.rh-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 10.5px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
+}
+.rh-chip--muted {
+  background: rgba(255, 255, 255, 0.09);
+  color: rgba(255, 255, 255, 0.7);
+}
+/* Live occupancy, from the `activeNow` aggregate. Turns the hero from
+   decoration into the one thing an admin checks first. */
+.rh-occupancy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 6px 12px 6px 10px;
+  border-radius: 20px;
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  background: rgba(0, 0, 0, 0.22);
+  color: #fff;
+}
+.rh-occupancy--live {
+  background: rgba(255, 255, 255, 0.95);
+  color: #1b5e20;
+}
+.rh-occupancy-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.5;
+}
+.rh-occupancy--live .rh-occupancy-dot {
+  opacity: 1;
+  animation: rhPulse 2s ease-in-out infinite;
+}
+@keyframes rhPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ── Dark mode ─────────────────────────────────────────────────────────── */
+body.dark .rh-hero {
+  background: linear-gradient(135deg, #1b5e20 0%, #0d3011 100%);
+}
+body.dark .rh-hero-sub {
+  color: rgba(255, 255, 255, 0.6);
+}
+body.dark .rh-chip {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.82);
+}
+body.dark .rh-back {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+body.dark .rh-back:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+body.dark .rh-occupancy {
+  background: rgba(0, 0, 0, 0.3);
+}
+body.dark .rh-occupancy--live {
+  background: var(--green);
+  color: #fff;
+}
+
+/* ── Responsive ────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .rh-hero {
+    padding: 16px 18px;
+  }
+  .rh-hero h1 {
+    font-size: 1.05rem;
+  }
+  /* Occupancy drops below the title row rather than competing with it for the
+     same line on a narrow screen. */
+  .rh-occupancy {
+    margin-left: 0;
+    margin-top: 10px;
+  }
+  .rh-hero-main {
+    flex-wrap: wrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rh-occupancy-dot {
+    animation: none;
+  }
+}

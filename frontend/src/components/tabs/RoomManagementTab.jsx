@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../services/api";
 import toast from "react-hot-toast";
 import {
@@ -12,7 +13,16 @@ import {
   MdOutlineBusiness,
 } from "react-icons/md";
 
+// This component renders .room-card, .room-add-card, .rooms-empty,
+// .qr-placeholder and .attendance-modal-overlay — every one of which is
+// defined only in attendance.css. It used to pick them up transitively because
+// AttendanceLogsPage happened to import that file; now that the page is built on
+// attendance-logs.css, the dependency has to be declared here or the whole tab
+// renders unstyled.
+import "../../styles/pages/attendance.css";
+
 export default function RoomManagementTab() {
+  const queryClient = useQueryClient();
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -34,6 +44,15 @@ export default function RoomManagementTab() {
     } finally {
       setLoading(false);
     }
+  }
+
+  // This tab keeps its own local copy of the room list, but two other surfaces
+  // read the cached one: the Room Logs grid and the room history hero chips,
+  // both via useAttendanceRooms (a 5 minute staleTime). Editing a room here left
+  // those stale for minutes -- including the grid still listing a room that had
+  // just been deleted. Refreshing the shared cache keeps all three in step.
+  function syncRoomCache() {
+    queryClient.invalidateQueries({ queryKey: ["attendance", "rooms"] });
   }
 
   function openAddModal() {
@@ -62,6 +81,7 @@ export default function RoomManagementTab() {
       }
       setShowModal(false);
       loadRooms();
+      syncRoomCache();
     } catch (err) {
       toast.error(err.message || "Failed to save room");
     }
@@ -73,6 +93,7 @@ export default function RoomManagementTab() {
       await api.deleteRoom(room.id);
       toast.success("Room deleted");
       loadRooms();
+      syncRoomCache();
     } catch (err) {
       toast.error(err.message || "Failed to delete room");
     }
