@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { MdSearch, MdMoreVert, MdQrCodeScanner, MdEdit, MdDelete, MdImage } from "react-icons/md";
 import Pagination from "../ui/Pagination";
 import ViewToggle from "../ui/ViewToggle";
+import FilterSelect from "../ui/FilterSelect";
 import {
   ALL,
   CATALOG_CATEGORIES,
@@ -16,33 +17,11 @@ import "../../styles/pages/catalog-browser.css";
 
 const DASH = "\u2014";
 
-const toOption = (o) => (typeof o === "string" ? { value: o, label: o } : { value: o.value, label: o.label });
-
 // Accepts either plain strings or ready-made {value, label} pairs.
 const toValue = (o) => (typeof o === "string" ? o : o.value);
 
 // The "no filter" sentinel row. ALL is the value the backend treats as a no-op.
 const withAll = (allLabel, values) => [{ value: ALL, label: allLabel }, ...values];
-
-function FilterSelect({ label, value, onChange, options }) {
-  // Normalised HERE, not at each call site. These option lists mix a labelled
-  // "All X" object with a spread of plain strings from CATALOG_*, and spreading
-  // does not convert: `[{value,label}, ...["Available"]]` leaves the tail as
-  // strings, so reading `o.label` gave undefined and React rendered every real
-  // option as a blank row — the Status/Category/Condition dropdowns looked
-  // empty. Normalising inside the component makes that mismatch unrepresentable.
-  const normalized = useMemo(() => options.map(toOption), [options]);
-
-  return (
-    <select className="cx-select" aria-label={label} title={label} value={value} onChange={(e) => onChange(e.target.value)}>
-      {normalized.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
-    </select>
-  );
-}
 
 function ItemThumb({ item, onImageClick }) {
   if (item.imageUrl) {

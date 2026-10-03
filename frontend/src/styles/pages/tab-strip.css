@@ -47,9 +47,13 @@
   color: #000;
 }
 
+/* No max-width here: the tab strip used to centre its content in a 1200px
+   column, which left large dead margins on wide screens. The Lab Manuals body
+   now uses the same full-width .catalog-page shell as /catalog, so this wrapper
+   must not constrain it. */
 .resources-page {
-  max-width: 1200px;
-  margin: 0 auto;
+  width: 100%;
+  min-width: 0;
 }
 
 .tab-strip-panel {

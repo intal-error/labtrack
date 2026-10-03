@@ -343,7 +343,7 @@ function StudentDashboard() {
     },
     {
       key: "manuals",
-      label: "Laboratory Manuals",
+      label: "Lab Manual",
       desc: "View available lab manuals",
       icon: MdMenuBook,
       tone: "green",

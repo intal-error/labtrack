@@ -19,7 +19,7 @@ const NAV_ITEMS = [
   { path: "/my-activity", label: "My Activity", icon: MdHistory, roles: ["student"] },
   { path: "/transactions", label: "Transactions", icon: FaExchangeAlt, roles: ["admin"] },
   { path: "/borrow-requests", label: "Borrow Requests", icon: MdAssignment, roles: ["admin"] },
-  { path: "/resources", label: "Resources", icon: MdMenuBook, roles: ["student", "admin"] },
+  { path: "/resources", label: "Lab Manual", icon: MdMenuBook, roles: ["student", "admin"] },
   { path: "/notifications", label: "Notifications", icon: MdNotifications, roles: ["student", "admin"] },
 ];
 

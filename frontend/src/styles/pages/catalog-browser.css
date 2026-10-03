@@ -329,6 +329,13 @@ body.dark .catalog-alert-title {
   background: rgba(239, 108, 0, 0.13);
   color: #ef6c00;
 }
+/* Used by the lab-manuals list, where the second state is "Archived" rather
+   than "Borrowed". Neutral grey so it reads as deliberately retired, not as an
+   alert. */
+.cx-status--archived {
+  background: rgba(158, 158, 158, 0.14);
+  color: #616161;
+}
 
 /* ── Availability ──────────────────────────────────────────────────────── */
 .cx-avail {
@@ -640,6 +647,10 @@ body.dark .cx-status--available {
 body.dark .cx-status--borrowed {
   background: rgba(255, 183, 77, 0.16);
   color: #ffb74d;
+}
+body.dark .cx-status--archived {
+  background: rgba(255, 255, 255, 0.09);
+  color: #9e9e9e;
 }
 body.dark .cx-card-status .cx-status {
   background: rgba(0, 0, 0, 0.7);

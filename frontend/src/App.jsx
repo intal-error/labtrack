@@ -137,7 +137,7 @@ function App() {
               <Route path="notifications" element={<NotificationsTab />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route path="resources" element={<ResourcesPage />} />
-              <Route path="documents" element={<Navigate to="/resources?tab=documents" replace />} />
+              <Route path="documents" element={<Navigate to="/resources" replace />} />
               <Route path="scanner" element={<RoleRoute allowed={["student"]} fallback="/my-activity"><ScannerHubPage /></RoleRoute>} />
               <Route path="my-activity" element={<RoleRoute allowed={["student"]}><MyActivityPage /></RoleRoute>} />
               <Route path="transactions" element={<RoleRoute allowed={["admin"]} fallback="/my-activity"><TransactionsPage /></RoleRoute>} />

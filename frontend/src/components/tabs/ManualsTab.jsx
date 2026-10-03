@@ -1,24 +1,40 @@
 import { useState, useEffect, useMemo } from "react";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
-import { timeAgo, fmtDate as formatDate } from "../../utils/helpers";
+import { fmtDate as formatDate } from "../../utils/helpers";
 import { filterBySearch } from "../../utils/search";
 import { COURSES } from "../../constants/courses";
 import { LAB_ROOMS } from "../../constants/labRooms";
+import {
+  ALL,
+  DEFAULT_MANUAL_CATEGORY,
+  DEFAULT_MANUAL_STATUS,
+  MANUAL_CATEGORIES,
+  MANUAL_SORTS,
+  MANUAL_STATUSES,
+  MANUALS_PAGE_SIZE,
+} from "../../constants/manuals";
+import StatStrip from "../ui/StatStrip";
+import FilterSelect from "../ui/FilterSelect";
+import Pagination from "../ui/Pagination";
+import ViewToggle from "../ui/ViewToggle";
+import LoadingSpinner from "../ui/LoadingSpinner";
+import useRowMenu from "../../hooks/useRowMenu";
 import toast from "react-hot-toast";
+import "../../styles/pages/catalog.css";
+import "../../styles/pages/catalog-browser.css";
 import "../../styles/pages/tabs.css";
 import "../../styles/pages/shared-form-panel.css";
-import { MdMenuBook, MdAdd, MdDelete, MdEdit, MdSearch, MdOpenInNew, MdCloudUpload, MdClose, MdInfo, MdAssignment, MdDescription, MdDownload, MdVisibility, MdClear, MdWarning } from "react-icons/md";
+import { MdMenuBook, MdAdd, MdDelete, MdEdit, MdSearch, MdOpenInNew, MdCloudUpload, MdClose, MdInfo, MdAssignment, MdDescription, MdDownload, MdVisibility, MdClear, MdWarning, MdMoreVert, MdPictureAsPdf } from "react-icons/md";
 
 
-const CATEGORIES = ["All", "General", "Safety", "Equipment Guide", "Software", "Procedure", "Other"];
-const STATUSES = ["Active", "Archived"];
-const SORT_OPTIONS = [
-  { value: "newest", label: "Newest First" },
-  { value: "oldest", label: "Oldest First" },
-  { value: "title-asc", label: "Title A-Z" },
-  { value: "title-desc", label: "Title Z-A" },
-];
+const DASH = "\u2014";
+
+const withAll = (allLabel, values) => [{ value: ALL, label: allLabel }, ...values];
+
+const CATEGORY_OPTIONS = withAll("All Categories", MANUAL_CATEGORIES);
+const COURSE_OPTIONS = withAll("All Courses", COURSES);
+const SORT_OPTIONS = MANUAL_SORTS;
 
 const FILE_TYPE_ICONS = {
   pdf: { color: "#d32f2f", label: "PDF" },
@@ -40,10 +56,31 @@ function getFileType(fileName) {
   return FILE_TYPE_ICONS[ext] || null;
 }
 
+// Mirrors StatusPill in CatalogBrowser: a soft 12% tint with saturated text, so
+// "Archived" reads as deliberately muted rather than as an error state.
+function StatusPill({ status }) {
+  const key = (status || "Active") === "Archived" ? "archived" : "active";
+  return <span className={`cx-status cx-status--${key}`}>{status || DEFAULT_MANUAL_STATUS}</span>;
+}
+
 const EMPTY_FORM = {
-  title: "", description: "", category: "General", course: "", labRoom: "",
-  status: "Active", fileUrl: "", fileName: "", fileSize: "", fileType: "", thumbnailUrl: "",
+  title: "", description: "", category: DEFAULT_MANUAL_CATEGORY, course: "", labRoom: "",
+  status: DEFAULT_MANUAL_STATUS, fileUrl: "", fileName: "", fileSize: "", fileType: "", thumbnailUrl: "",
 };
+
+const VIEW_STORAGE_KEY = "labtrack-manuals-view";
+
+/* The card's image band and title are div/h3 rather than <button>, so Enter and
+   Space have to be wired up by hand. The band is the single tab stop (it also
+   carries role="button"); the title stays a redundant mouse convenience so it
+   does not add a duplicate tab stop for the same action. Without this the
+   detail drawer is unreachable by keyboard in grid view, since the row kebab
+   that exposes "Details" only exists in list view. */
+function onCardKey(event, open) {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  open();
+}
 
 export default function ManualsTab() {
   const { role } = useAuth();
@@ -54,17 +91,19 @@ export default function ManualsTab() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [search, setSearch] = useState("");
-  const [filterCategory, setFilterCategory] = useState("All");
-  const [filterCourse, setFilterCourse] = useState("All");
-  const [filterLabRoom, setFilterLabRoom] = useState("All");
-  const [filterStatus, setFilterStatus] = useState("All");
+  const [filterCategory, setFilterCategory] = useState(ALL);
+  const [filterCourse, setFilterCourse] = useState(ALL);
+  const [filterStatus, setFilterStatus] = useState(ALL);
   const [sortBy, setSortBy] = useState("newest");
+  const [page, setPage] = useState(1);
+  const [viewMode, setViewMode] = useState("grid");
   const [form, setForm] = useState(EMPTY_FORM);
   const [uploading, setUploading] = useState(false);
 
   const [selectedManual, setSelectedManual] = useState(null);
   const [showDetail, setShowDetail] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [openRowMenu, rowMenu] = useRowMenu({ containerClass: "catalog-kebab-wrap" });
 
   useEffect(() => { load(); }, []);
 
@@ -87,11 +126,10 @@ export default function ManualsTab() {
 
   const filtered = useMemo(() => {
     let result = filterBySearch(manuals, search, ["title", "description", "course", "lab_room", "fileName"]).filter((m) => {
-      const matchCategory = filterCategory === "All" || m.category === filterCategory;
-      const matchCourse = filterCourse === "All" || m.course === filterCourse;
-      const matchLabRoom = filterLabRoom === "All" || m.lab_room === filterLabRoom;
-      const matchStatus = filterStatus === "All" || (m.status || "Active") === filterStatus;
-      return matchCategory && matchCourse && matchLabRoom && matchStatus;
+      const matchCategory = filterCategory === ALL || m.category === filterCategory;
+      const matchCourse = filterCourse === ALL || m.course === filterCourse;
+      const matchStatus = filterStatus === ALL || (m.status || "Active") === filterStatus;
+      return matchCategory && matchCourse && matchStatus;
     });
 
     result.sort((a, b) => {
@@ -109,17 +147,50 @@ export default function ManualsTab() {
     });
 
     return result;
-  }, [manuals, search, filterCategory, filterCourse, filterLabRoom, filterStatus, sortBy]);
+  }, [manuals, search, filterCategory, filterCourse, filterStatus, sortBy]);
 
-  const hasActiveFilters = search || filterCategory !== "All" || filterCourse !== "All" || filterLabRoom !== "All" || filterStatus !== "All";
+  // Render-phase reset, the pattern already used by useCatalogFilters.js:41 and
+  // ViewToggle.jsx:18. Any filter change invalidates the page number, otherwise
+  // page 7 of a 3-page result renders empty.
+  const resetKeys = [search, filterCategory, filterCourse, filterStatus, sortBy];
+  const [prevResetKeys, setPrevResetKeys] = useState(resetKeys);
+  if (resetKeys.some((k, i) => prevResetKeys[i] !== k)) {
+    setPrevResetKeys(resetKeys);
+    setPage(1);
+  }
+
+// The manuals endpoint returns the whole collection, so the page slice is
+// derived here rather than requested.
+const totalPages = Math.max(1, Math.ceil(filtered.length / MANUALS_PAGE_SIZE));
+// Clamped because deleting manuals can shrink totalPages while `page` is still
+// high, and the filter reset above only fires on filter/sort changes. Without
+// the clamp the slice comes back empty, and because Pagination returns null when
+// totalPages <= 1 the user is left with a blank results area and no controls.
+const safePage = Math.min(page, totalPages);
+const paged = useMemo(() => {
+  const start = (safePage - 1) * MANUALS_PAGE_SIZE;
+  return filtered.slice(start, start + MANUALS_PAGE_SIZE);
+}, [filtered, safePage]);
+
+  const activeFilterCount =
+    (search.trim() ? 1 : 0) +
+    (filterCategory !== ALL ? 1 : 0) +
+    (filterCourse !== ALL ? 1 : 0) +
+    (filterStatus !== ALL ? 1 : 0);
+
+  const hasActiveFilters = activeFilterCount > 0;
 
   function clearFilters() {
     setSearch("");
-    setFilterCategory("All");
-    setFilterCourse("All");
-    setFilterLabRoom("All");
-    setFilterStatus("All");
+    setFilterCategory(ALL);
+    setFilterCourse(ALL);
+    setFilterStatus(ALL);
     setSortBy("newest");
+  }
+
+  // The stat tiles are the status filter: tapping the active tile clears it.
+  function selectStatus(next) {
+    setFilterStatus((current) => (current === next ? ALL : next));
   }
 
   function openAdd() {
@@ -226,63 +297,76 @@ export default function ManualsTab() {
     a.click();
   }
 
-  if (loading) return <div className="page-loading"><div className="spinner-lg" /></div>;
+  if (loading) return <LoadingSpinner />;
 
   return (
-    <div className="tab-content">
-      {isAdmin && (
-        <button className="hero-action-btn ghost" onClick={openAdd}><MdAdd size={16} /> Upload Manual</button>
-      )}
+    <section className="catalog-page">
+        <StatStrip
+          variant="stack"
+          onSelect={selectStatus}
+          activeKey={filterStatus}
+          items={[
+            { key: ALL, label: "Total Manuals", value: stats.total },
+            { key: "Active", label: "Active", value: stats.active },
+            { key: "Archived", label: "Archived", value: stats.archived },
+          ]}
+        />
 
-      <div className="manuals-stats">
-        <div className={`manuals-stat-card ${filterStatus === "All" ? "active" : ""}`} onClick={() => setFilterStatus("All")}>
-          <div className="manuals-stat-icon total"><MdMenuBook size={20} /></div>
-          <div className="manuals-stat-info">
-            <span className="manuals-stat-number">{stats.total}</span>
-            <span className="manuals-stat-label">Total Manuals</span>
-          </div>
-        </div>
-        <div className={`manuals-stat-card ${filterStatus === "Active" ? "active" : ""}`} onClick={() => setFilterStatus(filterStatus === "Active" ? "All" : "Active")}>
-          <div className="manuals-stat-icon active"><MdMenuBook size={20} /></div>
-          <div className="manuals-stat-info">
-            <span className="manuals-stat-number">{stats.active}</span>
-            <span className="manuals-stat-label">Active</span>
-          </div>
-        </div>
-        <div className={`manuals-stat-card ${filterStatus === "Archived" ? "active" : ""}`} onClick={() => setFilterStatus(filterStatus === "Archived" ? "All" : "Archived")}>
-          <div className="manuals-stat-icon archived"><MdMenuBook size={20} /></div>
-          <div className="manuals-stat-info">
-            <span className="manuals-stat-number">{stats.archived}</span>
-            <span className="manuals-stat-label">Archived</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="manuals-toolbar">
-        <div className="manuals-filters-row">
-          <div className="manuals-search">
+        <div className="cx-toolbar">
+          <div className="cx-search">
             <MdSearch size={16} />
-            <input type="text" placeholder="Search by title, course, lab, description..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input
+              type="search"
+              className="cx-search-input"
+              placeholder="Search manuals by title, course, lab, file..."
+              aria-label="Search manuals"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
-          <select className="manuals-select" value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
-            {CATEGORIES.map((c) => <option key={c} value={c}>{c === "All" ? "All Categories" : c}</option>)}
+
+          <FilterSelect label="Category" value={filterCategory} onChange={setFilterCategory} options={CATEGORY_OPTIONS} />
+          <FilterSelect label="Course" value={filterCourse} onChange={setFilterCourse} options={COURSE_OPTIONS} />
+
+          <select
+            className="cx-select cx-select--sort"
+            aria-label="Sort"
+            title="Sort"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+          >
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
           </select>
-          <select className="manuals-select" value={filterCourse} onChange={(e) => setFilterCourse(e.target.value)}>
-            <option value="All">All Courses</option>
-            {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <select className="manuals-select" value={filterLabRoom} onChange={(e) => setFilterLabRoom(e.target.value)}>
-            <option value="All">All Labs</option>
-            {LAB_ROOMS.map((r) => <option key={r} value={r}>{r}</option>)}
-          </select>
-          <select className="manuals-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-            {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-          {hasActiveFilters && (
-            <button className="manuals-clear-btn" onClick={clearFilters}><MdClear size={14} /> Clear</button>
+
+          <ViewToggle value={viewMode} onChange={setViewMode} localStorageKey={VIEW_STORAGE_KEY} />
+
+          <div className="cx-toolbar-tail">
+            {hasActiveFilters && (
+              <button className="manuals-clear-btn" onClick={clearFilters}>
+                <MdClear size={14} /> Clear
+              </button>
+            )}
+            <Pagination
+              compact
+              maxVisible={5}
+              currentPage={safePage}
+              totalPages={totalPages}
+              totalItems={filtered.length}
+              pageSize={MANUALS_PAGE_SIZE}
+              onPageChange={setPage}
+            />
+          </div>
+
+          {isAdmin && (
+            <div className="cx-toolbar-actions">
+              <button className="btn btn-green" onClick={openAdd}>
+                <MdAdd size={16} /> Upload Manual
+              </button>
+            </div>
           )}
         </div>
-      </div>
 
       {showForm && (
         <div className={`lab-slide-panel ${showForm ? "open" : ""}`}>
@@ -332,7 +416,7 @@ export default function ManualsTab() {
                     <label>Category</label>
                     <div className="lab-input-wrap">
                       <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-                        {CATEGORIES.filter((c) => c !== "All").map((c) => <option key={c} value={c}>{c}</option>)}
+                        {MANUAL_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
                       </select>
                       <MdAssignment size={16} />
                     </div>
@@ -342,7 +426,7 @@ export default function ManualsTab() {
                       <label>Status</label>
                       <div className="lab-input-wrap">
                         <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                          {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                          {MANUAL_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                         </select>
                         <MdAssignment size={16} />
                       </div>
@@ -525,67 +609,174 @@ export default function ManualsTab() {
         </div>
       )}
 
-      <div className="manuals-grid">
-        {filtered.length === 0 ? (
-          <div className="manuals-empty">
+      {filtered.length === 0 ? (
+          <div className="catalog-empty">
             <MdMenuBook size={48} />
-            <h3>No Laboratory Manuals Available</h3>
+            <h3>{hasActiveFilters ? "No matching manuals" : "No manuals yet"}</h3>
             <p>
               {hasActiveFilters
-                ? "No matching manuals found. Try adjusting your search or filters."
+                ? "No laboratory manual matches the current filters."
                 : isAdmin
                   ? "Upload a laboratory manual to make it available to students."
                   : "Laboratory manuals will appear here once they are uploaded."
               }
             </p>
-            {hasActiveFilters && <button className="btn btn-outline" onClick={clearFilters} style={{ marginTop: 12 }}><MdClear size={14} /> Clear Filters</button>}
+            {hasActiveFilters ? (
+              <button className="btn btn-outline" onClick={clearFilters}><MdClear size={14} /> Clear filters</button>
+            ) : isAdmin ? (
+              <button className="btn btn-green" onClick={openAdd}><MdAdd size={16} /> Upload Manual</button>
+            ) : null}
           </div>
-        ) : filtered.map((m) => {
-          const fileType = getFileType(m.file_name);
-          return (
-            <div className="manual-card" key={m.id} onClick={() => openDetail(m)}>
-              <div className="manual-card-top">
-                <div className="manual-card-icon">
-                  {fileType ? (
-                    <div className="manual-icon-inner" style={{ color: fileType.color }}>
-                      <MdMenuBook size={28} />
-                      <span className="manual-file-badge" style={{ background: `${fileType.color}15`, color: fileType.color, border: `1px solid ${fileType.color}30` }}>{fileType.label}</span>
+        ) : viewMode === "grid" ? (
+          <div className="cx-results">
+            <div className="cx-grid">
+              {paged.map((m) => {
+                const fileType = getFileType(m.file_name);
+                return (
+                  <div className="cx-card manual-card-interactive" key={m.id}>
+                    <div
+                      className="cx-card-image"
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`View details for ${m.title || "manual"}`}
+                      onClick={() => openDetail(m)}
+                      onKeyDown={(e) => onCardKey(e, () => openDetail(m))}
+                    >
+                      {m.thumbnail_url ? (
+                        <img
+                          src={m.thumbnail_url}
+                          alt=""
+                          loading="lazy"
+                          width="200"
+                          height="150"
+                          decoding="async"
+                        />
+                      ) : (
+                        <div className="cx-card-placeholder">
+                          {fileType ? <MdPictureAsPdf size={30} style={{ color: fileType.color }} /> : <MdMenuBook size={30} />}
+                          <span>{fileType ? fileType.label : "No preview"}</span>
+                        </div>
+                      )}
+                      <span className="cx-card-status">
+                        <StatusPill status={m.status} />
+                      </span>
                     </div>
-                  ) : (
-                    <div className="manual-icon-inner"><MdMenuBook size={28} /></div>
-                  )}
-                </div>
-                <div className="manual-card-top-right">
-                  <span className={`manual-status-dot ${(m.status || "Active") === "Active" ? "active" : "archived"}`} />
-                  <span className="manual-card-category">{m.category}</span>
-                </div>
-              </div>
-              <div className="manual-card-body">
-                <h4 title={m.title}>{m.title}</h4>
-                <div className="manual-card-badges">
-                  {m.course && <span className="manual-badge course">{m.course}</span>}
-                  {m.lab_room && <span className="manual-badge lab">{m.lab_room}</span>}
-                </div>
-                {m.description && <p className="manual-card-desc" title={m.description}>{m.description}</p>}
-              </div>
-              <div className="manual-card-footer">
-                <div className="manual-card-meta">
-                  {m.created_at && <span className="manual-meta-date">{timeAgo(m.updated_at || m.created_at)}</span>}
-                  {m.uploaderName && <span className="manual-meta-uploader">by {m.uploaderName}</span>}
-                  {m.file_size && <span className="manual-meta-size">{m.file_size}</span>}
-                </div>
-                <div className="manual-card-actions">
-                  {m.file_url && (
-                    <a href={m.file_url} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-primary manual-open-btn" onClick={(e) => e.stopPropagation()}>
-                      <MdOpenInNew size={14} /> Open
-                    </a>
-                  )}
-                </div>
-              </div>
+                    <div className="cx-card-body">
+                      <h3 className="cx-card-title" title={m.title} onClick={() => openDetail(m)}>
+                        {m.title || DASH}
+                      </h3>
+                      <div className="cx-card-meta">
+                        {m.category && <span className="category-pill">{m.category}</span>}
+                        {m.course && <span className="category-pill cx-pill-course">{m.course}</span>}
+                        {m.lab_room && <span className="category-pill">{m.lab_room}</span>}
+                      </div>
+                      <div className="cx-card-actions">
+                        {m.file_url && (
+                          <button
+                            className="cx-card-btn"
+                            title="Open manual"
+                            aria-label="Open manual"
+                            onClick={() => window.open(m.file_url, "_blank", "noopener,noreferrer")}
+                          >
+                            <MdOpenInNew size={15} />
+                          </button>
+                        )}
+                        {isAdmin && (
+                          <>
+                            <button className="cx-card-btn" title="Edit" aria-label="Edit" onClick={() => openEdit(m)}>
+                              <MdEdit size={15} />
+                            </button>
+                            <button className="cx-card-btn cx-card-btn--danger" title="Delete" aria-label="Delete" onClick={() => confirmDelete(m)}>
+                              <MdDelete size={15} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
-      </div>
-    </div>
+          </div>
+        ) : (
+          <div className="cx-results">
+            <div className="cx-table-wrap">
+              <table className="cx-table">
+                <thead>
+                  <tr>
+                    <th className="cx-th-item">Manual</th>
+                    <th>Category</th>
+                    <th>Course</th>
+                    <th>Laboratory</th>
+                    <th>Status</th>
+                    <th>Size</th>
+                    <th className="cx-th-actions" aria-label="Actions" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {paged.map((m) => (
+                    <tr key={m.id}>
+                      <td className="cx-td-item">
+                        <div className="cx-item">
+                          <span className={`cx-thumb cx-thumb--empty manual-thumb-${(getFileType(m.file_name)?.label || "file").toLowerCase()}`}>
+                            {getFileType(m.file_name)?.label || <MdMenuBook size={16} />}
+                          </span>
+                          <div className="cx-item-text">
+                            <span className="cx-item-name" title={m.title}>{m.title || DASH}</span>
+                            <span className="cx-item-sub" title={m.file_name}>{m.file_name || "No file"}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td>{m.category ? <span className="category-pill">{m.category}</span> : <span className="cx-none">{DASH}</span>}</td>
+                      <td>{m.course || <span className="cx-none">{DASH}</span>}</td>
+                      <td>{m.lab_room || <span className="cx-none">{DASH}</span>}</td>
+                      <td><StatusPill status={m.status} /></td>
+                      <td>{m.file_size || <span className="cx-none">{DASH}</span>}</td>
+                      <td className="cx-td-actions">
+                        <div className="catalog-kebab-wrap">
+                          <button
+                            className="catalog-kebab-btn"
+                            aria-haspopup="true"
+                            aria-expanded={openRowMenu === m.id}
+                            aria-label={`Actions for ${m.title || "manual"}`}
+                            onClick={(e) => { e.stopPropagation(); rowMenu.toggle(m.id); }}
+                          >
+                            <MdMoreVert size={18} />
+                          </button>
+                          {openRowMenu === m.id && (
+                            /* No role="menu", matching CatalogBrowser: the popup
+                               mixes actions and is not a menuitem-only container. */
+                            <div className="catalog-kebab-dropdown">
+                              {m.file_url && (
+                                <button onClick={() => { window.open(m.file_url, "_blank", "noopener,noreferrer"); rowMenu.close(); }}>
+                                  <MdOpenInNew size={15} /> Open manual
+                                </button>
+                              )}
+                              <button onClick={() => { openDetail(m); rowMenu.close(); }}>
+                                <MdVisibility size={15} /> Details
+                              </button>
+                              {isAdmin && (
+                                <>
+                                  <div className="cx-kebab-divider" />
+                                  <button onClick={() => { openEdit(m); rowMenu.close(); }}>
+                                    <MdEdit size={15} /> Edit
+                                  </button>
+                                  <button className="danger" onClick={() => { confirmDelete(m); rowMenu.close(); }}>
+                                    <MdDelete size={15} /> Delete
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </section>
   );
 }

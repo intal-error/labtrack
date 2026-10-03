@@ -1,26 +1,25 @@
 import { lazy, Suspense } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { MdMenuBook, MdFolderOpen } from "react-icons/md";
+import { MdMenuBook } from "react-icons/md";
 import "../styles/pages/tab-strip.css";
 
 const ManualsTab = lazy(() => import("../components/tabs/ManualsTab"));
-const DocumentsTab = lazy(() => import("../components/tabs/DocumentsTab"));
 
-// Incidents used to be a Resources sub-tab. They are now a first-class workflow
-// (staff queue at /incident-reports, student tracking under My Activity), so the
-// tab is gone and `?tab=incidents` redirects below rather than silently landing
-// on Lab Manuals.
+// Resources used to carry three sub-tabs (Lab Manuals, Documents, Incidents).
+// Incidents became a first-class workflow (staff queue at /incident-reports,
+// student tracking under My Activity) and Documents is gone, so Lab Manuals is
+// the only tab. `?tab=incidents` still redirects below rather than silently
+// landing here, and any other `?tab=` value falls back to manuals.
 const ALL_TABS = [
-  { key: "manuals", label: "Lab Manuals", icon: MdMenuBook, roles: ["student", "admin"] },
-  { key: "documents", label: "Documents", icon: MdFolderOpen, roles: ["admin"] },
+  { key: "manuals", label: "Lab Manuals", icon: MdMenuBook },
 ];
 
 export default function ResourcesPage() {
   const { role } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const tabs = ALL_TABS.filter((tab) => tab.roles.includes(role));
+  const tabs = ALL_TABS;
   const fallback = tabs[0]?.key || "manuals";
 
   const requested = searchParams.get("tab");
@@ -39,26 +38,27 @@ export default function ResourcesPage() {
 
   return (
     <div className="resources-page">
-      <div className="tab-strip" role="tablist" aria-label="Resources">
-        {tabs.map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === key}
-            className={`tab-strip-btn ${activeTab === key ? "active" : ""}`}
-            onClick={() => switchTab(key)}
-          >
-            <Icon size={16} />
-            <span>{label}</span>
-          </button>
-        ))}
-      </div>
+      {tabs.length > 1 && (
+        <div className="tab-strip" role="tablist" aria-label="Lab Manual">
+          {tabs.map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === key}
+              className={`tab-strip-btn ${activeTab === key ? "active" : ""}`}
+              onClick={() => switchTab(key)}
+            >
+              <Icon size={16} />
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="tab-strip-panel" role="tabpanel">
         <Suspense fallback={<div className="page-loading"><div className="spinner-lg" /></div>}>
           {activeTab === "manuals" && <ManualsTab />}
-          {activeTab === "documents" && <DocumentsTab />}
         </Suspense>
       </div>
     </div>

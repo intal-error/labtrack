@@ -33,7 +33,7 @@ const ROUTE_NAMES = {
   "/borrow-requests": "Borrow Requests",
   "/incident-reports": "Incident Reports",
   "/maintenance": "Maintenance",
-  "/resources": "Resources",
+  "/resources": "Lab Manual",
   "/fines": "Fines",
   "/persona": "Persona",
   "/attendance": "Attendance Logs",
@@ -59,7 +59,7 @@ const NAV_ITEMS = [
     items: [
       { path: "/scanner", label: "Scanner", icon: MdQrCodeScanner, roles: ["student"] },
       { path: "/inventory", label: "Equipment Catalog", icon: MdInventory, roles: ["student"] },
-      { path: "/resources", label: "Resources", icon: MdMenuBook, roles: ["student"] },
+      { path: "/resources", label: "Lab Manual", icon: MdMenuBook, roles: ["student"] },
     ],
   },
   {
@@ -78,7 +78,7 @@ const NAV_ITEMS = [
     label: "MANAGEMENT",
     roles: ["admin"],
     items: [
-      { path: "/resources", label: "Resources", icon: MdMenuBook, roles: ["admin"] },
+      { path: "/resources", label: "Lab Manual", icon: MdMenuBook, roles: ["admin"] },
       { path: "/fines", label: "Fines", icon: PesoIcon, roles: ["admin"] },
       { path: "/persona", label: "Persona", icon: MdPerson, roles: ["admin"] },
     ],

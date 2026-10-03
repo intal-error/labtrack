@@ -7,6 +7,19 @@
 .stat-strip-card.tone-warn .stat-strip-icon{background:rgba(245,124,0,.08);color:#f57c00}
 .stat-strip-card.tone-alert .stat-strip-icon{background:rgba(211,47,47,.08);color:#d32f2f}
 
+/* ── clickable tiles (filter groups) ──
+   Opt-in: only rendered as <button> when the page passes onSelect. The reset
+   neutralises the UA button styling so an interactive tile is pixel-identical
+   to a static one until hovered. */
+.stat-strip-card.is-clickable{cursor:pointer;font-family:inherit;text-align:left;color:inherit;-webkit-appearance:none;appearance:none}
+.stat-strip-card.is-clickable:hover{transform:translateY(-2px);border-color:var(--green);box-shadow:0 4px 12px rgba(0,0,0,.08)}
+.stat-strip-card.is-clickable:active{transform:translateY(0)}
+.stat-strip-card.is-clickable:focus-visible{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(46,125,50,.16)}
+.stat-strip-card.is-active{border-color:var(--green);box-shadow:0 0 0 2px rgba(46,125,50,.15)}
+body.dark .stat-strip-card.is-clickable:hover{border-color:var(--green);box-shadow:0 4px 12px rgba(0,0,0,.4)}
+body.dark .stat-strip-card.is-clickable:focus-visible{box-shadow:0 0 0 3px rgba(67,160,71,.16)}
+body.dark .stat-strip-card.is-active{border-color:var(--green);box-shadow:0 0 0 2px rgba(67,160,71,.22)}
+
 /* ── stack variant: label above a large number, no icon tile ──
    column-reverse on .stat-strip-info flips the source order (value, label)
    into label-then-value without duplicating markup, and align-items:flex-start
