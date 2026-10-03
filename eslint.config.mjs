@@ -109,4 +109,18 @@ export default [
       },
     },
   },
+  {
+    // Verification scripts are Node-run asserts, not app code: they need
+    // process/console rather than the browser globals the block above supplies,
+    // but they are still ES modules because frontend/package.json sets
+    // "type": "module". (backend/tests/** is already covered by the
+    // backend/**/*.js block, which is commonjs + node globals.)
+    files: ["frontend/tests/**/*.js"],
+    languageOptions: {
+      sourceType: "module",
+      globals: {
+        ...globals.node,
+      },
+    },
+  },
 ];

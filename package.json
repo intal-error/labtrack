@@ -14,7 +14,9 @@
     "build": "npm run build -w frontend",
     "install:all": "npm install",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "verify": "npm run verify -w backend && npm run verify -w frontend",
+    "prebuild": "npm run verify"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

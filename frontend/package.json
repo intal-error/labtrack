@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "verify": "node tests/exportReport.verify.js"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.102.8",
