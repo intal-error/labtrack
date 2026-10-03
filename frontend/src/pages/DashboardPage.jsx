@@ -121,6 +121,13 @@ const BADGE_TONE = {
   pending: "pending",
   scheduled: "scheduled",
   open: "overdue",
+  // Incident reports use pending|under_review|approved|rejected|resolved
+  // (see constants/incidents.js). Approved is a good outcome, so it takes the
+  // positive tone rather than the in-progress one, and rejected shares the
+  // negative tone with the legacy "open".
+  under_review: "in-progress",
+  approved: "available",
+  rejected: "overdue",
   // Statuses are written three different ways across the app, so match all of
   // them rather than letting an unlisted one fall through to grey:
   // IncidentTab uses "investigating", MaintenanceTab uses "in-progress".
@@ -345,11 +352,11 @@ function StudentDashboard() {
     },
     {
       key: "incident",
-      label: "Report Incident",
-      desc: "Damaged or missing item",
+      label: "Incident Reports",
+      desc: "Report a damaged or lost item, track progress",
       icon: MdWarning,
       tone: "orange",
-      path: "/resources?tab=incidents",
+      path: "/my-activity?tab=incidents",
       meta: null,
     },
   ];

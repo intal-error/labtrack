@@ -3,6 +3,24 @@ const { supabase } = require("../config/supabase");
 const { parsePagination, paginatedResponse } = require("../middleware/pagination");
 const { randomUUID } = require("crypto");
 const { transformKeys } = require("../utils/transformKeys");
+// Course scoping and handler assignment moved to utils/adminScope.js so incident
+// reports enforce the identical "responsible for this course" rule instead of
+// growing a second copy of it. Re-exported here for existing importers.
+const {
+  isSuperAdmin,
+  isAdminForCourse,
+  getAdminCourses,
+  getTargetCourseAdmins,
+  autoAssignAdmin,
+} = require("../utils/adminScope");
+
+// Borrow requests are "still open" only while pending; once approved or
+// rejected the handler's queue is clear.
+const BORROW_WORKLOAD = {
+  table: "borrow_requests",
+  workloadColumn: "assigned_admin_id",
+  workloadStatuses: ["pending"],
+};
 
 function numberOr(value, fallback = 0) {
   const parsed = Number(value);
@@ -25,63 +43,6 @@ async function getActiveAdminsList() {
   return snap.docs
     .map((doc) => ({ id: doc.id, ...doc.data() }))
     .filter((a) => (a.status || "active") === "active");
-}
-
-function getAdminCourses(admin) {
-  if (Array.isArray(admin.assignedCourses) && admin.assignedCourses.length > 0) {
-    return admin.assignedCourses;
-  }
-  if (admin.assignedCourse) {
-    return [admin.assignedCourse];
-  }
-  return [];
-}
-
-function isAdminForCourse(admin, course) {
-  if (!course) return false;
-  const courses = getAdminCourses(admin);
-  return courses.includes(course);
-}
-
-function isSuperAdmin(admin) {
-  return admin.role === "admin" && getAdminCourses(admin).length === 0;
-}
-
-async function autoAssignAdmin(targetCourse) {
-  try {
-    const admins = await getActiveAdminsList();
-    if (admins.length === 0) return null;
-
-    let candidates = admins;
-    if (targetCourse) {
-      const matched = admins.filter((a) => isAdminForCourse(a, targetCourse));
-      if (matched.length > 0) candidates = matched;
-    }
-
-    const { data: pendingRequests } = await supabase
-      .from("borrow_requests").select("assigned_admin_id")
-      .eq("status", "pending");
-
-    const pendingCounts = {};
-    if (pendingRequests) {
-      pendingRequests.forEach((r) => {
-        if (r.assigned_admin_id) {
-          pendingCounts[r.assigned_admin_id] = (pendingCounts[r.assigned_admin_id] || 0) + 1;
-        }
-      });
-    }
-
-    candidates.sort((a, b) => (pendingCounts[a.id] || 0) - (pendingCounts[b.id] || 0));
-    return candidates[0];
-  } catch {
-    return null;
-  }
-}
-
-async function getTargetCourseAdmins(targetCourse) {
-  if (!targetCourse) return [];
-  const admins = await getActiveAdminsList();
-  return admins.filter((a) => isAdminForCourse(a, targetCourse));
 }
 
 const getAllRequests = async (req, res) => {
@@ -226,7 +187,7 @@ const createRequest = async (req, res) => {
       return res.status(400).json({ error: "Invalid due date format" });
     }
 
-    const assignedAdmin = await autoAssignAdmin(finalTargetCourse);
+    const assignedAdmin = await autoAssignAdmin(finalTargetCourse, BORROW_WORKLOAD);
 
     const requestData = {
       id: randomUUID(),

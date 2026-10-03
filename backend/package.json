@@ -8,7 +8,7 @@
     "dev": "nodemon server.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "verify": "node tests/attendanceExport.verify.js && node tests/roomAttendance.verify.js && node tests/roomCrud.verify.js && node tests/adminScoping.verify.js && node tests/labRoomResolution.verify.js && node tests/regressions.verify.js && node tests/catalogFilters.verify.js && node tests/reportExport.verify.js && node tests/transactionFilters.verify.js && node tests/transactionSort.verify.js",
+    "verify": "node tests/attendanceExport.verify.js && node tests/roomAttendance.verify.js && node tests/roomCrud.verify.js && node tests/adminScoping.verify.js && node tests/labRoomResolution.verify.js && node tests/regressions.verify.js && node tests/catalogFilters.verify.js && node tests/reportExport.verify.js && node tests/transactionFilters.verify.js && node tests/transactionSort.verify.js && node tests/incidentWorkflow.verify.js",
     "backfill:attendance-section": "node scripts/backfill-attendance-section.js",
     "backfill:attendance-section:dry": "node scripts/backfill-attendance-section.js --dry-run",
     "check:room-codes": "node scripts/check-room-codes.js"

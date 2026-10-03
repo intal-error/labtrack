@@ -1,9 +1,10 @@
 import { useSearchParams } from "react-router-dom";
-import { MdInbox, MdCheckCircle, MdAssignment, MdEventAvailable } from "react-icons/md";
+import { MdInbox, MdCheckCircle, MdAssignment, MdEventAvailable, MdWarning } from "react-icons/md";
 import PesoIcon from "../components/ui/PesoIcon";
 import TransactionsPanel from "./activity/TransactionsPanel";
 import RequestsPanel from "./activity/RequestsPanel";
 import AttendancePanel from "./activity/AttendancePanel";
+import MyIncidentsPanel from "./activity/MyIncidentsPanel";
 import FinesTab from "../components/tabs/FinesTab";
 import "../styles/pages/my-activity.css";
 import "../styles/pages/tab-strip.css";
@@ -13,6 +14,7 @@ const TABS = [
   { key: "returned", label: "Returned", icon: MdCheckCircle },
   { key: "requests", label: "Requests", icon: MdAssignment },
   { key: "attendance", label: "Attendance", icon: MdEventAvailable },
+  { key: "incidents", label: "Incidents", icon: MdWarning },
   { key: "fines", label: "Fines", icon: PesoIcon },
 ];
 
@@ -54,6 +56,7 @@ export default function MyActivityPage() {
         {activeTab === "returned" && <TransactionsPanel mode="returned" />}
         {activeTab === "requests" && <RequestsPanel />}
         {activeTab === "attendance" && <AttendancePanel />}
+        {activeTab === "incidents" && <MyIncidentsPanel />}
         {activeTab === "fines" && <FinesTab />}
       </div>
     </div>

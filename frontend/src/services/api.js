@@ -14,6 +14,25 @@ function toQuery(params) {
   return qs ? `?${qs}` : "";
 }
 
+/**
+ * Builds the thrown Error from a failed response.
+ *
+ * WHY the detail append: every zod schema on the backend answers 400 with
+ * `{ error: "Validation failed", details: ["field: message", ...] }`. Only the
+ * generic "Validation failed" was being kept, so a schema rejecting a perfectly
+ * legal form produced a toast naming no field and no reason. That is not
+ * hypothetical — the incident-date rule rejected the form's own default value
+ * this way and the only symptom on screen was the word "Validation failed".
+ *
+ * Every consumer reads err.message and several match it with .includes(), so
+ * appending is additive: existing fallbacks and substring checks keep working.
+ */
+function toError(body, status) {
+  const message = body?.error || `HTTP ${status}`;
+  const details = Array.isArray(body?.details) ? body.details.filter(Boolean) : [];
+  return new Error(details.length ? `${message}: ${details.join("; ")}` : message);
+}
+
 async function request(path, options = {}) {
   let headers = { "Content-Type": "application/json", ...options.headers };
 
@@ -42,8 +61,8 @@ async function request(path, options = {}) {
     clearTimeout(timer);
   }
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: "Request failed" }));
-    throw new Error(err.error || `HTTP ${res.status}`);
+    const body = await res.json().catch(() => null);
+    throw toError(body, res.status);
   }
   return res.json();
 }
@@ -60,8 +79,8 @@ function kioskRequest(path, options = {}) {
     .then(async (res) => {
       clearTimeout(timer);
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Request failed" }));
-        throw new Error(err.error || `HTTP ${res.status}`);
+        const body = await res.json().catch(() => null);
+        throw toError(body, res.status);
       }
       return res.json();
     })
@@ -207,11 +226,20 @@ export const api = {
   updateMaintenance: (id, data) => request(`/maintenance/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteMaintenance: (id) => request(`/maintenance/${id}`, { method: "DELETE" }),
 
-  // Incidents
+  // Incident Reports
+  // One endpoint per intent so the workflow cannot be short-circuited by a
+  // generic update: status, remark and reassignment are separate verbs, each
+  // re-validating the current state server-side.
   getIncidents: (params) => request(`/incidents${toQuery(params)}`),
   getMyIncidents: (params) => request(`/incidents/mine${toQuery(params)}`),
+  getIncident: (id) => request(`/incidents/${id}`),
   createIncident: (data) => request("/incidents", { method: "POST", body: JSON.stringify(data) }),
-  updateIncident: (id, data) => request(`/incidents/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  updateIncidentStatus: (id, status, note) =>
+    request(`/incidents/${id}/status`, { method: "PUT", body: JSON.stringify({ status, note }) }),
+  addIncidentRemark: (id, note) =>
+    request(`/incidents/${id}/remark`, { method: "PUT", body: JSON.stringify({ note }) }),
+  reassignIncident: (id, newHandlerId, reason) =>
+    request(`/incidents/${id}/reassign`, { method: "PUT", body: JSON.stringify({ newHandlerId, reason }) }),
   deleteIncident: (id) => request(`/incidents/${id}`, { method: "DELETE" }),
 
   // Manuals

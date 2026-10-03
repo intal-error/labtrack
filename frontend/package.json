@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "verify": "node tests/exportReport.verify.js"
+    "verify": "node tests/exportReport.verify.js && node tests/incidentWorkflow.verify.js"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.102.8",

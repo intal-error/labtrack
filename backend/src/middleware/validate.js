@@ -65,10 +65,55 @@ const borrowRequestSchema = z.object({
   targetCourse: z.string().max(100).trim().optional(),
 });
 
+// Incident reports are filed by students against a borrowed item, so the item is
+// required rather than optional. Reporter identity, course, item name and item
+// course are deliberately ABSENT: they are resolved server-side from Firestore
+// and the catalog table. Leaving them out also means zod strips any client that
+// tries to send them, which is how reporterName/itemName ended up forgeable
+// before (incidentController trusted req.body for both).
+const incidentCreateSchema = z.object({
+  catalogId: z.string().min(1, "Select the item involved").max(100).trim(),
+  incidentDate: z
+    .string()
+    .min(1, "Date of incident is required")
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be a calendar date")
+    // Compares the START of the selected day against now, not the end.
+    //
+    // This previously parsed `T23:59:59` and required that instant to be in the
+    // past, which rejects TODAY for the entire day — and today is the value the
+    // form pre-fills. Every report submitted on its default date failed with a
+    // bare "Validation failed"; backdating by one day "worked", so it read as an
+    // odd validation rule rather than a total breakage.
+    //
+    // Start-of-day gives the intended semantics: a report about today is always
+    // valid, tomorrow is not. A bare YYYY-MM-DD with no offset is parsed as
+    // local time by `new Date`, which is also how the browser interprets
+    // <input type="date">, so the two ends of the check agree on the calendar
+    // day without needing a second copy of "what is today" that could drift
+    // from the client's.
+    .refine((value) => {
+      const startOfDay = new Date(`${value}T00:00:00`);
+      return !Number.isNaN(startOfDay.getTime()) && startOfDay.getTime() <= Date.now();
+    }, "Date cannot be in the future"),
+  type: z.enum(["damage", "lost", "malfunction", "other"], {
+    error: "Choose what happened to the item",
+  }),
+  severity: z.enum(["low", "medium", "high", "critical"], {
+    error: "Choose how serious this is",
+  }),
+  description: z
+    .string()
+    .min(20, "Describe what happened in at least 20 characters")
+    .max(4000, "Description is too long")
+    .trim(),
+  photos: z.array(z.string().max(500)).max(3, "Maximum 3 photos").optional().default([]),
+});
+
 module.exports = {
   validate,
   registerSchema,
   adminCreateSchema,
   catalogCreateSchema,
   borrowRequestSchema,
+  incidentCreateSchema,
 };

@@ -31,6 +31,7 @@ const ROUTE_NAMES = {
   "/inventory": "Equipment Catalog",
   "/scanner": "Scanner",
   "/borrow-requests": "Borrow Requests",
+  "/incident-reports": "Incident Reports",
   "/maintenance": "Maintenance",
   "/resources": "Resources",
   "/fines": "Fines",
@@ -67,6 +68,7 @@ const NAV_ITEMS = [
     items: [
       { path: "/transactions", label: "Transactions", icon: FaExchangeAlt, roles: ["admin"] },
       { path: "/borrow-requests", label: "Borrow Requests", icon: MdAssignment, roles: ["admin"] },
+      { path: "/incident-reports", label: "Incident Reports", icon: MdWarning, roles: ["admin"] },
       { path: "/catalog", label: "Catalog", icon: MdInventory, roles: ["admin"] },
       { path: "/maintenance", label: "Maintenance", icon: MdBuild, roles: ["admin"] },
       { path: "/attendance", label: "Attendance Logs", icon: MdEventAvailable, roles: ["admin"] },

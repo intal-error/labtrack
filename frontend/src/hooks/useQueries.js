@@ -147,7 +147,7 @@ export function useOverdueCount() {
   });
 }
 
-// ── Incidents ──
+// ── Incident Reports ──
 export function useIncidents(params) {
   return useQuery({
     queryKey: ["incidents", params],
@@ -160,6 +160,18 @@ export function useMyIncidents(params) {
     queryKey: ["myIncidents", params],
     queryFn: () => api.getMyIncidents(params),
     staleTime: 60 * 1000,
+  });
+}
+/* The detail view needs the timeline, which only the single-report endpoint
+   returns (events are not in the list payload). Cached under its own key so
+   opening a report does not refetch the whole list, and disabled without an id
+   so it cannot fire for the "no report selected" case. */
+export function useIncident(id, { enabled = true } = {}) {
+  return useQuery({
+    queryKey: ["incident", id],
+    queryFn: () => api.getIncident(id),
+    staleTime: 30 * 1000,
+    enabled: Boolean(id) && enabled,
   });
 }
 

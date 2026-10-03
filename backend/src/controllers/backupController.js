@@ -3,7 +3,8 @@ const { randomUUID } = require("crypto");
 
 const COLLECTIONS = [
   "catalog", "transactions", "notifications",
-  "documents", "manuals", "maintenance", "incidents", "fines", "settings",
+  "documents", "manuals", "maintenance", "incidents", "incident_events",
+  "fines", "settings",
   "borrow_requests", "lab_attendance", "lab_rooms",
 ];
 

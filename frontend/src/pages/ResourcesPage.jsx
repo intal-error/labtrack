@@ -1,16 +1,18 @@
 import { lazy, Suspense } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { MdMenuBook, MdWarning, MdFolderOpen } from "react-icons/md";
+import { MdMenuBook, MdFolderOpen } from "react-icons/md";
 import "../styles/pages/tab-strip.css";
 
 const ManualsTab = lazy(() => import("../components/tabs/ManualsTab"));
-const IncidentTab = lazy(() => import("../components/tabs/IncidentTab"));
 const DocumentsTab = lazy(() => import("../components/tabs/DocumentsTab"));
 
+// Incidents used to be a Resources sub-tab. They are now a first-class workflow
+// (staff queue at /incident-reports, student tracking under My Activity), so the
+// tab is gone and `?tab=incidents` redirects below rather than silently landing
+// on Lab Manuals.
 const ALL_TABS = [
   { key: "manuals", label: "Lab Manuals", icon: MdMenuBook, roles: ["student", "admin"] },
-  { key: "incidents", label: "Incidents", icon: MdWarning, roles: ["student", "admin"] },
   { key: "documents", label: "Documents", icon: MdFolderOpen, roles: ["admin"] },
 ];
 
@@ -30,6 +32,10 @@ export default function ResourcesPage() {
     else next.set("tab", key);
     setSearchParams(next, { replace: true });
   };
+
+  if (requested === "incidents") {
+    return <Navigate to={role === "admin" ? "/incident-reports" : "/my-activity?tab=incidents"} replace />;
+  }
 
   return (
     <div className="resources-page">
@@ -52,7 +58,6 @@ export default function ResourcesPage() {
       <div className="tab-strip-panel" role="tabpanel">
         <Suspense fallback={<div className="page-loading"><div className="spinner-lg" /></div>}>
           {activeTab === "manuals" && <ManualsTab />}
-          {activeTab === "incidents" && <IncidentTab />}
           {activeTab === "documents" && <DocumentsTab />}
         </Suspense>
       </div>

@@ -1,0 +1,437 @@
+/* =============================================
+   Incident Reports — course-handler review workflow
+   =============================================
+
+   Loaded by IncidentReportsTab (staff queue) and MyIncidentsPanel (student
+   tracking). Everything not defined here already exists in tabs.css
+   (.incident-stats, .incident-card, .incident-meta, .incident-desc, ...) and
+   shared-form-panel.css (.lab-* form shell), so this file only adds what the
+   workflow introduced: status badges, the event timeline, the review bar and the
+   handler chip.
+
+   Every rule has a body.dark sibling — dark mode is a hard requirement in this
+   codebase (see the note on token hosting in global.css). */
+
+@import "./incident-modal.css";
+
+/* ── Stat strip ─────────────────────────────────────────────
+   Six statuses now instead of four (Total, Pending, Under Review, Approved,
+   Rejected, Resolved), so the fixed 4-column grid in tabs.css is widened. */
+.incident-stats {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+@media (max-width: 1100px) {
+  .incident-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .incident-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* tabs.css only tints total/open/investigating/resolved. One colour per
+   workflow status, following the same translucent-fill idiom. */
+.incident-stat-icon.pending { background: linear-gradient(135deg, rgba(255,152,0,.14), rgba(255,152,0,.04)); color: #ff9800 }
+.incident-stat-icon.under_review { background: linear-gradient(135deg, rgba(33,150,243,.14), rgba(33,150,243,.04)); color: #2196f3 }
+.incident-stat-icon.approved { background: linear-gradient(135deg, rgba(76,175,80,.14), rgba(76,175,80,.04)); color: #4caf50 }
+.incident-stat-icon.rejected { background: linear-gradient(135deg, rgba(244,67,54,.14), rgba(244,67,54,.04)); color: #f44336 }
+
+/* Keyboard users get the same affordance as the mouse affordance, since the
+   stat cards are click targets as well as filters. */
+.incident-stat-card:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+/* ── Status badge ──────────────────────────────────────────────
+   A named status badge replaces the old inline style that interpolated
+   STATUS_COLORS[status]; an unknown status (e.g. a legacy value that escaped the
+   migration) falls through to .is-unknown rather than rendering colourless. */
+.incident-status-badge {
+  background: rgba(117, 117, 117, .12);
+  color: #757575;
+  border: 1px solid rgba(117, 117, 117, .3);
+}
+
+.incident-status-badge.status-pending { background: rgba(245,124,0,.14); color: #e65100; border-color: rgba(245,124,0,.3) }
+.incident-status-badge.status-under_review { background: rgba(33,150,243,.14); color: #1565c0; border-color: rgba(33,150,243,.3) }
+.incident-status-badge.status-approved { background: rgba(67,160,71,.14); color: #2e7d32; border-color: rgba(67,160,71,.3) }
+.incident-status-badge.status-rejected { background: rgba(211,47,47,.14); color: #c62828; border-color: rgba(211,47,47,.3) }
+.incident-status-badge.status-resolved { background: rgba(0,150,136,.14); color: #00695c; border-color: rgba(0,150,136,.3) }
+.incident-status-badge.status-open { background: rgba(245,124,0,.14); color: #e65100; border-color: rgba(245,124,0,.3) }
+.incident-status-badge.status-investigating { background: rgba(33,150,243,.14); color: #1565c0; border-color: rgba(33,150,243,.3) }
+.incident-status-badge.is-unknown { background: rgba(117,117,117,.14); color: #757575; border-color: rgba(117,117,117,.3) }
+
+/* ── Handler chip ───────────────────────────────────────────────
+   Who owns the report. Prominent because "assigned to the right course handler"
+   is the core promise of the workflow. */
+.incident-assigned-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.incident-assigned-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(46, 125, 50, .1);
+  color: #2e7d32;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.incident-assigned-chip.is-unassigned {
+  background: rgba(245, 124, 0, .12);
+  color: #e65100;
+}
+
+/* The reporter's course, shown on staff cards because it drives assignment. */
+.incident-course-chip {
+  background: var(--bg);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.incident-unassigned {
+  color: #e65100;
+  font-style: italic;
+  font-weight: 600;
+}
+
+/* ── Detail modal bits ─────────────────────────────────────────
+   tabs.css truncates .incident-info-value to one line, which suits a handler
+   name but not a two-line value with a qualifier underneath it. */
+.incident-info-sub {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.incident-info-sub.warn {
+  color: #e65100;
+}
+
+.incident-detail-loading {
+  padding: 32px 24px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* ── Timeline ──────────────────────────────────────────────────
+   The append-only incident_events trail. This is the whole point of the
+   redesign: the student can see how the case progressed instead of only its
+   current state. */
+.incident-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 22px;
+  position: relative;
+}
+
+.incident-timeline::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  background: var(--border);
+}
+
+.incident-timeline-item {
+  position: relative;
+  padding: 0 0 18px 0;
+}
+
+.incident-timeline-item.is-last {
+  padding-bottom: 0;
+}
+
+.incident-timeline-item.is-last::before {
+  display: none;
+}
+
+.incident-timeline-dot {
+  position: absolute;
+  left: -22px;
+  top: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  border: 2px solid var(--border);
+  box-sizing: border-box;
+}
+
+.incident-timeline-dot.dot-submitted { border-color: #2196f3 }
+.incident-timeline-dot.dot-status { border-color: #ff9800 }
+.incident-timeline-dot.dot-remark { border-color: #7b1fa2 }
+.incident-timeline-dot.dot-reassigned { border-color: #00897b }
+
+.incident-timeline-body {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.incident-timeline-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.incident-timeline-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.incident-timeline-transition {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.incident-timeline-from { color: var(--text-muted); text-decoration: line-through }
+.incident-timeline-arrow { color: var(--text-muted) }
+.incident-timeline-to { color: var(--green) }
+
+.incident-timeline-note {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.incident-timeline-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.incident-timeline-actor {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.incident-timeline-tag {
+  background: rgba(33, 150, 243, .12);
+  color: #1565c0;
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.incident-timeline-time { margin-left: auto }
+
+.incident-timeline-empty {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  text-align: center;
+}
+
+/* ── Review bar (handler only) ───────────────────────────────── */
+.incident-review-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.incident-review-hint {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: none;
+  letter-spacing: 0;
+  margin-top: 3px;
+}
+
+.incident-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* buttons are full-width by default in the modal; in a wrapping row that reads
+   as a stack of slabs, so let each size to its label. */
+.incident-review-actions .incident-action-btn {
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 140px;
+}
+
+.incident-reassign-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+}
+
+.incident-reassign-box .incident-action-btn {
+  width: 100%;
+}
+
+.incident-closed-note {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+/* ── Form helpers ────────────────────────────────────────────── */
+.incident-char-count,
+.incident-photo-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.incident-selected-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.incident-selected-item img {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 8px;
+  flex-shrink: 0;
+  background: var(--bg-card);
+}
+
+.incident-assignment-note {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+/* ── Student panel ───────────────────────────────────────────── */
+.incident-my-intro {
+  margin: 4px 0 18px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.incident-open-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  border-radius: 10px;
+  background: rgba(245, 124, 0, .1);
+  border: 1px solid rgba(245, 124, 0, .3);
+  color: #e65100;
+  font-size: 12.5px;
+}
+
+.incident-resolution-line {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.incident-filed-note {
+  display: block;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* =============================================
+   Dark mode
+   ============================================= */
+body.dark .incident-stats { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+
+@media (max-width: 1100px) {
+  body.dark .incident-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  body.dark .incident-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+body.dark .incident-status-badge { background: rgba(255,255,255,.08); color: #9e9e9e; border-color: rgba(255,255,255,.18) }
+body.dark .incident-status-badge.status-pending { background: rgba(245,124,0,.18); color: #ffb74d; border-color: rgba(245,124,0,.35) }
+body.dark .incident-status-badge.status-under_review { background: rgba(33,150,243,.18); color: #64b5f6; border-color: rgba(33,150,243,.35) }
+body.dark .incident-status-badge.status-approved { background: rgba(67,160,71,.18); color: #81c784; border-color: rgba(67,160,71,.35) }
+body.dark .incident-status-badge.status-rejected { background: rgba(211,47,47,.18); color: #ef9a9a; border-color: rgba(211,47,47,.35) }
+body.dark .incident-status-badge.status-resolved { background: rgba(0,150,136,.18); color: #4db6ac; border-color: rgba(0,150,136,.35) }
+body.dark .incident-status-badge.status-open { background: rgba(245,124,0,.18); color: #ffb74d; border-color: rgba(245,124,0,.35) }
+body.dark .incident-status-badge.status-investigating { background: rgba(33,150,243,.18); color: #64b5f6; border-color: rgba(33,150,243,.35) }
+
+body.dark .incident-assigned-chip { background: rgba(67,160,71,.16); color: #81c784 }
+body.dark .incident-assigned-chip.is-unassigned { background: rgba(245,124,0,.18); color: #ffb74d }
+body.dark .incident-unassigned { color: #ffb74d }
+body.dark .incident-info-sub.warn { color: #ffb74d }
+
+body.dark .incident-timeline::before { background: rgba(255,255,255,.14) }
+body.dark .incident-timeline-dot { background: var(--bg-card); border-color: rgba(255,255,255,.24) }
+body.dark .incident-timeline-dot.dot-submitted { border-color: #64b5f6 }
+body.dark .incident-timeline-dot.dot-status { border-color: #ffb74d }
+body.dark .incident-timeline-dot.dot-remark { border-color: #ce93d8 }
+body.dark .incident-timeline-dot.dot-reassigned { border-color: #4db6ac }
+body.dark .incident-timeline-body { background: rgba(255,255,255,.03); border-color: rgba(255,255,255,.09) }
+body.dark .incident-timeline-from,
+body.dark .incident-timeline-arrow { color: #757575 }
+body.dark .incident-timeline-to { color: var(--green-light) }
+body.dark .incident-timeline-tag { background: rgba(33,150,243,.2); color: #90caf9 }
+body.dark .incident-timeline-empty { border-color: rgba(255,255,255,.14); background: rgba(255,255,255,.03) }
+
+body.dark .incident-reassign-box { background: rgba(255,255,255,.03); border-color: rgba(255,255,255,.09) }
+body.dark .incident-closed-note { background: rgba(255,255,255,.03); border-color: rgba(255,255,255,.09) }
+body.dark .incident-selected-item { background: rgba(255,255,255,.03); border-color: rgba(255,255,255,.09) }
+body.dark .incident-open-banner { background: rgba(245,124,0,.16); border-color: rgba(245,124,0,.34); color: #ffb74d }
+body.dark .incident-course-chip { background: rgba(255,255,255,.06) }
+body.dark .incident-filed-note { color: #757575 }

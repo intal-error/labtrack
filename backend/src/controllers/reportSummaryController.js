@@ -314,7 +314,14 @@ const getSummary = async (req, res) => {
         trendBorrowReturn,
       },
       stats: {
-        openIncidents: (incidents || []).filter((i) => i.status === "open").length,
+        // Incident reports moved from open|investigating|resolved to
+        // pending|under_review|approved|rejected|resolved. "Open" means the
+        // handler still owes the student an answer, which is the two workflow
+        // states that are neither a verdict nor a close-out. Matching on the
+        // old "open" string here silently pinned the dashboard KPI to 0.
+        openIncidents: (incidents || []).filter((i) =>
+          i.status === "pending" || i.status === "under_review" || i.status === "open"
+        ).length,
         todaySessions: (attendance || []).length,
       },
       period: {

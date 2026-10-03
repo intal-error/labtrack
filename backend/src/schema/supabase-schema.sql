@@ -186,6 +186,8 @@ CREATE TABLE IF NOT EXISTS maintenance (
 );
 
 -- Incident reports
+-- Status vocabulary: pending | under_review | approved | rejected | resolved.
+-- `assigned_to` holds the course handler's uid and is always written on create.
 CREATE TABLE IF NOT EXISTS incidents (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
@@ -196,14 +198,41 @@ CREATE TABLE IF NOT EXISTS incidents (
   reported_by TEXT,
   reporter_name TEXT,
   reporter_role TEXT,
-  status TEXT DEFAULT 'open',
+  reporter_school_id TEXT,
+  reporter_course TEXT,
+  reporter_year TEXT,
+  status TEXT DEFAULT 'pending',
   assigned_to TEXT,
+  assigned_to_name TEXT,
+  assigned_at TIMESTAMPTZ,
+  reassignment_history JSONB DEFAULT '[]',
+  reviewed_by TEXT,
+  reviewer_name TEXT,
+  reviewed_at TIMESTAMPTZ,
   resolution TEXT,
   item_name TEXT,
+  item_course TEXT,
   catalog_id TEXT,
+  incident_date DATE,
   photos JSONB DEFAULT '[]',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Append-only timeline for incident reports. Every status change, handler remark
+-- and reassignment is a row, so the student can follow progress and the case
+-- keeps an audit trail.
+CREATE TABLE IF NOT EXISTS incident_events (
+  id TEXT PRIMARY KEY,
+  incident_id TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  from_status TEXT,
+  to_status TEXT,
+  note TEXT,
+  actor_id TEXT,
+  actor_name TEXT,
+  actor_role TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- App settings (single row)
@@ -302,6 +331,9 @@ CREATE INDEX IF NOT EXISTS idx_lab_attendance_room ON lab_attendance(room_code);
 CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status);
 CREATE INDEX IF NOT EXISTS idx_incidents_reporter ON incidents(reported_by);
 CREATE INDEX IF NOT EXISTS idx_incidents_created ON incidents(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_incidents_assigned ON incidents(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_incidents_reporter_course ON incidents(reporter_course);
+CREATE INDEX IF NOT EXISTS idx_incident_events_incident ON incident_events(incident_id, created_at);
 
 CREATE INDEX IF NOT EXISTS idx_maintenance_status ON maintenance(status);
 CREATE INDEX IF NOT EXISTS idx_maintenance_created ON maintenance(created_at DESC);
