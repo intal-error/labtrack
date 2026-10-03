@@ -1,10 +1,9 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { fmtDate as formatDate } from "../../utils/helpers";
 import { filterBySearch } from "../../utils/search";
 import { COURSES } from "../../constants/courses";
-import { LAB_ROOMS } from "../../constants/labRooms";
 import {
   ALL,
   DEFAULT_MANUAL_CATEGORY,
@@ -47,6 +46,7 @@ const FILE_TYPE_ICONS = {
   jpg: { color: "#7b1fa2", label: "IMG" },
   jpeg: { color: "#7b1fa2", label: "IMG" },
   png: { color: "#7b1fa2", label: "IMG" },
+  gif: { color: "#7b1fa2", label: "IMG" },
   mp4: { color: "#c62828", label: "VID" },
 };
 
@@ -54,6 +54,35 @@ function getFileType(fileName) {
   if (!fileName) return null;
   const ext = fileName.split(".").pop().toLowerCase();
   return FILE_TYPE_ICONS[ext] || null;
+}
+
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const ACCEPTED_FILE_TYPES = ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif";
+
+function formatFileSize(bytes) {
+  if (!bytes && bytes !== 0) return "";
+  return bytes > 1024 * 1024
+    ? `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+    : `${(bytes / 1024).toFixed(0)} KB`;
+}
+
+function fileNameFromUrl(url) {
+  try {
+    const { pathname, hostname } = new URL(url);
+    const segment = decodeURIComponent(pathname.split("/").filter(Boolean).pop() || "");
+    return /\.[a-z0-9]{2,5}$/i.test(segment) ? segment : hostname;
+  } catch {
+    return "";
+  }
+}
+
+function isHttpUrl(value) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 // Mirrors StatusPill in CatalogBrowser: a soft 12% tint with saturated text, so
@@ -99,6 +128,8 @@ export default function ManualsTab() {
   const [viewMode, setViewMode] = useState("grid");
   const [form, setForm] = useState(EMPTY_FORM);
   const [uploading, setUploading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const fileInputRef = useRef(null);
 
   const [selectedManual, setSelectedManual] = useState(null);
   const [showDetail, setShowDetail] = useState(false);
@@ -217,13 +248,35 @@ const paged = useMemo(() => {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    const fileUrl = form.fileUrl.trim();
+    const thumbnailUrl = form.thumbnailUrl.trim();
+
+    if (!form.title.trim()) {
+      toast.error("Manual title is required");
+      return;
+    }
+    if (!fileUrl) {
+      toast.error("Upload a file or paste a file URL");
+      return;
+    }
+    if (!isHttpUrl(fileUrl)) {
+      toast.error("File URL must start with http:// or https://");
+      return;
+    }
+    if (thumbnailUrl && !isHttpUrl(thumbnailUrl)) {
+      toast.error("Thumbnail URL must start with http:// or https://");
+      return;
+    }
+
+    const fileName = form.fileName || fileNameFromUrl(fileUrl);
+    setSubmitting(true);
     try {
       const payload = {
-        title: form.title, description: form.description, category: form.category,
+        title: form.title.trim(), description: form.description, category: form.category,
         course: form.course, labRoom: form.labRoom, status: form.status,
-        fileUrl: form.fileUrl, fileName: form.fileName, fileSize: form.fileSize,
-        fileType: form.fileType || (form.fileName ? form.fileName.split(".").pop().toLowerCase() : ""),
-        thumbnailUrl: form.thumbnailUrl,
+        fileUrl, fileName, fileSize: form.fileSize,
+        fileType: form.fileType || (fileName ? fileName.split(".").pop().toLowerCase() : ""),
+        thumbnailUrl,
       };
       if (editing) {
         await api.updateManual(editing.id, payload);
@@ -236,33 +289,39 @@ const paged = useMemo(() => {
       setEditing(null);
       setForm(EMPTY_FORM);
       load();
-    } catch {
-      toast.error(editing ? "Failed to update manual" : "Unable to upload manual. Please check the file type and size.");
+    } catch (err) {
+      toast.error(err.message || (editing ? "Failed to update manual" : "Unable to upload manual"));
+    } finally {
+      setSubmitting(false);
     }
+  }
+
+  function handleFileUrlChange(value) {
+    setForm((f) => ({ ...f, fileUrl: value, fileName: "", fileSize: "", fileType: "" }));
   }
 
   async function handleFileUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 50 * 1024 * 1024) {
-      toast.error("File size must be under 50MB");
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast.error(`"${file.name}" is ${formatFileSize(file.size)}. Manuals must be under 10MB.`);
       return;
     }
     setUploading(true);
     try {
-      const { url } = await api.uploadDocument(file);
-      const ext = file.name.split(".").pop().toLowerCase();
-      const sizeStr = file.size > 1024 * 1024
-        ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
-        : `${(file.size / 1024).toFixed(0)} KB`;
+      const result = await api.uploadDocument(file);
+      const url = result?.url || result?.fileUrl;
+      if (!url) throw new Error("Upload finished but the server returned no file URL.");
       setForm((f) => ({
         ...f, fileUrl: url, fileName: file.name,
-        fileType: ext, fileSize: sizeStr,
+        fileType: file.name.split(".").pop().toLowerCase(),
+        fileSize: formatFileSize(file.size),
       }));
       toast.success("File uploaded!");
-    } catch {
-      toast.error("Upload failed");
+    } catch (err) {
+      toast.error(err.message || "Upload failed");
     } finally {
+      if (fileInputRef.current) fileInputRef.current.value = "";
       setUploading(false);
     }
   }
@@ -376,7 +435,7 @@ const paged = useMemo(() => {
           </div>
           <div className="lab-slide-body">
             <div className="lab-slide-accent" />
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} noValidate>
               <div className="lab-form-section">
                 <div className="lab-form-section-header">
                   <div className="lab-form-section-icon inc-details"><MdMenuBook size={14} /></div>
@@ -389,26 +448,14 @@ const paged = useMemo(() => {
                     <MdEdit size={16} />
                   </div>
                 </div>
-                <div className="lab-form-row">
-                  <div className="lab-form-field">
-                    <label>Course/Subject</label>
-                    <div className="lab-input-wrap">
-                      <select value={form.course} onChange={(e) => setForm({ ...form, course: e.target.value })}>
-                        <option value="">Select course</option>
-                        {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                      <MdAssignment size={16} />
-                    </div>
-                  </div>
-                  <div className="lab-form-field">
-                    <label>Laboratory</label>
-                    <div className="lab-input-wrap">
-                      <select value={form.labRoom} onChange={(e) => setForm({ ...form, labRoom: e.target.value })}>
-                        <option value="">Select laboratory</option>
-                        {LAB_ROOMS.map((r) => <option key={r} value={r}>{r}</option>)}
-                      </select>
-                      <MdAssignment size={16} />
-                    </div>
+                <div className="lab-form-field">
+                  <label>Course/Subject</label>
+                  <div className="lab-input-wrap">
+                    <select value={form.course} onChange={(e) => setForm({ ...form, course: e.target.value })}>
+                      <option value="">Select course</option>
+                      {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <MdAssignment size={16} />
                   </div>
                 </div>
                 <div className="lab-form-row">
@@ -442,27 +489,27 @@ const paged = useMemo(() => {
                 </div>
                 <div className="lab-form-field">
                   <label>Upload <span className="lab-required" /></label>
-                  {form.fileUrl ? (
+                  <label className="manual-upload-btn">
+                    <MdCloudUpload size={18} /> {uploading ? "Uploading..." : "Choose a file"}
+                    <input ref={fileInputRef} type="file" accept={ACCEPTED_FILE_TYPES} onChange={handleFileUpload} hidden disabled={uploading} />
+                  </label>
+                </div>
+                <div className="lab-form-field">
+                  <label>Or paste File URL</label>
+                  <div className="lab-input-wrap">
+                    <input type="url" value={form.fileUrl} onChange={(e) => handleFileUrlChange(e.target.value)} placeholder="https://drive.google.com/..." />
+                    <MdInfo size={16} />
+                  </div>
+                </div>
+                {form.fileUrl && (
+                  <div className="lab-form-field">
+                    <label>Selected file</label>
                     <div className="manual-file-preview">
                       <div className="manual-file-info">
-                        <span className="manual-file-name">{form.fileName || "Uploaded file"}</span>
+                        <span className="manual-file-name">{form.fileName || fileNameFromUrl(form.fileUrl) || "Uploaded file"}</span>
                         {form.fileSize && <span className="manual-file-size">{form.fileSize}</span>}
                       </div>
                       <button type="button" className="btn btn-sm btn-danger" onClick={() => setForm((f) => ({ ...f, fileUrl: "", fileName: "", fileSize: "", fileType: "" }))}>Remove</button>
-                    </div>
-                  ) : (
-                    <label className="manual-upload-btn">
-                      <MdCloudUpload size={18} /> {uploading ? "Uploading..." : "Choose file or paste URL"}
-                      <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.mp4" onChange={handleFileUpload} hidden disabled={uploading} />
-                    </label>
-                  )}
-                </div>
-                {!form.fileUrl && (
-                  <div className="lab-form-field">
-                    <label>Or paste File URL</label>
-                    <div className="lab-input-wrap">
-                      <input type="url" value={form.fileUrl} onChange={(e) => setForm({ ...form, fileUrl: e.target.value })} placeholder="https://drive.google.com/..." />
-                      <MdInfo size={16} />
                     </div>
                   </div>
                 )}
@@ -487,8 +534,10 @@ const paged = useMemo(() => {
               </div>
 
               <div className="lab-form-actions">
-                <button type="button" className="lab-form-cancel-btn" onClick={() => { setShowForm(false); setEditing(null); }}>Cancel</button>
-                <button type="submit" className="lab-form-submit-btn" disabled={!form.fileUrl}>{editing ? "Update" : "Upload"}</button>
+                <button type="button" className="lab-form-cancel-btn" disabled={submitting} onClick={() => { setShowForm(false); setEditing(null); }}>Cancel</button>
+                <button type="submit" className="lab-form-submit-btn" disabled={submitting || uploading || !form.fileUrl.trim()}>
+                  {submitting ? "Saving..." : editing ? "Update" : "Upload"}
+                </button>
               </div>
             </form>
           </div>

@@ -59,11 +59,24 @@ const authorize = (...allowedRoles) => {
   };
 };
 
+const MULTER_ERROR_CODES = new Set([
+  "LIMIT_FILE_SIZE",
+  "LIMIT_FILE_TYPE",
+  "LIMIT_UNEXPECTED_FILE",
+  "LIMIT_PART_COUNT",
+  "LIMIT_FIELD_KEY",
+  "LIMIT_FIELD_VALUE",
+  "LIMIT_FIELD_COUNT",
+]);
+
 const errorHandler = (err, req, res, _next) => {
   console.error("Server error:", err);
   const isDev = process.env.NODE_ENV === "development";
-  res.status(err.status || 500).json({
-    error: isDev ? (err.message || "Internal server error") : "Internal server error",
+  const isMulterLimit = MULTER_ERROR_CODES.has(err.code);
+  const status = err.status || err.statusCode || (isMulterLimit ? 400 : 500);
+  const safeToShow = isDev || isMulterLimit || err.expose === true;
+  res.status(status).json({
+    error: safeToShow ? (err.message || "Internal server error") : "Internal server error",
   });
 };
 

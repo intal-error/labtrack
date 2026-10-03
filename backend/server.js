@@ -3,7 +3,6 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const compression = require("compression");
-const NodeCache = require("node-cache");
 const cron = require("node-cron");
 const rateLimit = require("express-rate-limit");
 const { ipKeyGenerator } = rateLimit;
@@ -29,6 +28,7 @@ const borrowRequestRoutes = require("./src/routes/borrowRequests");
 const attendanceRoutes = require("./src/routes/attendance");
 
 const { checkOverdueTransactions } = require("./src/utils/overdueChecker");
+const { cache, cacheKey } = require("./src/utils/cache");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -47,12 +47,10 @@ app.use(compression());
 app.use(express.json({ limit: "1mb" }));
 
 // In-memory cache for read-heavy endpoints (30s default TTL)
-const cache = new NodeCache({ stdTTL: 30, checkperiod: 60, useClones: false });
-
 function cacheMiddleware(ttl = 30) {
   return (req, res, next) => {
     if (req.method !== "GET") return next();
-    const key = `__cache__${req.user?.uid || "anon"}::${req.originalUrl}`;
+    const key = cacheKey(req);
     const cached = cache.get(key);
     if (cached) {
       res.set("X-Cache", "HIT");

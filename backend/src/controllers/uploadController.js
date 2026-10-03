@@ -13,6 +13,8 @@ const upload = multer({
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "application/msword",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-powerpoint",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
       "image/jpeg",
       "image/png",
       "image/gif",
@@ -20,7 +22,10 @@ const upload = multer({
     if (allowed.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error("File type not allowed"));
+      const err = new Error(`File type not allowed: ${file.mimetype}`);
+      err.status = 400;
+      err.expose = true;
+      cb(err);
     }
   },
 });
@@ -75,10 +80,8 @@ const uploadDocument = async (req, res) => {
     }
 
     const fileExt = req.file.originalname.split(".").pop().toLowerCase();
-    let type = "other";
-    if (fileExt === "pdf") type = "pdf";
-    else if (["xlsx", "xls"].includes(fileExt)) type = "xlsx";
-    else if (["docx", "doc"].includes(fileExt)) type = "docx";
+    const typeByExt = { pdf: "pdf", xlsx: "xlsx", xls: "xlsx", docx: "docx", doc: "docx", pptx: "pptx", ppt: "pptx" };
+    const type = typeByExt[fileExt] || "other";
 
     const size = req.file.size > 1048576
       ? `${(req.file.size / 1048576).toFixed(1)} MB`
@@ -94,13 +97,20 @@ const uploadDocument = async (req, res) => {
       created_at: new Date().toISOString(),
     };
 
-    const { data: inserted, error } = await supabase
-      .from("documents")
-      .insert(docData)
-      .select()
-      .single();
-    if (error) throw error;
-    res.status(201).json(transformKeys(inserted));
+    let inserted = docData;
+    try {
+      const { data: logged, error } = await supabase
+        .from("documents")
+        .insert(docData)
+        .select()
+        .single();
+      if (error) throw error;
+      inserted = logged;
+    } catch (dbErr) {
+      console.error("Uploaded file could not be logged to documents:", dbErr.message);
+    }
+
+    res.status(201).json({ url: data.secure_url, ...transformKeys(inserted) });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }

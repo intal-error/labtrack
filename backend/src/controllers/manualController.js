@@ -1,9 +1,11 @@
 const { supabase } = require("../config/supabase");
 const { db } = require("../config/firebase");
 const { randomUUID } = require("crypto");
+const { invalidateCache } = require("../utils/cache");
 
 const TABLE = "manuals";
 const USERS = "users";
+const CACHE_PATH = "/api/manuals";
 
 async function enrichWithUploaderNames(items) {
   const userIds = [...new Set(items.map((m) => m.uploaded_by).filter(Boolean))];
@@ -82,6 +84,7 @@ const create = async (req, res) => {
       .select()
       .single();
     if (error) throw error;
+    invalidateCache(CACHE_PATH);
     res.status(201).json(data);
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
@@ -114,6 +117,7 @@ const update = async (req, res) => {
       .update(updates)
       .eq("id", id);
     if (error) throw error;
+    invalidateCache(CACHE_PATH);
     res.json({ message: "Manual updated" });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
@@ -135,6 +139,7 @@ const remove = async (req, res) => {
       .delete()
       .eq("id", id);
     if (error) throw error;
+    invalidateCache(CACHE_PATH);
     res.json({ message: "Manual deleted" });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });

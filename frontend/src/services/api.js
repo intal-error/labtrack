@@ -4,6 +4,7 @@ import { getIdToken } from "firebase/auth";
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 const KIOSK_SECRET = import.meta.env.VITE_KIOSK_SECRET || "";
 const TIMEOUT_MS = 30000;
+const DOCUMENT_UPLOAD_TIMEOUT_MS = 120000;
 
 function toQuery(params) {
   if (!params) return "";
@@ -184,16 +185,17 @@ export const api = {
       } catch {}
     }
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 30000);
+    const timer = setTimeout(() => controller.abort(), DOCUMENT_UPLOAD_TIMEOUT_MS);
     let res;
     try {
       res = await fetch(`${API_URL}/upload/document`, { method: "POST", headers, body: formData, signal: controller.signal });
-    } catch {
+    } catch (err) {
+      if (err.name === "AbortError") throw new Error("Upload timed out. Try a smaller file.");
       throw new Error("Server is offline. Please try again later.");
     } finally {
       clearTimeout(timer);
     }
-    if (!res.ok) throw new Error("Upload failed");
+    if (!res.ok) throw toError(await res.json().catch(() => ({})), res.status);
     return res.json();
   },
 
