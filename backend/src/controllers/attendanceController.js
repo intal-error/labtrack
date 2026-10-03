@@ -7,6 +7,7 @@ const { transformKeys } = require("../utils/transformKeys");
 const {
   applyAttendanceFilters,
   applyAssignedCourse,
+  sortAttendance,
   sortAttendanceAsc,
   facet,
   describeAttendanceFilters,
@@ -37,6 +38,40 @@ function formatDuration(minutes) {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+/**
+ * The display name to store in lab_attendance.lab_room, resolved from
+ * lab_rooms by room_code.
+ *
+ * The kiosk sends both roomCode and labRoom derived from the name embedded in
+ * the scanned QR (AttendanceKioskPage.jsx:143-144). Because a rename leaves
+ * qr_data frozen -- it must, or the slug the kiosk derives would change and
+ * split the room's history -- that embedded name is the room's ORIGINAL name.
+ * Storing it verbatim would therefore stamp every future record with a stale
+ * room name, which then surfaced in the Today's Log Room column, the student
+ * cards, the student attendance panel and the dashboard.
+ *
+ * So: room_code stays the stable join key (frozen), and lab_room is looked up
+ * fresh from the room record, which always carries the current name.
+ *
+ * Fails soft to the client-supplied name when the room is unknown or the lookup
+ * errors, so a missing lab_rooms row degrades to the old behaviour instead of
+ * blocking a student's time-in.
+ */
+async function resolveLabRoom(roomCode, fallback) {
+  if (!roomCode) return fallback || "Laboratory";
+  try {
+    const { data, error } = await supabase
+      .from("lab_rooms")
+      .select("room_name")
+      .eq("room_code", roomCode)
+      .limit(1);
+    if (error) throw error;
+    return (data && data[0] && data[0].room_name) || fallback || "Laboratory";
+  } catch {
+    return fallback || "Laboratory";
+  }
 }
 
 // --- Public Kiosk Endpoints (no auth required) ---
@@ -121,7 +156,7 @@ const timeIn = async (req, res) => {
       section: userData.section || "",
       subject,
       professor,
-      lab_room: labRoom,
+      lab_room: await resolveLabRoom(roomCode, labRoom),
       room_code: roomCode || "",
       date: today,
       time_in: now,
@@ -377,7 +412,7 @@ const getAttendanceHistory = async (req, res) => {
 const getRoomAttendanceHistory = async (req, res) => {
   try {
     const { roomId } = req.params;
-    const { from, to, student, year, course, section, page = 1, limit = 50 } = req.query;
+    const { from, to, student, year, course, section, subject, professor, page = 1, limit = 50 } = req.query;
 
     const { data: roomData, error: roomError } = await supabase
       .from("lab_rooms")
@@ -388,6 +423,14 @@ const getRoomAttendanceHistory = async (req, res) => {
     const roomCode = roomData.room_code;
     const roomName = roomData.room_name;
 
+    // Guards rooms stored before createRoom rejected unslugifiable names. With
+    // room_code "" the normRoom comparison below matches every row in the
+    // building that has no room_code, merging unrelated rooms into one history.
+    // Better a clear error than silently wrong data.
+    if (!roomCode) {
+      return res.status(400).json({ error: "This room has no usable identifier. Rename it to one containing letters or numbers." });
+    }
+
     const { data: allRecords, error: fetchError } = await supabase
       .from("lab_attendance")
       .select("*");
@@ -396,41 +439,78 @@ const getRoomAttendanceHistory = async (req, res) => {
     const norm = normRoom;
     let roomRecords = (allRecords || []).filter((r) => norm(r.room_code) === norm(roomCode));
 
+    // Scoped admins must not see other courses' students here. Every other
+    // attendance reader already calls this — getTodayAttendance,
+    // getAttendanceFacets, getAttendanceHistory and exportToExcel — and this
+    // endpoint was the single omission. That caused two problems at once:
+    // a data leak (other courses' names and IDs on screen), and a silent
+    // table/export mismatch, because exportToExcel DOES apply the assignment.
+    // Filtering to a different course produced an empty workbook while the
+    // table above showed rows; filtering to a year produced fewer rows than
+    // the screen. With this in place the two agree.
+    //
+    // Applied BEFORE the facet() calls on purpose: scoping afterwards would
+    // leave the dropdowns offering courses this admin may not see, and
+    // selecting one would return nothing — reproducing the same symptom in a
+    // new place. Scoping first means every filter list only contains values the
+    // admin is allowed to query.
+    roomRecords = applyAssignedCourse(roomRecords, req.adminAssignment);
+
+    // Facets are computed BEFORE filtering, on purpose: the dropdown options
+    // then stay stable while the user narrows the list, instead of collapsing
+    // down to the one value still selected.
     const uniqueYears = facet(roomRecords, "year");
     const uniqueCourses = facet(roomRecords, "course");
     const uniqueSections = facet(roomRecords, "section");
     const uniqueSubjects = facet(roomRecords, "subject");
+    const uniqueProfessors = facet(roomRecords, "professor");
 
-    if (from) roomRecords = roomRecords.filter((r) => (r.date || "") >= from);
-    if (to) roomRecords = roomRecords.filter((r) => (r.date || "") <= to);
-    if (year) roomRecords = roomRecords.filter((r) => String(r.year || "").toLowerCase() === year.toLowerCase());
-    if (course) roomRecords = roomRecords.filter((r) => String(r.course || "").toLowerCase() === course.toLowerCase());
-    if (section) roomRecords = roomRecords.filter((r) => String(r.section || "").toLowerCase() === section.toLowerCase());
-    if (student) {
-      const s = student.toLowerCase();
-      roomRecords = roomRecords.filter((r) =>
-        (r.first_name || "").toLowerCase().includes(s) ||
-        (r.last_name || "").toLowerCase().includes(s) ||
-        (r.student_school_id || "").toLowerCase().includes(s)
-      );
-    }
+    // Shared helper rather than a second, hand-rolled filter chain. It already
+    // supports subject and professor (plus room scoping) and compares from/to
+    // on the calendar day via dayKey, where a raw string compare silently drops
+    // the boundary day whenever `from` carries a time component.
+    roomRecords = applyAttendanceFilters(roomRecords, { from, to, student, year, course, section, subject, professor });
+    roomRecords = sortAttendance(roomRecords);
 
-    roomRecords.sort((a, b) => {
-      const dA = a.date || "";
-      const dB = b.date || "";
-      if (dA !== dB) return dB.localeCompare(dA);
-      const tA = new Date(a.time_in || 0).getTime();
-      const tB = new Date(b.time_in || 0).getTime();
-      return tB - tA;
-    });
+    // Aggregates over the whole FILTERED set, not the page being returned.
+    // Free: the array above is already fully materialised, so this costs no
+    // extra query. The UI labels these "across the current filters" because
+    // that is precisely what they describe.
+    const totalMinutes = roomRecords.reduce((sum, r) => sum + (r.total_duration || 0), 0);
+    const completed = roomRecords.filter((r) => r.total_duration != null).length;
+    const stats = {
+      uniqueStudents: new Set(roomRecords.map((r) => r.student_school_id).filter(Boolean)).size,
+      totalMinutes,
+      // Mean over COMPLETED sessions only. Including in-progress rows would
+      // divide by a total_duration that is still growing, so a session that
+      // started a minute ago would drag the average toward zero.
+      avgMinutes: completed > 0 ? Math.round(totalMinutes / completed) : 0,
+      activeNow: roomRecords.filter((r) => r.status === "active").length,
+    };
 
     const total = roomRecords.length;
-    const pageNum = parseInt(page, 10) || 1;
-    const limitNum = parseInt(limit, 10) || 50;
+    // Clamped because both come straight off the query string. Unclamped,
+    // ?page=-1 produced slice(-100, -50) -- an empty page reported alongside a
+    // non-zero total, which reads as "the data is gone" rather than "the URL is
+    // wrong". Upper bound keeps a hand-typed limit from allocating a huge slice.
+    const pageNum = Math.min(Math.max(parseInt(page, 10) || 1, 1), 100000);
+    const limitNum = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200);
     const start = (pageNum - 1) * limitNum;
     const paged = roomRecords.slice(start, start + limitNum);
 
-    res.json({ records: transformKeys(paged), total, page: pageNum, totalPages: Math.ceil(total / limitNum), roomName, years: uniqueYears, courses: uniqueCourses, sections: uniqueSections, subjects: uniqueSubjects });
+    res.json({
+      records: transformKeys(paged),
+      total,
+      page: pageNum,
+      totalPages: Math.ceil(total / limitNum),
+      roomName,
+      years: uniqueYears,
+      courses: uniqueCourses,
+      sections: uniqueSections,
+      subjects: uniqueSubjects,
+      professors: uniqueProfessors,
+      stats,
+    });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -813,6 +893,14 @@ const createRoom = async (req, res) => {
     const roomCode = roomName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     const qrData = `LABROOM:${roomName}`;
 
+    // A name with no letters or digits ("!!!", "###") slugifies to "", and
+    // normRoom("") === "" would then match every attendance row in the building
+    // that has no room_code -- merging unrelated rooms into one history. Refuse
+    // the room at creation rather than let it corrupt reads later.
+    if (!roomCode) {
+      return res.status(400).json({ error: "Room name must contain at least one letter or number" });
+    }
+
     const { data: existing } = await supabase
       .from("lab_rooms")
       .select("id")
@@ -864,11 +952,46 @@ const updateRoom = async (req, res) => {
       if (updates[key] !== undefined) sanitized[key] = updates[key];
     }
 
+    // With room_code frozen (see below), room_name is the only remaining signal
+    // that tells two rooms apart. The kiosk derives room_code by slugifying the
+    // name, so two rooms sharing a name would also share a code and have their
+    // attendance merged. createRoom already refuses duplicates; a rename could
+    // introduce one, so it has to be refused here too.
+    if (sanitized.roomName !== undefined) {
+      const wanted = String(sanitized.roomName).trim();
+      if (!wanted) return res.status(400).json({ error: "Room name is required" });
+      const { data: clash } = await supabase
+        .from("lab_rooms")
+        .select("id")
+        .eq("room_name", wanted)
+        .neq("id", id)
+        .limit(1);
+      if (clash && clash.length > 0) {
+        return res.status(400).json({ error: "A room with this name already exists" });
+      }
+    }
+
     const updatePayload = {};
     if (sanitized.roomName !== undefined) {
       updatePayload.room_name = sanitized.roomName;
-      updatePayload.room_code = sanitized.roomName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-      updatePayload.qr_data = `LABROOM:${sanitized.roomName}`;
+      // room_code and qr_data are deliberately NOT regenerated on rename.
+      //
+      // room_code is the join key lab_attendance rows were written with, and
+      // the kiosk derives room_code by slugifying the name embedded in the QR
+      // payload (AttendanceKioskPage.jsx:144) rather than looking lab_rooms up.
+      // So regenerating either one is doubly destructive: the new key orphans
+      // every prior row, AND newly scanned students get written under the new
+      // key while the room still points at the old one — the room's attendance
+      // splits permanently with no recovery path in the UI.
+      //
+      // Keeping qr_data frozen also keeps the printed and regenerated QR codes
+      // encoding the ORIGINAL name, which is what makes future scans continue to
+      // produce the frozen slug. The trade-off is that the QR modal shows the
+      // original name after a rename; the alternative is changing the kiosk
+      // contract to send the name only and resolving the code server-side.
+      //
+      // qr_data is deliberately absent from updatePayload -- writing the current
+      // value back would be a no-op write that hides the intent.
     }
     if (sanitized.location !== undefined) updatePayload.location = sanitized.location;
     if (sanitized.status !== undefined) updatePayload.status = sanitized.status;
@@ -1081,7 +1204,7 @@ const autoScan = async (req, res) => {
       section: (section || "").trim(),
       subject,
       professor: professor.trim(),
-      lab_room: labRoom || "Laboratory",
+      lab_room: await resolveLabRoom(roomCode, labRoom),
       room_code: roomCode || "",
       date: today,
       time_in: now,

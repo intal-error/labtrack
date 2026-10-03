@@ -15,12 +15,19 @@ const path = require("path");
 const fs = require("fs");
 
 // --- Load the real calendarBounds logic out of the ES module -------------
-// exportReport.js is ESM; transpile-free evaluation is done by rewriting the
-// two imports to CommonJS so the real source (not a copy) is under test.
+// exportReport.js is ESM; transpile-free evaluation is done by rewriting its
+// imports to CommonJS so the real source (not a copy) is under test.
+//
+// The import strip is deliberately generic. It used to hardcode
+// `from "./dateRange"`, which silently stopped matching the moment that
+// specifier gained an explicit ".js" extension — the import then survived into
+// the eval and the whole suite died with "Cannot use import statement outside a
+// module" instead of reporting a real failure. `localDayKey` is injected below,
+// so every import in this file is redundant here and can be dropped wholesale.
 const srcPath = path.resolve(__dirname, "../../frontend/src/components/ui/exportReport.js");
 let src = fs.readFileSync(srcPath, "utf8");
 src = src
-  .replace(/^import\s+\{[^}]*\}\s+from\s+"\.\/dateRange";?$/m, "")
+  .replace(/^import\s+[^;]*?from\s+["'][^"']+["'];?$/gm, "")
   .replace(/^export\s+/gm, "")
   .concat("\nmodule.exports = { buildAttendanceQuery, calendarBounds, buildExportQuery, rangeToParams, DATE_RANGE_OPTIONS };\n");
 

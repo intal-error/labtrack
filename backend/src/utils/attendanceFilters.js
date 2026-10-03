@@ -107,11 +107,44 @@ function applyAttendanceFilters(records, query = {}) {
   return result;
 }
 
-/** Restricts rows to an admin's assigned course when one is set. */
+/**
+ * Matches a year the way an admin would expect, tolerating the two forms in use.
+ *
+ * lab_attendance.year is stored as "4th Year" (the values in
+ * frontend/src/constants/courses.js YEARS), but the admin editor's year field is
+ * free text capped at 10 chars (backend/src/middleware/validate.js:41), so it can
+ * hold "4" or "4th Year". Comparing them as plain strings would scope an admin to
+ * zero rows, which reads as "the room is empty" rather than "the filter is
+ * mistyped" — so when BOTH sides yield a leading number, compare those.
+ */
+function yearMatches(recordYear, wanted) {
+  if (!recordYear || !wanted) return false;
+  if (eqInsensitive(recordYear, wanted)) return true;
+  const digits = (v) => {
+    const m = /^\s*(\d+)/.exec(String(v));
+    return m ? m[1] : null;
+  };
+  const a = digits(recordYear);
+  const b = digits(wanted);
+  return a !== null && b !== null && a === b;
+}
+
+/**
+ * Restricts rows to an admin's assigned course/year when either is set.
+ *
+ * Previously this read assignedCourse and ignored assignedYear entirely, even
+ * though the courseFilter middleware populates both and documents that "admins
+ * only see data matching their assignedCourse + assignedYear". An admin with a
+ * year assigned was therefore never year-scoped, anywhere. Each dimension is
+ * applied independently so an admin scoped by course only is unaffected.
+ */
 function applyAssignedCourse(records, adminAssignment) {
+  let result = records || [];
   const course = adminAssignment?.assignedCourse;
-  if (!course) return records;
-  return records.filter((r) => eqInsensitive(r.course, course));
+  const year = adminAssignment?.assignedYear;
+  if (course) result = result.filter((r) => eqInsensitive(r.course, course));
+  if (year) result = result.filter((r) => yearMatches(r.year, year));
+  return result;
 }
 
 /** Newest date first, then latest time-in. */

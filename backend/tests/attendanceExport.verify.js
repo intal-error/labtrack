@@ -131,6 +131,32 @@ async function exportAndRead(query) {
   check("blank section rows are excluded when a section is chosen",
     applyAttendanceFilters(records, { section: "A" }).includes(records[3]), false);
 
+  // Subject and professor became reachable from the UI when the export dialog
+  // gained those fields, so the server side needs asserting too.
+  check("subject filter",
+    applyAttendanceFilters(records, { subject: "Test" }).map((r) => r.id).sort(),
+    ["a1", "a3", "a4", "a5"]);
+
+  check("professor filter",
+    applyAttendanceFilters(records, { professor: "Mar" }).map((r) => r.id).sort(),
+    ["a1", "a3", "a4"]);
+
+  check("professor filter is case-insensitive",
+    applyAttendanceFilters(records, { professor: "mar" }).map((r) => r.id).sort(),
+    ["a1", "a3", "a4"]);
+
+  check("subject + professor combined",
+    applyAttendanceFilters(records, { subject: "Test", professor: "Jhon" }).map((r) => r.id),
+    ["a5"]);
+
+  // THIS is the contract the frontend must honour: the backend treats these as
+  // literal values with no sentinel awareness, so a dialog that forwards "All"
+  // filters every row out. frontend/tests/exportReport.verify.js asserts the
+  // frontend strips it before it gets here.
+  check("the sentinel 'All' is matched literally, not ignored",
+    applyAttendanceFilters(records, { subject: "All", professor: "All" }).map((r) => r.id),
+    []);
+
   check("roomCode matches room_code only",
     applyAttendanceFilters(records, { roomCode: "CET-01" }).map((r) => r.id).slice().sort(),
     ["a1", "a2", "a4", "a5"]);
@@ -217,6 +243,33 @@ async function exportAndRead(query) {
   check("date param still works and is described", todayDesc.includes("Date: 2026-09-30"), true);
   check("date param scopes to a single day",
     today.sheet.getRow(today.sheet.rowCount).getCell(2).value, "Total Records: 2");
+
+  console.log("--- subject / professor narrow a real workbook ---");
+
+  const bySubject = await exportAndRead({ subject: "Draw" });
+  check("subject narrows the exported rows",
+    bySubject.sheet.getRow(bySubject.sheet.rowCount).getCell(2).value, "Total Records: 1");
+  check("subtitle describes the subject",
+    String(bySubject.sheet.getCell("A2").value).includes("Subject: Draw"), true);
+
+  const byProfessor = await exportAndRead({ professor: "Jhon" });
+  check("professor narrows the exported rows",
+    byProfessor.sheet.getRow(byProfessor.sheet.rowCount).getCell(2).value, "Total Records: 1");
+  check("subtitle describes the professor",
+    String(byProfessor.sheet.getCell("A2").value).includes("Professor: Jhon"), true);
+
+  const byBoth = await exportAndRead({ subject: "Test", professor: "Jhon" });
+  check("subject + professor combined",
+    byBoth.sheet.getRow(byBoth.sheet.rowCount).getCell(2).value, "Total Records: 1");
+
+  // The exact regression, server side: a workbook still builds, still returns
+  // 200, and contains nothing. This is what a user saw as "Report downloaded!"
+  console.log("--- the failure mode the frontend guard prevents ---");
+  const sentinelLeak = await exportAndRead({ subject: "All", professor: "All" });
+  check("sentinel leak produces a 200 with an empty workbook",
+    sentinelLeak.res.statusCode, 200);
+  check("sentinel leak exports zero records",
+    sentinelLeak.sheet.getRow(sentinelLeak.sheet.rowCount).getCell(2).value, "Total Records: 0");
 
   console.log("--- unresolvable room must fail closed ---");
 
