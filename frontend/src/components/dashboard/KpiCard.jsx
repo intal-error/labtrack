@@ -14,10 +14,9 @@ export default function KpiCard({
   delta,
   deltaInvert = false,
   deltaCaption,
-  period = false,
 }) {
   return (
-    <div className={`dash-kpi${period ? " is-period" : ""}`}>
+    <div className="dash-kpi">
       <span className={`dash-kpi-icon ${tone}`}>
         <Icon size={20} />
       </span>

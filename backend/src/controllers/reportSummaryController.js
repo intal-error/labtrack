@@ -172,17 +172,6 @@ function countOverdueAt(borrowedRows, ms) {
   return count;
 }
 
-function mapTableRow(t) {
-  return {
-    id: t.id,
-    userName: [t.first_name, t.last_name].filter(Boolean).join(" ") || null,
-    itemName: t.item_name || null,
-    quantity: Number(t.quantity) || 1,
-    dueDate: t.due_date || null,
-    timestamp: t.returned_at || t.timestamp || t.created_at || null,
-  };
-}
-
 const getSummary = async (req, res) => {
   try {
     const today = todayKey();
@@ -204,19 +193,14 @@ const getSummary = async (req, res) => {
     const [
       usersAgg,
       studentsAgg,
-      catalog,
       borrowedRows,
       returnedRows,
       incidents,
-      maintenance,
-      fines,
-      requests,
       attendance,
       attendanceRange,
     ] = await Promise.all([
       db.collection("users").count().get(),
       db.collection("users").where("role", "==", "student").count().get(),
-      fetchAll(() => supabase.from("catalog").select("*", { count: "exact" }).order("id", { ascending: true })),
       fetchAll(() =>
         supabase
           .from("transactions")
@@ -232,21 +216,6 @@ const getSummary = async (req, res) => {
           .order("id", { ascending: true })
       ),
       fetchAll(() => supabase.from("incidents").select("*", { count: "exact" }).order("id", { ascending: true })),
-      fetchAll(() => supabase.from("maintenance").select("*", { count: "exact" }).order("id", { ascending: true })),
-      fetchAll(() =>
-        supabase
-          .from("fines")
-          .select("*", { count: "exact" })
-          .order("created_at", { ascending: false })
-          .order("id", { ascending: false })
-      ),
-      fetchAll(() =>
-        supabase
-          .from("borrow_requests")
-          .select("*", { count: "exact" })
-          .order("created_at", { ascending: false })
-          .order("id", { ascending: false })
-      ),
       fetchAll(() =>
         supabase.from("lab_attendance").select("*", { count: "exact" }).eq("date", today).order("id", { ascending: true })
       ),
@@ -281,54 +250,14 @@ const getSummary = async (req, res) => {
 
     const activeBorrowed = borrowedRows.filter(isOpenBorrow).length;
 
-    const allCatalog = (catalog || []).map((d) => ({
-      category: d.category || "Uncategorized",
-      condition: d.condition || "Unknown",
-      status: d.status || "Available",
-    }));
-
-    // Top borrowed (units moved in range) — borrows only, never double-count returns
-    const topItems = {};
-    borrowedRows.forEach((t) => {
-      if (!inRange(t.borrowed_at || t.timestamp || t.created_at)) return;
-      const name = t.item_name || "Unknown";
-      topItems[name] = (topItems[name] || 0) + (Number(t.quantity) || 1);
-    });
-    const topBorrowedData = Object.entries(topItems)
-      .map(([name, value]) => ({ name: name.length > 20 ? name.slice(0, 18) + "..." : name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 5);
-
+    // Status histogram behind the dashboard's "N resolved all time" sub-line.
     const incidentData = {};
     (incidents || []).forEach((i) => {
       const s = i.status || "unknown";
       incidentData[s] = (incidentData[s] || 0) + 1;
     });
 
-    const requestStatusData = {};
-    (requests || []).forEach((r) => {
-      const s = r.status || "unknown";
-      requestStatusData[s] = (requestStatusData[s] || 0) + 1;
-    });
-
-    const finesData = (fines || []).map((d) => ({
-      status: d.status || "unknown",
-      totalFine: Number(d.total_fine) || 0,
-    }));
-    const pendingFines = finesData.filter((f) => f.status === "pending");
-    const totalPendingFineAmount = pendingFines.reduce((sum, f) => sum + f.totalFine, 0);
-
-    const categoryData = {};
-    const conditionData = {};
-    allCatalog.forEach((c) => {
-      categoryData[c.category] = (categoryData[c.category] || 0) + 1;
-      conditionData[c.condition] = (conditionData[c.condition] || 0) + 1;
-    });
-
-    const maintenanceData = (maintenance || []).map((d) => ({ status: d.status || "unknown" }));
-    const scheduledMaintenance = maintenanceData.filter((m) => m.status === "scheduled").length;
-
-    // ── Period metrics + trends (respect ?from / ?to) ──
+    // ── Period metrics + borrow/return trend (respect ?from / ?to) ──
     const series = createSeries(fromStr, toStr, rangeEndMs);
     let periodBorrows = 0;
     let periodReturns = 0;
@@ -348,15 +277,13 @@ const getSummary = async (req, res) => {
       series.bump(when, "returned");
     });
 
+    // Counted inline rather than bucketed: the dashboard shows a single session
+    // total, so there is no series to bump.
     (attendanceRange || []).forEach((r) => {
       if (!inRange(r.date)) return;
       periodSessions += 1;
-      series.bump(r.date, "sessions");
     });
 
-    series.entries.forEach((row) => {
-      row.overdue = countOverdueAt(borrowedRows, Math.min(row.endMs, rangeEndMs));
-    });
     const periodOverdue = countOverdueAt(borrowedRows, rangeEndMs);
 
     const trendBorrowReturn = series.entries.map((row) => ({
@@ -364,68 +291,30 @@ const getSummary = async (req, res) => {
       borrowed: row.borrowed || 0,
       returned: row.returned || 0,
     }));
-    const trendAttendance = series.entries.map((row) => ({
-      date: row.label,
-      sessions: row.sessions || 0,
-    }));
-    const trendOverdue = series.entries.map((row) => ({
-      date: row.label,
-      overdue: row.overdue || 0,
-    }));
 
-    // ── Detail tables for the Reports page (always all-time) ──
-    const byNewest = (a, b) => (toMs(b) || 0) - (toMs(a) || 0);
-    const recentBorrowed = borrowedRows
-      .filter(isOpenBorrow)
-      .sort((a, b) => byNewest(a.borrowed_at || a.timestamp || a.created_at, b.borrowed_at || b.timestamp || b.created_at))
-      .slice(0, 5)
-      .map(mapTableRow);
-    const recentReturned = returnedRows
-      .slice()
-      .sort((a, b) => byNewest(a.returned_at || a.timestamp || a.created_at, b.returned_at || b.timestamp || b.created_at))
-      .slice(0, 5)
-      .map(mapTableRow);
+    // Only overdueList.length is sent, so it stays as a count rather than
+    // sorting and mapping five display rows that no consumer renders.
     const nowMs = Date.now();
     const overdueList = borrowedRows.filter((t) => {
       const due = toMs(t.due_date);
       return due !== null && due < nowMs && !returnedAsOf(t, nowMs);
     });
-    const overdueTable = overdueList
-      .slice()
-      .sort((a, b) => (toMs(a.due_date) || 0) - (toMs(b.due_date) || 0))
-      .slice(0, 5)
-      .map(mapTableRow);
 
     res.json({
       counts: {
         users: usersAgg.data().count,
         students: studentsAgg.data().count,
-        catalog: catalog.length,
         borrowed: activeBorrowed,
-        returned: returnedRows.length,
       },
       charts: {
-        categoryData: Object.entries(categoryData).map(([name, value]) => ({ name, value })),
-        conditionData: Object.entries(conditionData).map(([name, value]) => ({ name, value })),
-        topBorrowedData,
         incidentData: Object.entries(incidentData).map(([name, value]) => ({
           name: name.charAt(0).toUpperCase() + name.slice(1),
           value,
         })),
-        requestStatusData: Object.entries(requestStatusData).map(([name, value]) => ({
-          name: name.charAt(0).toUpperCase() + name.slice(1),
-          value,
-        })),
         trendBorrowReturn,
-        trendAttendance,
-        trendOverdue,
       },
       stats: {
         openIncidents: (incidents || []).filter((i) => i.status === "open").length,
-        scheduledMaintenance,
-        pendingRequests: (requests || []).filter((r) => r.status === "pending").length,
-        pendingFines: pendingFines.length,
-        totalPendingFineAmount,
         todaySessions: (attendance || []).length,
       },
       period: {
@@ -437,9 +326,6 @@ const getSummary = async (req, res) => {
         overdue: periodOverdue,
       },
       tables: {
-        recentBorrowed,
-        recentReturned,
-        overdue: overdueTable,
         overdueTotal: overdueList.length,
       },
     });

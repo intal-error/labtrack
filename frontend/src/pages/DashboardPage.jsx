@@ -6,10 +6,7 @@ import {
   useMyBorrowed,
   useMyReturned,
   useMyBorrowRequests,
-  useBorrowRequests,
   useCatalog,
-  useIncidents,
-  useMaintenance,
   useReportSummary,
   useStudentAttendance,
   useMyFines,
@@ -24,6 +21,7 @@ import EmptyChart from "../components/ui/EmptyChart";
 import LoadError from "../components/ui/LoadError";
 import ChartTooltip from "../components/ui/ChartTooltip";
 import KpiCard from "../components/dashboard/KpiCard";
+import DeltaBadge from "../components/dashboard/DeltaBadge";
 import PanelCard from "../components/dashboard/PanelCard";
 import MiniTable from "../components/dashboard/MiniTable";
 import StatusDonut from "../components/dashboard/StatusDonut";
@@ -32,13 +30,11 @@ import {
   MdInventory,
   MdHistory,
   MdSwapHoriz,
-  MdAssignment,
   MdWarning,
   MdArrowForward,
   MdEventBusy,
   MdInventory2,
   MdEventAvailable,
-  MdBuild,
   MdAttachMoney,
   MdMenuBook,
   MdError,
@@ -46,15 +42,10 @@ import {
   MdCheckCircle,
   MdNotificationsOff,
   MdCategory,
-  MdSwapVert,
 } from "react-icons/md";
 import {
-  BarChart,
-  Bar,
   AreaChart,
   Area,
-  LineChart,
-  Line,
   CartesianGrid,
   XAxis,
   YAxis,
@@ -69,10 +60,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
    so read the camel name and fall back. */
 const field = (row, camel, snake) => row?.[camel] ?? row?.[snake] ?? null;
 const rowName = (r) => field(r, "itemName", "item_name") || "—";
-const nameOf = (r) =>
-  [field(r, "firstName", "first_name"), field(r, "lastName", "last_name")]
-    .filter(Boolean)
-    .join(" ") || "—";
 
 /* `Number(null)` is 0 and `Number("")` is 0, both finite — so a NULL
    available_quantity would read as "none available" and report a fully
@@ -151,18 +138,6 @@ function statusBadge(status) {
   return (
     <span className={`dash-badge ${BADGE_TONE[key] || "neutral"}`}>{titleCase(status)}</span>
   );
-}
-
-/* An item is not late until its due date has fully passed. Flooring whole days
-   means a loan due today reads "On loan" at 23:59 and flips to "1d overdue"
-   just after midnight, instead of showing "0d overdue" all due-date long. */
-function borrowStatusBadge(row) {
-  const due = toLocalDate(row?.dueDate);
-  if (due) {
-    const days = Math.floor((Date.now() - due.getTime()) / DAY_MS);
-    if (days >= 1) return <span className="dash-badge overdue">{days}d overdue</span>;
-  }
-  return <span className="dash-badge inuse">On loan</span>;
 }
 
 /* `new Date("2026-10-02")` is parsed as UTC midnight, which then formats as the
@@ -553,8 +528,6 @@ function StudentDashboard() {
 /*                   ADMIN DASHBOARD              */
 /* ═══════════════════════════════════════════════ */
 function AdminDashboard() {
-  const navigate = useNavigate();
-
   const [range, setRange] = useState(DEFAULT_RANGE);
   // Preset ranges are relative to "today", so re-resolve once the calendar day rolls over.
   const [today, setToday] = useState(() => new Date());
@@ -584,9 +557,6 @@ function AdminDashboard() {
   const { data: prevData } = useReportSummary(prevParams);
 
   const { data: catalogData } = useCatalog();
-  const { data: incidentsData } = useIncidents({ limit: 5 });
-  const { data: maintenanceData } = useMaintenance({ status: "scheduled", limit: 5 });
-  const { data: borrowRequestsData } = useBorrowRequests({ status: "pending", limit: 5 });
 
   const summary = rawData || {};
   const counts = summary.counts || {};
@@ -599,12 +569,6 @@ function AdminDashboard() {
   const delta = (key) => (hasPrev ? numOr(period[key]) - numOr(prevPeriod[key]) : undefined);
 
   const catalogRows = useMemo(() => rowsOf(catalogData), [catalogData]);
-  const recentIncidents = useMemo(() => rowsOf(incidentsData), [incidentsData]);
-  const upcomingMaintenance = useMemo(() => rowsOf(maintenanceData), [maintenanceData]);
-  const pendingRequests = useMemo(
-    () => rowsOf(borrowRequestsData).slice(0, 5),
-    [borrowRequestsData]
-  );
 
   /* Equipment is tracked as catalog rows with a quantity, and "available" is
      decremented per unit — so a row is only a single status when its quantities
@@ -670,23 +634,8 @@ function AdminDashboard() {
   // The backend zero-fills one bucket per day/week/month, so emptiness has to
   // come from the values — not from whether the array has anything in it.
   const trendBorrowReturn = useMemo(() => charts.trendBorrowReturn || [], [charts.trendBorrowReturn]);
-  const trendAttendance = useMemo(() => charts.trendAttendance || [], [charts.trendAttendance]);
-  const trendOverdue = useMemo(() => charts.trendOverdue || [], [charts.trendOverdue]);
 
   const hasBorrowActivity = trendBorrowReturn.some((d) => d.borrowed > 0 || d.returned > 0);
-  const hasSessions = trendAttendance.some((d) => d.sessions > 0);
-  const hasOverdueTrend = trendOverdue.some((d) => d.overdue > 0);
-
-  // Both series come off the same bucket list, so they line up index-for-index.
-  const usageData = useMemo(() => {
-    const length = Math.max(trendAttendance.length, trendBorrowReturn.length);
-    return Array.from({ length }, (_, i) => ({
-      date: trendAttendance[i]?.date ?? trendBorrowReturn[i]?.date ?? "",
-      sessions: trendAttendance[i]?.sessions ?? 0,
-      borrowed: trendBorrowReturn[i]?.borrowed ?? 0,
-    }));
-  }, [trendAttendance, trendBorrowReturn]);
-  const hasUsage = usageData.some((d) => d.sessions > 0 || d.borrowed > 0);
 
   const kpis = [
     {
@@ -729,15 +678,6 @@ function AdminDashboard() {
     { icon: MdEventBusy, tone: "red", label: "Overdue Items", value: period.overdue || 0, delta: delta("overdue"), deltaInvert: true },
   ];
 
-  const quickActions = [
-    { label: "Catalog", desc: "Manage inventory", icon: MdInventory, path: "/catalog" },
-    { label: "Borrow Requests", desc: "Review requests", icon: MdAssignment, path: "/borrow-requests" },
-    { label: "Transactions", desc: "View all records", icon: MdSwapHoriz, path: "/transactions" },
-    { label: "Maintenance", desc: "Schedule repairs", icon: MdBuild, path: "/maintenance" },
-    { label: "Attendance", desc: "View logs", icon: MdEventAvailable, path: "/attendance" },
-    { label: "Fines", desc: "Settle balances", icon: MdAttachMoney, path: "/fines" },
-  ];
-
   /* Percentages drive a <colgroup> under table-layout:fixed, so the table is
      always exactly its panel's width. Each figure is the cell's border-box
      share; the ~16px of 8px side padding inside it is already accounted for.
@@ -748,47 +688,6 @@ function AdminDashboard() {
     { key: "units", header: "Units", width: "10%", render: totalUnits },
     { key: "available", header: "Avail.", width: "16%", render: (r) => `${freeUnits(r)} / ${totalUnits(r)}` },
     { key: "status", header: "Status", width: "26%", render: (r) => statusBadge(r?.status) },
-  ];
-
-  const requestColumns = [
-    { key: "student", header: "Student", clip: true, width: "23%", render: nameOf },
-    { key: "item", header: "Item", clip: true, width: "26%", render: rowName },
-    {
-      key: "requested",
-      header: "Added",
-      width: "18%",
-      render: (r) => formatShortDate(field(r, "createdAt", "created_at")),
-    },
-    { key: "status", header: "Status", width: "33%", render: (r) => statusBadge(r?.status) },
-  ];
-
-  const borrowColumns = [
-    { key: "student", header: "Student", clip: true, width: "21%", render: (r) => r.userName || "—" },
-    { key: "item", header: "Item", clip: true, width: "26%", render: (r) => r.itemName || "—" },
-    { key: "due", header: "Due", width: "18%", render: (r) => formatShortDate(r.dueDate) },
-    { key: "status", header: "Status", width: "35%", render: (r) => borrowStatusBadge(r) },
-  ];
-
-  const incidentColumns = [
-    { key: "title", header: "Item", clip: true, width: "38%", render: (r) => field(r, "title") || "—" },
-    {
-      key: "reported",
-      header: "Reported",
-      width: "25%",
-      render: (r) => formatShortDate(field(r, "createdAt", "created_at")),
-    },
-    { key: "status", header: "Status", width: "37%", render: (r) => statusBadge(r?.status) },
-  ];
-
-  const maintenanceColumns = [
-    { key: "item", header: "Item", clip: true, width: "38%", render: rowName },
-    {
-      key: "scheduled",
-      header: "Scheduled",
-      width: "25%",
-      render: (r) => formatShortDate(field(r, "scheduledDate", "scheduled_date")),
-    },
-    { key: "status", header: "Status", width: "37%", render: (r) => statusBadge(r?.status) },
   ];
 
   if (reportLoading) return <LoadingState />;
@@ -823,35 +722,29 @@ function AdminDashboard() {
         ))}
       </div>
 
-      <div className="dash-section-head">
-        <h3>In selected period</h3>
-        <span className="dash-section-sub">
-          {hasPrev ? vsLabel : "No earlier period to compare"}
-        </span>
-      </div>
-      <div className="dash-kpis">
-        {periodStats.map((stat) => (
-          <KpiCard key={stat.label} period {...stat} />
-        ))}
-      </div>
-
-      <div className="dash-actions">
-        {quickActions.map(({ label, desc, icon: Icon, path }) => (
-          <button
-            key={path}
-            className="dash-action"
-            onClick={() => navigate(path)}
-          >
-            <span className="dash-action-icon">
-              <Icon size={22} />
-            </span>
-            <span className="dash-action-text">
-              <span className="dash-action-label">{label}</span>
-              <span className="dash-action-desc">{desc}</span>
-            </span>
-            <MdArrowForward size={16} className="dash-action-arrow" />
-          </button>
-        ))}
+      <div className="dash-period-strip">
+        <div className="dash-period-head">
+          <h3>In selected period</h3>
+          <span className="dash-period-compare">
+            {hasPrev ? vsLabel : "No earlier period to compare"}
+          </span>
+        </div>
+        <div className="dash-period-metrics">
+          {periodStats.map(({ icon: Icon, tone, label, value, delta, deltaInvert }) => (
+            <div key={label} className="dash-period-metric">
+              <span className={`dash-period-icon ${tone}`}>
+                <Icon size={15} />
+              </span>
+              <span className="dash-period-body">
+                <span className="dash-period-value">{value}</span>
+                <span className="dash-period-label">{label}</span>
+              </span>
+              {delta !== undefined && delta !== null && (
+                <DeltaBadge value={delta} invert={deltaInvert} />
+              )}
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="dash-grid">
@@ -876,19 +769,9 @@ function AdminDashboard() {
           />
         </PanelCard>
 
-        <PanelCard
-          icon={MdAssignment}
-          title="Pending Requests"
-          actionTo="/borrow-requests"
-        >
-          <MiniTable
-            columns={requestColumns}
-            rows={pendingRequests}
-            empty="No requests waiting on you"
-          />
-        </PanelCard>
-
-        <PanelCard icon={MdSwapHoriz} title="Borrow & Return Volume" span={2}>
+        {/* span 3: this is the only panel on the second grid row, so it takes
+            the full width rather than leaving column 3 empty. */}
+        <PanelCard icon={MdSwapHoriz} title="Borrow & Return Volume" span={3}>
           <div className="dash-chart-body">
             {hasBorrowActivity ? (
               <>
@@ -940,142 +823,6 @@ function AdminDashboard() {
               <EmptyChart text="No borrow or return activity in this period" />
             )}
           </div>
-        </PanelCard>
-
-        <PanelCard icon={MdSwapVert} title="Lab Usage">
-          <div className="dash-chart-body">
-            {hasUsage ? (
-              <>
-                <ResponsiveContainer width="100%" height={210}>
-                  <BarChart
-                    data={usageData}
-                    margin={{ top: 5, right: 12, left: -18, bottom: 0 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="var(--border)"
-                      vertical={false}
-                    />
-                    <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} />
-                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} width={40} />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Bar dataKey="sessions" name="Sessions" fill="#00897b" radius={[4, 4, 0, 0]} barSize={9} />
-                    <Bar dataKey="borrowed" name="Borrows" fill="#2e7d32" radius={[4, 4, 0, 0]} barSize={9} />
-                  </BarChart>
-                </ResponsiveContainer>
-                <div className="dash-chart-legend">
-                  <span className="dash-legend-item">
-                    <span className="dash-legend-dot" style={{ background: "#00897b" }} />
-                    Sessions
-                  </span>
-                  <span className="dash-legend-item">
-                    <span className="dash-legend-dot" style={{ background: "#2e7d32" }} />
-                    Borrows
-                  </span>
-                </div>
-              </>
-            ) : (
-              <EmptyChart text="No lab usage in this period" />
-            )}
-          </div>
-        </PanelCard>
-
-        <PanelCard icon={MdEventAvailable} title="Sessions Logged">
-          <div className="dash-chart-body">
-            {hasSessions ? (
-              <ResponsiveContainer width="100%" height={210}>
-                <AreaChart
-                  data={trendAttendance}
-                  margin={{ top: 5, right: 12, left: -18, bottom: 0 }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="var(--border)"
-                    vertical={false}
-                  />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} width={40} />
-                  <Tooltip content={<ChartTooltip />} />
-                  <Area
-                    type="monotone"
-                    dataKey="sessions"
-                    name="Sessions"
-                    stroke="#1976d2"
-                    fill="#1976d2"
-                    fillOpacity={0.15}
-                    strokeWidth={2}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : (
-              <EmptyChart text="No lab sessions in this period" />
-            )}
-          </div>
-        </PanelCard>
-
-        <PanelCard icon={MdEventBusy} title="Overdue Items">
-          <div className="dash-chart-body">
-            {hasOverdueTrend ? (
-              <ResponsiveContainer width="100%" height={210}>
-                <LineChart
-                  data={trendOverdue}
-                  margin={{ top: 5, right: 12, left: -18, bottom: 0 }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="var(--border)"
-                    vertical={false}
-                  />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} width={40} />
-                  <Tooltip content={<ChartTooltip />} />
-                  <Line
-                    type="monotone"
-                    dataKey="overdue"
-                    name="Overdue"
-                    stroke="#e53935"
-                    strokeWidth={2}
-                    dot={{ r: 2 }}
-                    activeDot={{ r: 4 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <EmptyChart text="No overdue data in this period" />
-            )}
-          </div>
-        </PanelCard>
-
-        <PanelCard
-          icon={MdHistory}
-          title="Recent Borrows"
-          actionTo="/transactions"
-        >
-          <MiniTable
-            columns={borrowColumns}
-            rows={tables.recentBorrowed}
-            empty="No active borrows"
-          />
-        </PanelCard>
-
-        <PanelCard icon={MdWarning} title="Recent Incidents" actionTo="/incidents">
-          <MiniTable
-            columns={incidentColumns}
-            rows={recentIncidents}
-            empty="No incident reports"
-          />
-        </PanelCard>
-
-        <PanelCard
-          icon={MdBuild}
-          title="Upcoming Maintenance"
-          actionTo="/maintenance"
-        >
-          <MiniTable
-            columns={maintenanceColumns}
-            rows={upcomingMaintenance}
-            empty="Nothing scheduled"
-          />
         </PanelCard>
       </div>
     </div>
