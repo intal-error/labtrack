@@ -26,5 +26,8 @@ CREATE TABLE lab_attendance (
 CREATE INDEX IF NOT EXISTS idx_lab_attendance_date ON lab_attendance(date);
 CREATE INDEX IF NOT EXISTS idx_lab_attendance_student ON lab_attendance(student_school_id);
 CREATE INDEX IF NOT EXISTS idx_lab_attendance_date_status ON lab_attendance(date, status);
+-- Leads on status alone for the "Currently Inside" poll, which no longer filters
+-- on date (see 18-lab-attendance-status-index.sql).
+CREATE INDEX IF NOT EXISTS idx_lab_attendance_status ON lab_attendance(status);
 CREATE INDEX IF NOT EXISTS idx_lab_attendance_student_date ON lab_attendance(student_school_id, date);
 CREATE INDEX IF NOT EXISTS idx_lab_attendance_room ON lab_attendance(room_code);

@@ -157,6 +157,45 @@ body.dark .tab-strip-btn.active .al-tab-count {
   border-color: var(--green);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.09);
 }
+/* An open session that crossed midnight. Outlined in amber rather than filled so
+   it still reads as "present in the building" -- these students ARE inside, they
+   just never got signed out. */
+.al-student--stale {
+  border-color: rgba(217, 119, 6, 0.55);
+  background: rgba(217, 119, 6, 0.05);
+}
+.al-stale-badge {
+  align-self: flex-start;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(217, 119, 6, 0.14);
+  color: #b45309;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.al-meta-since {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.al-stale-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 0 0 12px;
+  padding: 9px 12px;
+  border: 1px solid rgba(217, 119, 6, 0.4);
+  border-radius: 10px;
+  background: rgba(217, 119, 6, 0.08);
+  color: #b45309;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.al-stale-note svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
 .al-student-top {
   display: flex;
   align-items: center;

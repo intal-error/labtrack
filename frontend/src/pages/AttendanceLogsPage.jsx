@@ -229,6 +229,12 @@ export default function AttendanceLogsPage() {
         variant="stack"
         items={[
           { label: "Currently Inside", value: stats?.currentlyInside ?? 0 },
+          // Only present when it is non-zero. An always-visible "0 overnight"
+          // tile is noise, but a hidden non-zero one loses the information that
+          // matters most on a live occupancy board.
+          ...(stats?.staleInside > 0
+            ? [{ label: "Not Signed Out", value: stats.staleInside }]
+            : []),
           { label: "Today's Sessions", value: stats?.totalToday ?? 0 },
           { label: "Hours Today", value: formatDuration(stats?.totalMinutesToday ?? 0) },
           { label: "Students This Week", value: stats?.uniqueStudentsThisWeek ?? 0 },
@@ -398,6 +404,11 @@ function ActiveTab({ students, rooms, filterRoom, onFilterRoom, busy, error, onR
     [rooms]
   );
 
+  // Flagged by the server, not derived here: whether a session counts as stale
+  // depends on the SCHOOL's calendar day (SCHOOL_TIMEZONE), which the browser
+  // cannot know. Re-deriving it client-side was how the two clocks drifted.
+  const staleCount = students.filter((s) => s.staleSession).length;
+
   return (
     <>
       <div className="au-toolbar">
@@ -422,6 +433,14 @@ function ActiveTab({ students, rooms, filterRoom, onFilterRoom, busy, error, onR
           </span>
         </div>
       </div>
+
+      {staleCount > 0 && (
+        <p className="al-stale-note">
+          <MdErrorOutline size={14} />
+          {staleCount} of these timed in on an earlier day and were never signed out. Sign them out at the room
+          kiosk to close the session.
+        </p>
+      )}
 
       <div className="au-results">
         {error ? (
@@ -460,7 +479,12 @@ function ActiveTab({ students, rooms, filterRoom, onFilterRoom, busy, error, onR
         ) : (
           <div className={`al-live-grid${busy ? " au-results--busy" : ""}`}>
             {students.map((s) => (
-              <article key={s.id} className="al-student">
+              <article key={s.id} className={`al-student${s.staleSession ? " al-student--stale" : ""}`}>
+                {s.staleSession && (
+                  <span className="al-stale-badge" title={`Timed in on ${s.date || "an earlier day"}`}>
+                    Not signed out
+                  </span>
+                )}
                 <div className="al-student-top">
                   <span className="al-avatar">{initials(s)}</span>
                   <span className="al-student-text">
@@ -489,7 +513,10 @@ function ActiveTab({ students, rooms, filterRoom, onFilterRoom, busy, error, onR
                   </div>
                   <div className="al-meta-row">
                     <span className="al-meta-label">Time in</span>
-                    <span className="al-meta-value">{formatTime(s.timeIn)}</span>
+                    <span className="al-meta-value">
+                      {formatTime(s.timeIn)}
+                      {s.staleSession && s.date && <span className="al-meta-since"> ({s.date})</span>}
+                    </span>
                   </div>
                 </div>
 

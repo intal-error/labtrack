@@ -10,6 +10,9 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: SCHOOL_TIMEZONE
+        value: Asia/Manila
+        description: "IANA timezone the school operates in - decides what 'today' means for attendance. Render runs UTC, so this must be set explicitly."
       - key: CLIENT_URL
         sync: false
         description: "Set to your frontend URL (e.g. https://your-app.vercel.app)"

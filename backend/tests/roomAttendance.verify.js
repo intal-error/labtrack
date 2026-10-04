@@ -1,11 +1,16 @@
 // Verifies getRoomAttendanceHistory — the endpoint behind /attendance/room/:id.
 //
 // WHY THIS FILE EXISTS: that endpoint grew subject and professor filters, a
-// professors facet, and a stats aggregate, but nothing exercised it. The six
-// pre-existing suites all target other endpoints, so a regression here would
-// ship silently. It is also the only attendance reader that does NOT apply
-// applyAssignedCourse (see the note at the bottom) — asserted here so the gap
-// is documented rather than forgotten.
+// professors facet, and a stats aggregate, but nothing exercised it. The other
+// pre-existing suites all target different endpoints, so a regression here would
+// ship silently.
+//
+// It originally also pinned the admin course scoping on this endpoint, back when
+// the room page scoped by assignment and exportToExcel did not. That mismatch was
+// a real bug -- an empty workbook next to a populated table. Attendance is now
+// building-wide on both sides, so the table/export PARITY invariant is what is
+// worth keeping here, and it is asserted at the bottom of this file. The
+// building-wide contract itself is pinned by tests/attendanceVisibility.verify.js.
 //
 // Fully offline: the Supabase and Firebase clients are stubbed before the
 // controller loads, exactly as attendanceExport.verify.js does.
@@ -101,7 +106,7 @@ const { getRoomAttendanceHistory } = require("../src/controllers/attendanceContr
 // Imported so the parity assertions below exercise the SAME helpers the
 // endpoint and the export use, rather than a re-implementation that could drift
 // and hide the very divergence it is meant to catch.
-const { applyAttendanceFilters, applyAssignedCourse, normRoom } = require("../src/utils/attendanceFilters");
+const { applyAttendanceFilters, normRoom } = require("../src/utils/attendanceFilters");
 
 // The row set exportToExcel would fetch for a room: every attendance row, with
 // the room narrowed by room_code exactly as the export resolves it from roomId.
@@ -250,42 +255,41 @@ function check(name, actual, expected) {
   check("absurd limit is capped, not honoured", r.body.records.length, 5);
   check("and total still reflects the true count", r.body.total, 5);
 
-  console.log("--- admin course assignment is honoured ---");
-  // This endpoint used to omit applyAssignedCourse while exportToExcel applied
-  // it. Two consequences, both now guarded below:
-  //   1. leak — other courses' students were listed on screen
-  //   2. silent mismatch — filtering to another course gave an empty workbook
-  //      while the table showed rows; filtering to a year gave fewer rows
-  const scoped = { assignedCourse: "BSCS", assignedYear: "" };
+  console.log("--- attendance is building-wide, so the room page shows every course ---");
+  // This endpoint used to apply applyAssignedCourse while exportToExcel applied it
+  // separately, and getActiveStudents/getDailyLog/getStats had their own copies.
+  // The copies drifted (case-sensitive, and assignedYear ignored) until admins saw
+  // blank screens. All of that is gone; the contract is now that no assignment
+  // narrows attendance, asserted here against the room page too.
+  const scoped = { assignedCourse: "BSCS", assignedCourses: ["BSCS"], assignedYear: "" };
   r = await call("room-cet", {}, scoped);
-  check("total is limited to the assigned course", r.body.total, 1);
-  check("only the assigned course's row survives", r.body.records.map((x) => x.id), ["a3"]);
+  check("a narrow assignment does not shrink the room page", r.body.total, 5);
+  check("and every course's row is listed", r.body.records.map((x) => x.id).sort(), ["a1", "a2", "a3", "a4", "a5"]);
 
-  console.log("--- facets are scoped too, so no dropdown offers a dead value ---");
-  // Scoping after the facet() calls would leave "BSCS" offered to a BIT-scoped
-  // admin, and selecting it would return nothing — the original symptom in a new
-  // place.
-  check("courses facet excludes other courses", r.body.courses, ["BSCS"]);
-  check("years facet is scoped", r.body.years, ["3rd Year"]);
-  check("sections facet is scoped", r.body.sections, ["3A"]);
-  check("subjects facet is scoped", r.body.subjects, ["Algo 1"]);
-  check("professors facet is scoped", r.body.professors, ["Reyes"]);
-  check("stats are scoped", r.body.stats, { uniqueStudents: 1, totalMinutes: 2, avgMinutes: 2, activeNow: 0 });
+  console.log("--- facets list every value, so no dropdown offers a dead filter ---");
+  check("courses facet is complete", r.body.courses, ["BIT", "BSCS"]);
+  check("years facet is complete", r.body.years, ["3rd Year", "4th Year"]);
+  check("sections facet is complete", r.body.sections, ["3A", "4A", "4B"]);
+  check("subjects facet is complete", r.body.subjects, ["Algo 1", "Net 1", "Net 2"]);
+  check("professors facet is complete", r.body.professors, ["Dela Cruz", "Lim", "Reyes", "Santos"]);
+  // Five distinct students; a4's 6 minutes dominate. The mean is over the four
+  // COMPLETED sessions only -- including a5, whose total_duration is still
+  // growing, would drag the average toward zero.
+  check("stats cover every course in the room", r.body.stats, { uniqueStudents: 5, totalMinutes: 11, avgMinutes: 3, activeNow: 1 });
 
   console.log("--- table and export agree (the invariant that actually broke) ---");
-  // exportToExcel applies applyAssignedCourse and getRoomAttendanceHistory did
-  // not, so any filter could diverge. Assert both sides produce the same count
-  // for the same filters under the same assignment.
+  // Both sides are now built from the same two steps -- a room match, then
+  // applyAttendanceFilters -- so any divergence here means one of them has grown a
+  // filter the other lacks, which is exactly how the original bug appeared.
   for (const filters of [{}, { course: "BSCS" }, { year: "3rd Year" }, { course: "BIT" }, { year: "4th Year" }]) {
     const label = Object.keys(filters).length ? Object.entries(filters).map(([k, v]) => `${k}=${v}`).join(" ") : "no filter";
     const tableRows = (await call("room-cet", filters, scoped)).body.total;
-    // Export side, reproduced from exportToExcel's own composition:
-    // applyAttendanceFilters(...) then applyAssignedCourse(...).
-    const exportRows = applyAssignedCourse(applyAttendanceFilters(recordsFor("CET-01"), filters), scoped).length;
+    // Export side, reproduced from exportToExcel's own composition.
+    const exportRows = applyAttendanceFilters(recordsFor("CET-01"), filters).length;
     check(`table and export agree for ${label}`, tableRows, exportRows);
   }
 
-  console.log("--- unassigned admins are unaffected ---");
+  console.log("--- no assignment shape changes what the room page shows ---");
   r = await call("room-cet", {}, {});
   check("no assignment sees every room row", r.body.total, 5);
   r = await call("room-cet", {}, { assignedCourse: "", assignedYear: "" });

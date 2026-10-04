@@ -6,7 +6,6 @@ const { randomUUID } = require("crypto");
 const { transformKeys } = require("../utils/transformKeys");
 const {
   applyAttendanceFilters,
-  applyAssignedCourse,
   sortAttendance,
   sortAttendanceAsc,
   facet,
@@ -14,22 +13,38 @@ const {
   normRoom,
 } = require("../utils/attendanceFilters");
 const { slug } = require("../utils/exportUtils");
+const { todayKey, weekStartKey, formatTimeInTz } = require("../utils/schoolClock");
 
 const USERS = "users";
 
-function getTodayString() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
+/**
+ * Every date boundary below goes through the school clock, not the host clock.
+ * See utils/schoolClock.js -- the deploy target runs UTC, so the host's calendar
+ * day is behind the school's for 8 hours a day and a scan before 08:00 was filed
+ * under the wrong date.
+ */
+const getTodayString = () => todayKey();
 
-function formatTime(isoString) {
-  if (!isoString) return "";
-  const d = new Date(isoString);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+/**
+ * The student's open session, if any, regardless of which day it started.
+ *
+ * Both endpoints used to require `date === today`, which was a silent trap: a
+ * 23:30 scan is filed under the previous calendar day, so from midnight the
+ * session became invisible to BOTH the sign-out path and the "Already timed in"
+ * guard. The student was told "No active session found. Please time in first."
+ * while standing in the lab, and a second scan-in created a duplicate open row.
+ *
+ * When several rows are somehow open (written before this rule), today's wins and
+ * the rest are ordered newest-first so the sign-out closes the most likely
+ * intended one rather than an arbitrary one.
+ */
+function findOpenSession(records, today) {
+  const open = (records || []).filter((r) => r.status === "active");
+  if (open.length === 0) return null;
+  return (
+    open.find((r) => r.date === today) ||
+    [...open].sort((a, b) => new Date(b.time_in || 0).getTime() - new Date(a.time_in || 0).getTime())[0]
+  );
 }
 
 function formatDuration(minutes) {
@@ -125,9 +140,12 @@ const timeIn = async (req, res) => {
       .eq("student_school_id", schoolId.trim());
     if (fetchError) throw fetchError;
 
-    const activeSession = (studentRecords || []).find((r) => r.status === "active" && r.date === today);
+    const activeSession = findOpenSession(studentRecords, today);
     if (activeSession) {
-      return res.status(400).json({ error: "Already timed in. Please time out first." });
+      // Say which day, so a student held overnight by a forgotten session is told
+      // why instead of just being refused.
+      const since = activeSession.date && activeSession.date !== today ? ` from ${activeSession.date}` : "";
+      return res.status(400).json({ error: `Already timed in${since}. Please time out first.` });
     }
 
     const todayRecords = (studentRecords || []).filter((r) => r.date === today);
@@ -197,7 +215,7 @@ const timeOut = async (req, res) => {
       .eq("student_school_id", schoolId.trim());
     if (fetchError) throw fetchError;
 
-    const activeDoc = (studentRecords || []).find((r) => r.status === "active" && r.date === today);
+    const activeDoc = findOpenSession(studentRecords, today);
 
     if (!activeDoc) {
       return res.status(400).json({ error: "No active session found. Please time in first." });
@@ -257,35 +275,40 @@ const getActiveStudents = async (req, res) => {
     const today = getTodayString();
     const { room } = req.query;
 
+    // Deliberately NOT date-filtered. This used to require `date = today`, which
+    // hid anyone whose session crossed midnight -- a 23:30 scan was filed under
+    // the previous day, so the student disappeared from "Currently Inside" while
+    // still physically in the building, and timeOut could not close the session
+    // either because it looked for today's row too. A session is open until
+    // something closes it, regardless of which calendar day it started on.
     const { data: records, error } = await supabase
       .from("lab_attendance")
       .select("*")
-      .eq("date", today)
       .eq("status", "active");
     if (error) throw error;
 
     let result = records || [];
-
-    if (req.adminAssignment?.assignedCourse) {
-      result = result.filter((r) => r.course === req.adminAssignment.assignedCourse);
-    }
 
     if (room) {
       const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
       result = result.filter((r) => norm(r.room_code) === norm(room));
     }
 
+    // Oldest session first: the row that has been open longest is the one an
+    // admin most needs to see, and it was previously pushed off the list.
     result.sort((a, b) => {
       const tA = new Date(a.time_in || 0).getTime();
       const tB = new Date(b.time_in || 0).getTime();
-      return tB - tA;
+      return tA - tB;
     });
 
     const nowMs = Date.now();
     result = result.map((r) => {
       const timeInDate = new Date(r.time_in);
       const currentDuration = !Number.isNaN(timeInDate.getTime()) ? Math.round((nowMs - timeInDate.getTime()) / 60000) : 0;
-      return { ...r, currentDuration };
+      // Computed server-side so the browser does not have to re-derive the school
+      // calendar day to tell a normal session from a stranded overnight one.
+      return { ...r, currentDuration, staleSession: r.date !== today };
     });
 
     res.json(transformKeys(result));
@@ -305,8 +328,7 @@ const getTodayAttendance = async (req, res) => {
       .eq("date", today);
     if (error) throw error;
 
-    const scoped = applyAssignedCourse(records || [], req.adminAssignment);
-    const result = applyAttendanceFilters(scoped, { course, year, section, subject, professor, labRoom, roomCode, student });
+    const result = applyAttendanceFilters(records || [], { course, year, section, subject, professor, labRoom, roomCode, student });
 
     result.sort((a, b) => {
       const tA = new Date(a.time_in || 0).getTime();
@@ -333,10 +355,6 @@ const getDailyLog = async (req, res) => {
 
     let result = records || [];
 
-    if (req.adminAssignment?.assignedCourse) {
-      result = result.filter((r) => r.course === req.adminAssignment.assignedCourse);
-    }
-
     result.sort((a, b) => {
       const tA = new Date(a.time_in || 0).getTime();
       const tB = new Date(b.time_in || 0).getTime();
@@ -356,15 +374,13 @@ const getAttendanceFacets = async (req, res) => {
       .select("course,year,section,subject,professor,lab_room,room_code");
     if (error) throw error;
 
-    const scoped = applyAssignedCourse(records || [], req.adminAssignment);
-
     res.json({
-      courses: facet(scoped, "course"),
-      years: facet(scoped, "year"),
-      sections: facet(scoped, "section"),
-      subjects: facet(scoped, "subject"),
-      professors: facet(scoped, "professor"),
-      rooms: [...new Set(scoped.map((r) => r.lab_room || r.room_code).filter(Boolean))].sort(),
+      courses: facet(records || [], "course"),
+      years: facet(records || [], "year"),
+      sections: facet(records || [], "section"),
+      subjects: facet(records || [], "subject"),
+      professors: facet(records || [], "professor"),
+      rooms: [...new Set((records || []).map((r) => r.lab_room || r.room_code).filter(Boolean))].sort(),
     });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
@@ -382,10 +398,7 @@ const getAttendanceHistory = async (req, res) => {
     const { data: records, error: fetchError } = await query;
     if (fetchError) throw fetchError;
 
-    const result = applyAssignedCourse(
-      applyAttendanceFilters(records || [], { from, to, course, year, section, subject, professor, labRoom, student }),
-      req.adminAssignment
-    );
+    const result = applyAttendanceFilters(records || [], { from, to, course, year, section, subject, professor, labRoom, student });
 
     result.sort((a, b) => {
       const dA = a.date || "";
@@ -438,23 +451,6 @@ const getRoomAttendanceHistory = async (req, res) => {
 
     const norm = normRoom;
     let roomRecords = (allRecords || []).filter((r) => norm(r.room_code) === norm(roomCode));
-
-    // Scoped admins must not see other courses' students here. Every other
-    // attendance reader already calls this — getTodayAttendance,
-    // getAttendanceFacets, getAttendanceHistory and exportToExcel — and this
-    // endpoint was the single omission. That caused two problems at once:
-    // a data leak (other courses' names and IDs on screen), and a silent
-    // table/export mismatch, because exportToExcel DOES apply the assignment.
-    // Filtering to a different course produced an empty workbook while the
-    // table above showed rows; filtering to a year produced fewer rows than
-    // the screen. With this in place the two agree.
-    //
-    // Applied BEFORE the facet() calls on purpose: scoping afterwards would
-    // leave the dropdowns offering courses this admin may not see, and
-    // selecting one would return nothing — reproducing the same symptom in a
-    // new place. Scoping first means every filter list only contains values the
-    // admin is allowed to query.
-    roomRecords = applyAssignedCourse(roomRecords, req.adminAssignment);
 
     // Facets are computed BEFORE filtering, on purpose: the dropdown options
     // then stay stable while the user narrows the list, instead of collapsing
@@ -611,39 +607,38 @@ const getMyAttendance = async (req, res) => {
 const getStats = async (req, res) => {
   try {
     const today = getTodayString();
-
-    const weekStart = new Date();
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-    const weekStartStr = weekStart.toISOString().slice(0, 10);
+    const weekStartStr = weekStartKey();
 
     const [todayResult, activeResult, weekResult] = await Promise.all([
       supabase.from("lab_attendance").select("*").eq("date", today),
-      supabase.from("lab_attendance").select("*").eq("date", today).eq("status", "active"),
-      supabase.from("lab_attendance").select("*").gte("date", weekStartStr).lte("date", today),
+      // Every open session, not just today's. Same reason as getActiveStudents:
+      // a session that crossed midnight is still open, and a KPI tile that
+      // counted only today's rows disagreed with the list directly beneath it.
+      supabase.from("lab_attendance").select("date").eq("status", "active"),
+      supabase.from("lab_attendance").select("student_school_id").gte("date", weekStartStr).lte("date", today),
     ]);
 
     if (todayResult.error) throw todayResult.error;
     if (activeResult.error) throw activeResult.error;
     if (weekResult.error) throw weekResult.error;
 
-    let todayRecords = todayResult.data || [];
-    if (req.adminAssignment?.assignedCourse) {
-      todayRecords = todayRecords.filter((r) => r.course === req.adminAssignment.assignedCourse);
-    }
+    const todayRecords = todayResult.data || [];
+    const activeRows = activeResult.data || [];
 
-    let weekRecords = weekResult.data || [];
-    if (req.adminAssignment?.assignedCourse) {
-      weekRecords = weekRecords.filter((r) => r.course === req.adminAssignment.assignedCourse);
-    }
+    // Split so the UI can show how many of the open sessions are leftovers. A
+    // tile that says "8 inside" when seven of them scanned in yesterday is
+    // actionable information, not noise.
+    const currentlyInside = activeRows.length;
+    const staleInside = activeRows.filter((r) => r.date !== today).length;
 
     const totalToday = todayRecords.length;
-    const currentlyInside = (activeResult.data || []).length;
     const completedToday = todayRecords.filter((r) => r.status === "timed_out").length;
     const totalMinutesToday = todayRecords.reduce((sum, r) => sum + (r.total_duration || 0), 0);
-    const uniqueStudents = new Set(weekRecords.map((d) => d.student_school_id)).size;
+    const uniqueStudents = new Set((weekResult.data || []).map((d) => d.student_school_id).filter(Boolean)).size;
 
     res.json({
       currentlyInside,
+      staleInside,
       totalToday,
       completedToday,
       totalMinutesToday,
@@ -767,12 +762,9 @@ const exportToExcel = async (req, res) => {
     if (fetchError) throw fetchError;
 
     const result = sortAttendanceAsc(
-      applyAssignedCourse(
-        // The from/to bounds are already applied by the query above; only the
-        // remaining column filters belong here.
-        applyAttendanceFilters(records || [], { course, year, section, subject, professor, roomCode: codeFilters, labRoom: nameFilters, student, date }),
-        req.adminAssignment
-      )
+      // The from/to bounds are already applied by the query above; only the
+      // remaining column filters belong here.
+      applyAttendanceFilters(records || [], { course, year, section, subject, professor, roomCode: codeFilters, labRoom: nameFilters, student, date })
     );
 
     const workbook = new ExcelJS.Workbook();
@@ -829,8 +821,8 @@ const exportToExcel = async (req, res) => {
         r.subject || "-",
         r.professor || "-",
         r.lab_room || "-",
-        formatTime(r.time_in),
-        formatTime(r.time_out),
+        formatTimeInTz(r.time_in),
+        formatTimeInTz(r.time_out),
         duration,
         status,
       ]);
@@ -1104,8 +1096,12 @@ const autoScan = async (req, res) => {
       .eq("student_school_id", schoolId.trim());
     if (fetchError) throw fetchError;
 
+    // Two different windows on purpose. The open session is looked up across ALL
+    // days so an overnight session can still be signed out of (see
+    // findOpenSession); the duplicate-scan guard below stays on today's rows only,
+    // because "you scanned twice in 30 seconds" is a same-moment concern.
     const studentRecords = (allRecords || []).filter((r) => r.date === today);
-    const activeSession = studentRecords.find((r) => r.status === "active");
+    const activeSession = findOpenSession(allRecords, today);
 
     if (activeSession) {
       if (activeSession.room_code && !roomCode) {

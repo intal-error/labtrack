@@ -14,7 +14,6 @@ const {
   methodAwareLimiter,
 } = require("./src/middleware/rateLimits");
 const { kioskAuth } = require("./src/middleware/kioskAuth");
-const { courseFilter } = require("./src/middleware/courseFilter");
 const authRoutes = require("./src/routes/auth");
 const catalogRoutes = require("./src/routes/catalog");
 const transactionRoutes = require("./src/routes/transactions");
@@ -124,7 +123,7 @@ app.use("/api/attendance", attendanceLimiter, (req, res, next) => {
     return kioskAuth(req, res, next);
   }
   return verifyToken(req, res, next);
-}, courseFilter, attendanceRoutes);
+}, attendanceRoutes);
 app.get("/api/health", async (req, res) => {
   const health = { status: "ok", timestamp: new Date().toISOString() };
   try {
