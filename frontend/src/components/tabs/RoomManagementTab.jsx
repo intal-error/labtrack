@@ -6,6 +6,7 @@ import {
   MdAdd,
   MdEdit,
   MdDelete,
+  MdRefresh,
   MdQrCodeScanner,
   MdLocationOn,
   MdDownload,
@@ -53,6 +54,14 @@ export default function RoomManagementTab() {
   // just been deleted. Refreshing the shared cache keeps all three in step.
   function syncRoomCache() {
     queryClient.invalidateQueries({ queryKey: ["attendance", "rooms"] });
+  }
+
+  // Both halves are needed. This tab renders from its own local copy, so
+  // loadRooms() alone is what updates the grid below; syncRoomCache() is what
+  // keeps the Room Logs tab and the room history hero chips in step.
+  function refreshRooms() {
+    loadRooms();
+    syncRoomCache();
   }
 
   function openAddModal() {
@@ -116,13 +125,19 @@ export default function RoomManagementTab() {
       <div className="rooms-header">
         <h3>Lab Rooms</h3>
         <div className="rooms-header-actions">
+          <button className="btn btn-outline" onClick={refreshRooms} aria-label="Refresh">
+            <MdRefresh size={14} /> Refresh
+          </button>
           <button className="btn btn-primary" onClick={openAddModal}>
             <MdAdd size={14} /> Add Room
           </button>
         </div>
       </div>
 
-      {loading ? (
+      {/* The spinner is reserved for the first load. Gating it on an empty list
+          keeps the QR grid on screen while a Refresh is in flight, instead of
+          swapping the whole panel for a full-height loader on every press. */}
+      {loading && rooms.length === 0 ? (
         <div className="rooms-empty">
           <div className="spinner-lg" />
           <h3>Loading rooms...</h3>

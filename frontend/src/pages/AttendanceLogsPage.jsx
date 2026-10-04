@@ -95,6 +95,18 @@ function LoadingPanel({ label = "Loading records" }) {
   );
 }
 
+// Intentionally identical to the Transactions toolbar refresh — same classes,
+// same icon, same aria-label, and deliberately no disabled/in-flight state.
+// Returns only the button: TodayTab renders it inside the .au-toolbar-actions
+// group it already has, the other tabs supply their own wrapper.
+function RefreshButton({ onClick }) {
+  return (
+    <button type="button" className="btn btn-outline" onClick={onClick} aria-label="Refresh">
+      <MdRefresh size={16} /> Refresh
+    </button>
+  );
+}
+
 export default function AttendanceLogsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -143,7 +155,7 @@ export default function AttendanceLogsPage() {
   // to watch scans arrive. The live list only refreshes while its own tab shows.
   const live = activeTab === "active" || activeTab === "today";
 
-  const { data: stats } = useAttendanceStats(live);
+  const { data: stats, refetch: refetchStats } = useAttendanceStats(live);
   const { data: activeData, isFetching: activeFetching, isError: activeError, refetch: refetchActive } = useActiveStudents(
     filterRoom,
     activeTab === "active"
@@ -155,12 +167,27 @@ export default function AttendanceLogsPage() {
   // A full-table scan; only requested once the Today tab actually shows the
   // dropdowns that consume it.
   const { data: facets } = useAttendanceFacets({ enabled: activeTab === "today" });
-  const { data: roomsData } = useAttendanceRooms();
+  const { data: roomsData, refetch: refetchRooms } = useAttendanceRooms();
 
   const activeStudents = useMemo(() => (Array.isArray(activeData) ? activeData : []), [activeData]);
   const todayRecords = useMemo(() => (Array.isArray(todayData) ? todayData : []), [todayData]);
   const rooms = useMemo(() => (Array.isArray(roomsData) ? roomsData : []), [roomsData]);
   const facetsData = facets || EMPTY_FACETS;
+
+  // Backs the toolbar Refresh button on every tab, and mirrors what the
+  // Transactions page button does: re-fetch what this tab is showing plus the
+  // StatStrip tiles, which render above the tab strip on all four tabs. Stale
+  // cache is otherwise only busted by the 30s poll, which is disabled entirely
+  // on the Room tabs.
+  //
+  // The enabled:false queries are skipped explicitly rather than relying on
+  // refetch() being a no-op for a disabled query.
+  const refresh = useCallback(() => {
+    refetchStats();
+    if (activeTab === "active") refetchActive();
+    if (activeTab === "today") refetchToday();
+    if (activeTab === "roomLogs" || activeTab === "rooms") refetchRooms();
+  }, [activeTab, refetchStats, refetchActive, refetchToday, refetchRooms]);
 
   const updateAttendance = useUpdateAttendance();
   const deleteAttendance = useDeleteAttendance();
@@ -291,6 +318,7 @@ export default function AttendanceLogsPage() {
             busy={activeFetching}
             error={activeError}
             onRetry={refetchActive}
+            onRefresh={refresh}
             onGoToRooms={() => switchTab("rooms")}
           />
         )}
@@ -312,10 +340,11 @@ openRowMenu={openRowMenu}
             onEdit={openEditModal}
             onDelete={handleDeleteRecord}
             onExport={() => setExportOpen(true)}
+            onRefresh={refresh}
           />
         )}
 
-        {activeTab === "roomLogs" && <RoomLogsTab />}
+        {activeTab === "roomLogs" && <RoomLogsTab onRefresh={refresh} />}
 
         {activeTab === "rooms" && <RoomManagementTab />}
         </div>
@@ -392,7 +421,7 @@ openRowMenu={openRowMenu}
 }
 
 /* ── Currently Inside ────────────────────────────────────────────────────── */
-function ActiveTab({ students, rooms, filterRoom, onFilterRoom, busy, error, onRetry, onGoToRooms }) {
+function ActiveTab({ students, rooms, filterRoom, onFilterRoom, busy, error, onRetry, onRefresh, onGoToRooms }) {
   // The select is keyed by roomCode (what the API filters on) but must display
   // roomName. Built once per rooms change so the memoised FilterSelect isn't
   // handed a fresh array on every render.
@@ -431,6 +460,10 @@ function ActiveTab({ students, rooms, filterRoom, onFilterRoom, busy, error, onR
           <span className="au-count">
             {students.length} student{students.length !== 1 ? "s" : ""} inside
           </span>
+        </div>
+
+        <div className="au-toolbar-actions">
+          <RefreshButton onClick={onRefresh} />
         </div>
       </div>
 
@@ -550,6 +583,7 @@ function TodayTab({
   onEdit,
   onDelete,
   onExport,
+  onRefresh,
 }) {
   return (
     <>
@@ -601,6 +635,7 @@ function TodayTab({
           <button type="button" className="btn btn-green" onClick={onExport}>
             <MdFileDownload size={15} /> Download Report
           </button>
+          <RefreshButton onClick={onRefresh} />
         </div>
       </div>
 
@@ -719,7 +754,7 @@ function TodayTab({
 }
 
 /* ── Room Logs ───────────────────────────────────────────────────────────── */
-function RoomLogsTab() {
+function RoomLogsTab({ onRefresh }) {
   const navigate = useNavigate();
   const { data, isPending, isError, refetch } = useAttendanceRooms();
 
@@ -733,6 +768,10 @@ function RoomLogsTab() {
         </span>
         <div className="au-toolbar-tail">
           <span className="al-live-note">Select a room to open its attendance history</span>
+        </div>
+
+        <div className="au-toolbar-actions">
+          <RefreshButton onClick={onRefresh} />
         </div>
       </div>
 
