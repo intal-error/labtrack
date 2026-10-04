@@ -170,7 +170,13 @@ export const api = {
     } finally {
       clearTimeout(timer);
     }
-    if (!res.ok) throw new Error("Upload failed");
+    // toError, not a bare "Upload failed". This endpoint has four distinct
+    // failure modes that all used to reach the user as that one string:
+    // storage not configured (503), a rejected file type, an oversized file,
+    // and a spent rate limit (429). Discarding the body meant a missing
+    // CLOUDINARY_CLOUD_NAME in production looked exactly like a bad photo,
+    // and cost a full deploy cycle to tell apart.
+    if (!res.ok) throw toError(await res.json().catch(() => ({})), res.status);
     return res.json();
   },
 

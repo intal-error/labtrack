@@ -4,9 +4,15 @@ const cors = require("cors");
 const helmet = require("helmet");
 const compression = require("compression");
 const cron = require("node-cron");
-const rateLimit = require("express-rate-limit");
-const { ipKeyGenerator } = rateLimit;
 const { verifyToken, authorize, errorHandler } = require("./src/middleware/auth");
+const {
+  generalLimiter,
+  authLimiter,
+  attendanceLimiter,
+  uploadLimiter,
+  backupLimiter,
+  methodAwareLimiter,
+} = require("./src/middleware/rateLimits");
 const { kioskAuth } = require("./src/middleware/kioskAuth");
 const { courseFilter } = require("./src/middleware/courseFilter");
 const authRoutes = require("./src/routes/auth");
@@ -32,6 +38,45 @@ const { cache, cacheKey } = require("./src/utils/cache");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+/**
+ * Env vars whose absence breaks a whole feature rather than a single request.
+ *
+ * WHY: every one of these is declared `sync: false` in render.yaml, which means
+ * Render never receives it from the repo and it has to be typed into the
+ * dashboard by hand. backend/.env is gitignored, so a deploy that skipped one
+ * of them boots cleanly and looks healthy: /api/health only ever checked
+ * Supabase, so a missing CLOUDINARY_CLOUD_NAME took down image uploads on
+ * Catalog, Maintenance, Incidents and Profile while the service reported "ok".
+ *
+ * Logging these once at boot turns a silent misconfiguration into the first
+ * line of the deploy log. Nothing here exits the process — taking the service
+ * down over an unset key would lock every user out of login for a feature they
+ * may not even be using.
+ */
+const REQUIRED_ENV = [
+  ["SUPABASE_URL", "all application data"],
+  ["SUPABASE_SERVICE_KEY", "all application data"],
+  ["FIREBASE_PROJECT_ID", "authentication"],
+  ["FIREBASE_CLIENT_EMAIL", "authentication"],
+  ["FIREBASE_PRIVATE_KEY", "authentication"],
+];
+
+// Checked separately: these gate file uploads only, so they degrade one feature
+// instead of the whole app and are reported as a warning rather than an error.
+const IMAGE_ENV = [
+  ["CLOUDINARY_CLOUD_NAME", "image and document uploads"],
+  ["CLOUDINARY_UPLOAD_PRESET", "image and document uploads"],
+];
+
+function reportMissingEnv(label, entries, log) {
+  const missing = entries.filter(([key]) => !process.env[key]?.trim());
+  if (!missing.length) return [];
+  log(`\n${label}`);
+  for (const [key, purpose] of missing) log(`  - ${key} is not set (needed for ${purpose})`);
+  log("");
+  return missing.map(([key]) => key);
+}
 
 const allowedOrigins = (process.env.CLIENT_URL || "http://localhost:5173")
   .split(",")
@@ -68,91 +113,6 @@ function cacheMiddleware(ttl = 30) {
   };
 }
 
-// Rate limiters
-const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req) => req.user?.uid || ipKeyGenerator(req.ip),
-  message: { error: "Too many requests, please try again later" },
-  handler: (req, res) => {
-    console.warn(`[RATE-LIMIT] General limit hit: ${req.user?.uid || req.ip} on ${req.method} ${req.originalUrl}`);
-    res.status(429).json({ error: "Too many requests, please try again later" });
-  },
-});
-
-const writeLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req) => req.user?.uid || ipKeyGenerator(req.ip),
-  message: { error: "Too many write requests, please try again later" },
-  handler: (req, res) => {
-    console.warn(`[RATE-LIMIT] Write limit hit: ${req.user?.uid || req.ip} on ${req.method} ${req.originalUrl}`);
-    res.status(429).json({ error: "Too many write requests, please try again later" });
-  },
-});
-
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Too many authentication attempts, please try again later" },
-  handler: (req, res) => {
-    console.warn(`[RATE-LIMIT] Auth limit hit: ${req.ip} on ${req.method} ${req.originalUrl}`);
-    res.status(429).json({ error: "Too many authentication attempts, please try again later" });
-  },
-});
-
-const attendanceLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000,
-  max: 60,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req) => req.user?.uid || ipKeyGenerator(req.ip),
-  message: { error: "Too many attendance requests, please try again later" },
-  handler: (req, res) => {
-    console.warn(`[RATE-LIMIT] Attendance limit hit: ${req.user?.uid || req.ip}`);
-    res.status(429).json({ error: "Too many attendance requests, please try again later" });
-  },
-});
-
-const uploadLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  max: 15,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req) => req.user?.uid || ipKeyGenerator(req.ip),
-  message: { error: "Too many upload requests, please try again later" },
-  handler: (req, res) => {
-    console.warn(`[RATE-LIMIT] Upload limit hit: ${req.user?.uid || req.ip}`);
-    res.status(429).json({ error: "Too many upload requests, please try again later" });
-  },
-});
-
-const backupLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req) => req.user?.uid || ipKeyGenerator(req.ip),
-  message: { error: "Too many backup requests, please try again later" },
-  handler: (req, res) => {
-    console.warn(`[RATE-LIMIT] Backup limit hit: ${req.user?.uid || req.ip}`);
-    res.status(429).json({ error: "Too many backup requests, please try again later" });
-  },
-});
-
-const methodAwareLimiter = (req, res, next) => {
-  if (["POST", "PUT", "DELETE", "PATCH"].includes(req.method)) {
-    return writeLimiter(req, res, next);
-  }
-  return generalLimiter(req, res, next);
-};
-
 // Public routes
 app.use("/api/auth", authLimiter, authRoutes);
 
@@ -176,6 +136,17 @@ app.get("/api/health", async (req, res) => {
     health.status = "degraded";
     health.database = "disconnected";
   }
+
+  // Storage is reported separately from `status` on purpose. Cloudinary being
+  // unconfigured does not mean the service is unhealthy — login, borrowing and
+  // attendance all still work — so folding it into `status` would make Render
+  // restart a perfectly good service. Surfacing it as its own field instead
+  // means the one thing that cannot be diagnosed from the UI is at least
+  // visible in a health check. Never echo the values, only whether they exist.
+  const imageEnvMissing = IMAGE_ENV.filter(([key]) => !process.env[key]?.trim()).map(([key]) => key);
+  health.storage = imageEnvMissing.length ? "not_configured" : "configured";
+  if (imageEnvMissing.length) health.storageMissing = imageEnvMissing;
+
   res.json(health);
 });
 
@@ -209,8 +180,26 @@ cron.schedule("*/30 * * * *", () => {
   checkOverdueTransactions().catch(console.error);
 });
 
+// Startup config summary. Evaluated once, after every route is mounted, so a
+// blank env var shows up in the deploy log before the first request arrives.
+// Deliberately not labelled FATAL: nothing exits, so a reader who took the word
+// literally would expect the process to be down rather than serving requests
+// that fail one endpoint at a time. Plain ASCII only, so the line renders
+// correctly in whatever log viewer reads it.
+reportMissingEnv("ERROR: required configuration is missing, the matching feature will fail at request time:", REQUIRED_ENV, console.error);
+const missingImageEnv = reportMissingEnv(
+  "WARNING: image/document uploads will fail until these are set:",
+  IMAGE_ENV,
+  console.warn
+);
+
 const server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  if (missingImageEnv.length) {
+    console.log(
+      `Storage: NOT CONFIGURED (${missingImageEnv.join(", ")}) - /api/upload/* will return 503`
+    );
+  }
 });
 
 const gracefulShutdown = (signal) => {

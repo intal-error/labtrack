@@ -19,6 +19,22 @@ function Field({ label, required, error, children }) {
   );
 }
 
+/**
+ * Must match the multer config in backend/src/controllers/uploadController.js.
+ *
+ * WHY check this here instead of trusting the file picker: `accept` is advisory
+ * only — it shapes the OS dialog and is trivially bypassed by "All files", by
+ * drag-and-drop, or by pasting an extension. The picker used to say
+ * `image/*` while the server accepted only these three types, so the UI
+ * cheerfully offered webp and HEIC (both very likely from a phone, and this app
+ * is an installable PWA) and then rejected the upload. Combined with an error
+ * message that named nothing, the result was an item that simply could not be
+ * created. Rejecting up front turns that into a sentence that says what to do.
+ */
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif"];
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const IMAGE_ACCEPT = ALLOWED_IMAGE_TYPES.join(",");
+
 function toPayload(form) {
   return {
     itemName: form.itemName.trim(),
@@ -94,6 +110,19 @@ export default function CatalogItemDrawer({ open, mode = "create", initial, onCl
   const handleUpload = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Rejected locally rather than uploaded and bounced, so the user is told
+      // what is wrong with the file instead of being told "upload failed".
+      if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+        toast.error("Only JPG, PNG, and GIF images are allowed");
+        if (fileRef.current) fileRef.current.value = "";
+        return;
+      }
+      if (file.size > MAX_IMAGE_BYTES) {
+        toast.error("Image must be 10MB or smaller");
+        if (fileRef.current) fileRef.current.value = "";
+        return;
+      }
+
       setUploading(true);
       try {
         const { url } = await api.uploadImage(file);
@@ -283,7 +312,7 @@ export default function CatalogItemDrawer({ open, mode = "create", initial, onCl
                         <MdCloudUpload size={16} />
                         {uploading ? "Uploading..." : "Upload"}
                       </button>
-                      <input ref={fileRef} type="file" accept="image/*" onChange={handleUpload} hidden />
+                      <input ref={fileRef} type="file" accept={IMAGE_ACCEPT} onChange={handleUpload} hidden />
                     </div>
                     {isUpdate && form.imageUrl && (
                       <img className="lab-image-preview" src={form.imageUrl} alt="" onError={(e) => { e.currentTarget.style.display = "none"; }} />
