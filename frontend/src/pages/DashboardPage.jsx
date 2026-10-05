@@ -24,7 +24,9 @@ import KpiCard from "../components/dashboard/KpiCard";
 import DeltaBadge from "../components/dashboard/DeltaBadge";
 import PanelCard from "../components/dashboard/PanelCard";
 import MiniTable from "../components/dashboard/MiniTable";
-import StatusDonut from "../components/dashboard/StatusDonut";
+import CourseAvailabilityDonut from "../components/dashboard/CourseAvailabilityDonut";
+import { COURSES } from "../constants/courses";
+import { CATALOG_COURSE_UNASSIGNED } from "../constants/catalog";
 import {
   MdQrCodeScanner,
   MdInventory,
@@ -42,6 +44,9 @@ import {
   MdCheckCircle,
   MdNotificationsOff,
   MdCategory,
+  MdPeople,
+  MdMeetingRoom,
+  MdReportProblem,
 } from "react-icons/md";
 import {
   AreaChart,
@@ -79,6 +84,45 @@ const freeUnits = (row) => {
   }
   return String(row?.status || "").toLowerCase() === "borrowed" ? 0 : total;
 };
+
+/* An item is available only when nothing is out of it. Counting units here
+   reported stock size rather than what an admin can actually borrow, and the
+   status column is not a reliable shortcut: the borrow-request approval path
+   leaves status "Available" while units are still out
+   (borrowRequestController.js:282), so it would overcount. */
+const isAvailableItem = (row) => freeUnits(row) >= totalUnits(row);
+
+/* The course that owns a catalog row. Blank and null courses are real — an item
+   can be registered without one — so they are collected under one bucket
+   instead of being dropped, which would quietly understate availability. */
+const rowCourse = (row) =>
+  String(field(row, "course") || "").trim() || CATALOG_COURSE_UNASSIGNED;
+
+/* Material 700-800 shades, spaced far enough apart in hue to stay tellable when
+   they sit next to each other as thin donut slices. */
+const COURSE_PALETTE = [
+  "#2e7d32", // green
+  "#1976d2", // blue
+  "#00897b", // teal
+  "#f9a825", // amber
+  "#ef6c00", // orange
+  "#7b1fa2", // purple
+  "#c2185b", // pink
+  "#5d4037", // brown
+  "#455a64", // blue grey
+];
+
+/* Fixed colour per course, so a course keeps the same slice colour no matter how
+   the donut happens to be sorted. Built from COURSES so a newly registered
+   course picks up the next hue automatically; one entry is left over for the
+   unassigned bucket. */
+const COURSE_COLORS = [...COURSES, CATALOG_COURSE_UNASSIGNED].reduce(
+  (map, name, i) => {
+    map[name] = COURSE_PALETTE[i % COURSE_PALETTE.length];
+    return map;
+  },
+  {}
+);
 
 /**
  * The equivalent window immediately before `params`, so period metrics can be
@@ -569,7 +613,6 @@ function AdminDashboard() {
   const counts = summary.counts || {};
   const stats = summary.stats || {};
   const charts = summary.charts || {};
-  const tables = summary.tables || {};
   const period = summary.period || {};
   const prevPeriod = prevData?.period || {};
   const hasPrev = !!prevParams;
@@ -577,49 +620,30 @@ function AdminDashboard() {
 
   const catalogRows = useMemo(() => rowsOf(catalogData), [catalogData]);
 
-  /* Equipment is tracked as catalog rows with a quantity, and "available" is
-     decremented per unit — so a row is only a single status when its quantities
-     agree. Split each row's units across the four operational states instead of
-     pretending a partially-borrowed row is one thing. */
-  const equipment = useMemo(() => {
-    const buckets = {
-      Available: 0,
-      "In Use": 0,
-      "Under Maintenance": 0,
-      "Out of Service": 0,
-    };
-    let units = 0;
-    let items = 0;
-    let available = 0;
+  /* Available ITEMS per course, not units: one slice per course, sized by how
+     many of its items have nothing out. Sorted by size so the legend reads as a
+     ranking, and courses with nothing available are dropped so they do not claim
+     an empty slice or a legend row. */
+  const courseAvailability = useMemo(() => {
+    const byCourse = new Map();
 
     catalogRows.forEach((row) => {
-      const total = totalUnits(row);
-      const free = freeUnits(row);
-      const condition = String(field(row, "condition") || "").toLowerCase();
-
-      items += 1;
-      units += total;
-      available += free;
-      buckets["In Use"] += total - free;
-
-      if (condition === "missing") {
-        buckets["Out of Service"] += free;
-      } else if (condition === "for repair" || condition === "damaged") {
-        buckets["Under Maintenance"] += free;
-      } else {
-        buckets.Available += free;
-      }
+      if (!isAvailableItem(row)) return;
+      const course = rowCourse(row);
+      byCourse.set(course, (byCourse.get(course) || 0) + 1);
     });
 
-    return { buckets, units, items, available };
+    return [...byCourse.entries()]
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
   }, [catalogRows]);
 
-  const equipmentStatusData = useMemo(
-    () =>
-      ["Available", "In Use", "Under Maintenance", "Out of Service"]
-        .map((name) => ({ name, value: equipment.buckets[name] }))
-        .filter((d) => d.value > 0),
-    [equipment]
+  /* Taken from the slice array rather than counted separately, so the number in
+     the middle of the donut is by construction the sum of the slices beside it
+     and the two can never disagree. */
+  const availableItems = useMemo(
+    () => courseAvailability.reduce((sum, d) => sum + d.value, 0),
+    [courseAvailability]
   );
 
   const catalogPreview = useMemo(
@@ -630,51 +654,40 @@ function AdminDashboard() {
     [catalogRows]
   );
 
-  const incidentCounts = useMemo(() => {
-    const byStatus = {};
-    (charts.incidentData || []).forEach((d) => {
-      byStatus[String(d.name).toLowerCase()] = d.value;
-    });
-    return byStatus;
-  }, [charts.incidentData]);
-
   // The backend zero-fills one bucket per day/week/month, so emptiness has to
   // come from the values — not from whether the array has anything in it.
   const trendBorrowReturn = useMemo(() => charts.trendBorrowReturn || [], [charts.trendBorrowReturn]);
 
   const hasBorrowActivity = trendBorrowReturn.some((d) => d.borrowed > 0 || d.returned > 0);
 
+  /* Icon, label and number only. The breakdown each of these used to carry in a
+     sub-line is either on the page already (the donut is the available count per
+     course, the catalog table has Units and Avail. columns) or is not worth
+     a third line, so the tiles stay scannable. */
   const kpis = [
     {
       icon: MdInventory2,
       tone: "green",
-      label: "Total Equipment",
-      value: equipment.units,
-      sub: `${equipment.items} items · ${equipment.available} available`,
+      label: "Total Items",
+      value: catalogRows.length,
     },
     {
-      icon: MdHistory,
-      tone: "orange",
-      label: "Items On Loan",
-      value: counts.borrowed || 0,
-      sub: `${tables.overdueTotal || 0} overdue now`,
-      delta: delta("borrows"),
-      deltaCaption: `borrows ${vsLabel}`,
+      icon: MdPeople,
+      tone: "blue",
+      label: "Total Student Users",
+      value: counts.students || 0,
     },
     {
-      icon: MdEventAvailable,
+      icon: MdMeetingRoom,
       tone: "teal",
-      label: "Sessions Today",
-      value: stats.todaySessions || 0,
-      delta: delta("sessions"),
-      deltaCaption: vsLabel,
+      label: "Total Rooms",
+      value: stats.totalRooms || 0,
     },
     {
-      icon: MdWarning,
+      icon: MdReportProblem,
       tone: "red",
-      label: "Open Incidents",
-      value: stats.openIncidents || 0,
-      sub: `${incidentCounts.resolved || 0} resolved all time`,
+      label: "Total Reported Incidents",
+      value: stats.totalIncidents || 0,
     },
   ];
 
@@ -705,8 +718,7 @@ function AdminDashboard() {
         <div className="dash-head-text">
           <h2>Dashboard</h2>
           <span className="dash-head-sub">
-            {formatRangeDate(period.from)} – {formatRangeDate(period.to)} ·{" "}
-            {counts.students || 0} students · {counts.users || 0} registered users
+            {formatRangeDate(period.from)} – {formatRangeDate(period.to)}
           </span>
         </div>
         <div className="dash-head-filter">
@@ -768,11 +780,12 @@ function AdminDashboard() {
           />
         </PanelCard>
 
-        <PanelCard icon={MdCategory} title="Equipment Status">
-          <StatusDonut
-            data={equipmentStatusData}
-            total={equipment.units}
-            totalLabel="Units"
+        <PanelCard icon={MdCategory} title="Available Items by Course">
+          <CourseAvailabilityDonut
+            data={courseAvailability}
+            total={availableItems}
+            totalLabel="Available"
+            colorMap={COURSE_COLORS}
           />
         </PanelCard>
 

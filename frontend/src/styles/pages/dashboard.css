@@ -1,11 +1,13 @@
 /* ========== Dashboard Page ========== */
+/* No max-width: the page fills .main-content so a wide monitor shows no dead
+   space at the edges. The horizontal gutter belongs to .main-content (24px,
+   16px below 1024px) — adding page padding on top of it doubled the margin and
+   pushed the cards in from the sidebar, so this block only pads the bottom. */
 .dash-page {
-  max-width: 1280px;
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 20px;
-  padding: 20px 26px 28px;
+  padding: 0 0 28px;
   animation: dashFadeIn 0.3s ease both;
 }
 @keyframes dashFadeIn {
@@ -841,26 +843,22 @@ body.dark .dash-badge.neutral {
 }
 
 /* ── Responsive ── */
+/* Only the vertical rhythm is tuned here; the side gutter is .main-content's. */
 @media (max-width: 1024px) {
   .dash-page {
-    padding: 16px;
+    padding-bottom: 20px;
     gap: 16px;
-  }
-}
-@media (max-width: 900px) {
-  .dash-page {
-    padding: 16px 18px;
   }
 }
 @media (max-width: 768px) {
   .dash-page {
     gap: 14px;
-    padding: 14px 16px;
+    padding-bottom: 18px;
   }
 }
 @media (max-width: 480px) {
   .dash-page {
-    padding: 12px 12px 16px;
+    padding-bottom: 16px;
     gap: 12px;
   }
 }

@@ -3,23 +3,42 @@ import ChartTooltip from "../ui/ChartTooltip";
 import EmptyChart from "../ui/EmptyChart";
 import "./dashboard-widgets.css";
 
-/* Statuses that carry meaning get a fixed colour; anything unexpected in the
-   data falls back to the neutral ramp so a new state never renders invisible. */
-const STATUS_COLORS = {
-  Available: "#43a047",
-  "In Use": "#42a5f5",
-  "Under Maintenance": "#f9a825",
-  "Out of Service": "#e53935",
-};
-const FALLBACK_COLORS = ["#00897b", "#7b1fa2", "#ef6c00", "#5d4037", "#1976d2"];
+/* Course slices are ordered by how many items each course has available, so the
+   colour cannot come from the row index — the same course would change colour
+   whenever a rival course overtook it. The caller passes a name → hex map that
+   is built from the fixed course list instead; these are only the last-resort
+   ramp for a course code the map does not know about, so an unexpected value
+   still renders as a distinct visible slice rather than inheriting a
+   neighbour's colour. */
+const FALLBACK_COLORS = [
+  "#00897b",
+  "#7b1fa2",
+  "#ef6c00",
+  "#c2185b",
+  "#455a64",
+  "#5d4037",
+  "#303f9f",
+  "#9e9d24",
+];
 
-const colorFor = (name, index) =>
-  STATUS_COLORS[name] || FALLBACK_COLORS[index % FALLBACK_COLORS.length];
+const colorFor = (name, index, colorMap) =>
+  colorMap[name] || FALLBACK_COLORS[index % FALLBACK_COLORS.length];
 
-export default function StatusDonut({ data, total, totalLabel = "Total" }) {
+/**
+ * One slice per course, sized by how many of that course's items are available.
+ * `total` is the figure the centre label summarises; the caller derives it from
+ * these same rows, so it normally equals the slice sum.
+ */
+export default function CourseAvailabilityDonut({
+  data,
+  total,
+  totalLabel = "Total",
+  colorMap = {},
+  emptyText = "No available equipment",
+}) {
   const rows = (data || []).filter((d) => d.value > 0);
   if (rows.length === 0) {
-    return <EmptyChart text="No equipment data" />;
+    return <EmptyChart text={emptyText} />;
   }
 
   const sum = rows.reduce((acc, d) => acc + d.value, 0);
@@ -40,7 +59,7 @@ export default function StatusDonut({ data, total, totalLabel = "Total" }) {
               strokeWidth={0}
             >
               {rows.map((d, i) => (
-                <Cell key={d.name} fill={colorFor(d.name, i)} />
+                <Cell key={d.name} fill={colorFor(d.name, i, colorMap)} />
               ))}
             </Pie>
             <Tooltip content={<ChartTooltip />} />
@@ -57,7 +76,7 @@ export default function StatusDonut({ data, total, totalLabel = "Total" }) {
           <li key={d.name}>
             <span
               className="dash-donut-dot"
-              style={{ background: colorFor(d.name, i) }}
+              style={{ background: colorFor(d.name, i, colorMap) }}
             />
             <span className="dash-donut-name">{d.name}</span>
             <span className="dash-donut-value">{d.value}</span>

@@ -1,15 +1,12 @@
 const { supabase } = require("../config/supabase");
 const { db } = require("../config/firebase");
+// Supabase/PostgREST silently caps a response at `max-rows` (1000 by default),
+// so every unbounded read must be paged out or the counts come back short. The
+// pager lives in utils/fetchAll because the catalog reads need it too.
+const { fetchAll } = require("../utils/fetchAll");
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-function isOpenBorrow(t) {
-  if (t?.action !== "borrowed") return false;
-  if ((t?.status || "").toLowerCase() === "returned") return false;
-  const remaining = Math.max(0, (Number(t?.quantity) || 1) - (Number(t?.returned_quantity) || 0));
-  return remaining > 0;
-}
 
 // Bare `YYYY-MM-DD` values are calendar dates in the server's local timezone —
 // the same convention attendanceController uses when writing lab_attendance.date.
@@ -138,29 +135,6 @@ function returnedAsOf(t, ms) {
   return (t.status || "").toLowerCase() === "returned";
 }
 
-// Supabase/PostgREST silently caps a response at `max-rows` (1000 by default),
-// so every unbounded read must be paged out or the counts come back short.
-const FETCH_BATCH = 1000;
-const FETCH_MAX_BATCHES = 200;
-
-async function fetchAll(build) {
-  const first = await build().range(0, FETCH_BATCH - 1);
-  if (first.error) throw first.error;
-  const out = first.data ? [...first.data] : [];
-  // If the count header is missing, keep paging until a page comes back empty.
-  const total = typeof first.count === "number" ? first.count : Infinity;
-  let fetched = out.length;
-  for (let i = 1; fetched < total && i < FETCH_MAX_BATCHES; i++) {
-    const page = await build().range(fetched, fetched + FETCH_BATCH - 1);
-    if (page.error) throw page.error;
-    const rows = page.data || [];
-    if (rows.length === 0) break;
-    out.push(...rows);
-    fetched += rows.length;
-  }
-  return out;
-}
-
 function countOverdueAt(borrowedRows, ms) {
   let count = 0;
   for (const t of borrowedRows) {
@@ -196,8 +170,9 @@ const getSummary = async (req, res) => {
       borrowedRows,
       returnedRows,
       incidents,
-      attendance,
       attendanceRange,
+      roomsAgg,
+      activeRoomsAgg,
     ] = await Promise.all([
       db.collection("users").count().get(),
       db.collection("users").where("role", "==", "student").count().get(),
@@ -216,11 +191,21 @@ const getSummary = async (req, res) => {
           .order("id", { ascending: true })
       ),
       fetchAll(() => supabase.from("incidents").select("*", { count: "exact" }).order("id", { ascending: true })),
-      fetchAll(() =>
-        supabase.from("lab_attendance").select("*", { count: "exact" }).eq("date", today).order("id", { ascending: true })
-      ),
       fetchAll(attendanceRangeQuery),
+      // `head: true` asks PostgREST for the count header only, so the room
+      // totals cost nothing regardless of how many labs are registered.
+      supabase.from("lab_rooms").select("*", { count: "exact", head: true }),
+      supabase
+        .from("lab_rooms")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "active"),
     ]);
+
+    // PostgREST reports failures in the resolved value rather than rejecting, so
+    // the head-count reads have to be checked by hand. Without this a permission
+    // or schema problem would surface as "0 rooms" instead of an error.
+    if (roomsAgg?.error) throw roomsAgg.error;
+    if (activeRoomsAgg?.error) throw activeRoomsAgg.error;
 
     // Effective range start: explicit ?from, otherwise earliest data (all-time)
     let fromStr = fromParam;
@@ -247,15 +232,6 @@ const getSummary = async (req, res) => {
       const t = toMs(value);
       return t !== null && t >= fromMs && t <= rangeEndMs;
     };
-
-    const activeBorrowed = borrowedRows.filter(isOpenBorrow).length;
-
-    // Status histogram behind the dashboard's "N resolved all time" sub-line.
-    const incidentData = {};
-    (incidents || []).forEach((i) => {
-      const s = i.status || "unknown";
-      incidentData[s] = (incidentData[s] || 0) + 1;
-    });
 
     // ── Period metrics + borrow/return trend (respect ?from / ?to) ──
     const series = createSeries(fromStr, toStr, rangeEndMs);
@@ -292,25 +268,19 @@ const getSummary = async (req, res) => {
       returned: row.returned || 0,
     }));
 
-    // Only overdueList.length is sent, so it stays as a count rather than
-    // sorting and mapping five display rows that no consumer renders.
-    const nowMs = Date.now();
-    const overdueList = borrowedRows.filter((t) => {
-      const due = toMs(t.due_date);
-      return due !== null && due < nowMs && !returnedAsOf(t, nowMs);
-    });
-
+    /* The response below is consumed by exactly one caller — DashboardPage — so it
+       carries only what that page renders: two user counts, the room totals, the
+       incident totals, the trend series and the period block. `todaySessions`
+       and `tables.overdueTotal` used to live here; neither has a reader since
+       the dashboard's KPI row moved to lifetime totals, and lab_attendance /
+       transactions are already read for the period block, so keeping them cost
+       payload and code without buying a cheaper query. */
     res.json({
       counts: {
         users: usersAgg.data().count,
         students: studentsAgg.data().count,
-        borrowed: activeBorrowed,
       },
       charts: {
-        incidentData: Object.entries(incidentData).map(([name, value]) => ({
-          name: name.charAt(0).toUpperCase() + name.slice(1),
-          value,
-        })),
         trendBorrowReturn,
       },
       stats: {
@@ -322,7 +292,13 @@ const getSummary = async (req, res) => {
         openIncidents: (incidents || []).filter((i) =>
           i.status === "pending" || i.status === "under_review" || i.status === "open"
         ).length,
-        todaySessions: (attendance || []).length,
+        // Every report ever filed, so the dashboard's headline incident figure is
+        // the total workload rather than only the part still open.
+        totalIncidents: (incidents || []).length,
+        // A head-count query returns no rows, so `count` is the whole payload and
+        // is null only if the count was not requested at all.
+        totalRooms: roomsAgg?.count || 0,
+        activeRooms: activeRoomsAgg?.count || 0,
       },
       period: {
         from: fromStr,
@@ -331,9 +307,6 @@ const getSummary = async (req, res) => {
         returns: periodReturns,
         sessions: periodSessions,
         overdue: periodOverdue,
-      },
-      tables: {
-        overdueTotal: overdueList.length,
       },
     });
   } catch (err) {

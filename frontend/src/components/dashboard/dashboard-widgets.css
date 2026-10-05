@@ -121,11 +121,6 @@
   line-height: 1.1;
   letter-spacing: -0.02em;
 }
-.dash-kpi-sub {
-  font-size: 11.5px;
-  color: var(--text-muted);
-  opacity: 0.85;
-}
 
 /* ── Period Comparison Strip ── */
 /* The hero KPIs above already carry current state, so the period-over-period

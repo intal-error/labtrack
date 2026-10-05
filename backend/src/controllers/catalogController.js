@@ -3,13 +3,36 @@ const { db } = require("../config/firebase");
 const { parsePagination, paginatedResponse } = require("../middleware/pagination");
 const { randomUUID } = require("crypto");
 const { transformKeys } = require("../utils/transformKeys");
+const { fetchAll, isTruncated } = require("../utils/fetchAll");
+
+/**
+ * Reads the whole catalog.
+ *
+ * PostgREST caps one response at `max-rows` (1000) and signals nothing when it
+ * does — it just returns its first 1000 rows. A plain `select("*")` therefore
+ * silently truncated the catalog: the dashboard's totals came up short and a
+ * paginated listing dropped the overflow rows on every page after the first.
+ *
+ * The single read is kept for the ordinary case, so its row order (and cost)
+ * stay exactly as they were. Only when the count header says the response was
+ * cut short is the catalog re-read paged, with `id` as the ordering column so
+ * the pages cannot overlap or skip rows.
+ */
+async function readWholeCatalog() {
+  const { data, error, count } = await supabase.from("catalog").select("*", { count: "exact" });
+  if (error) throw error;
+
+  const rows = data || [];
+  if (!isTruncated(count, rows.length)) return rows;
+
+  return fetchAll(() => supabase.from("catalog").select("*").order("id", { ascending: true }));
+}
 
 const getAll = async (req, res) => {
   try {
-    const { data: items, error } = await supabase.from("catalog").select("*");
-    if (error) throw error;
+    const items = await readWholeCatalog();
 
-    let result = items || [];
+    let result = items;
 
     if (req.query.search) {
       const q = req.query.search.toLowerCase();
@@ -64,14 +87,26 @@ const getAll = async (req, res) => {
   }
 };
 
+/** Same truncation guard as readWholeCatalog, for the columns stats needs. */
+async function readCatalogStatsRows() {
+  const COLUMNS = "course, status, category";
+  const { data, error, count } = await supabase
+    .from("catalog")
+    .select(COLUMNS, { count: "exact" });
+  if (error) throw error;
+
+  const rows = data || [];
+  if (!isTruncated(count, rows.length)) return rows;
+
+  return fetchAll(() =>
+    supabase.from("catalog").select(COLUMNS).order("id", { ascending: true })
+  );
+}
+
 const getStats = async (req, res) => {
   try {
-    const { data: items, error } = await supabase
-      .from("catalog")
-      .select("course, status, category");
-    if (error) throw error;
+    const rows = await readCatalogStatsRows();
 
-    const rows = items || [];
     const byCourseMap = new Map();
     const categories = new Set();
     let totalQuantity = 0;

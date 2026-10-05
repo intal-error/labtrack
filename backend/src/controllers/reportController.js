@@ -1,6 +1,7 @@
 const { supabase } = require("../config/supabase");
 const { queryTransactions } = require("../utils/transactionFilters");
 const { slug } = require("../utils/exportUtils");
+const { fetchAll } = require("../utils/fetchAll");
 const ExcelJS = require("exceljs");
 
 function formatDate(value) {
@@ -148,11 +149,13 @@ const returnedReport = async (req, res) => buildTransactionsExport(req, res, "re
 
 const catalogReport = async (req, res) => {
   try {
-    const { data: catalog, error } = await supabase
-      .from("catalog")
-      .select("*");
-
-    if (error) throw error;
+    // Paged: an unbounded select("*") is silently cut off at max-rows, which
+    // would drop the tail of a large inventory out of the spreadsheet. The
+    // exact count lets fetchAll stop after one request for a normal catalog
+    // instead of always probing for a further page.
+    const catalog = await fetchAll(() =>
+      supabase.from("catalog").select("*", { count: "exact" }).order("id", { ascending: true })
+    );
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Catalog Inventory");
@@ -161,7 +164,7 @@ const catalogReport = async (req, res) => {
     const colWidths = [30, 14, 12, 12, 14, 14, 12];
     sheet.columns = headers.map((h, i) => ({ header: h, width: colWidths[i] }));
 
-    (catalog || []).forEach((d) => {
+    catalog.forEach((d) => {
       sheet.addRow([d.item_name || "-", d.category || "-", d.course || "-", d.quantity || 0, d.available_quantity || 0, d.condition || "-", d.status || "-"]);
     });
 
