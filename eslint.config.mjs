@@ -101,6 +101,19 @@ export default [
     },
   },
   {
+    // The service worker runs in the SW global scope, not the window: no DOM, and
+    // the worker-lifetime globals instead (self, caches, clients). The workbox
+    // imports come from the vite-plugin-pwa dependency tree and are resolved at
+    // build time, so they are not declared here.
+    files: ["frontend/src/sw.js"],
+    languageOptions: {
+      sourceType: "module",
+      globals: {
+        ...globals.serviceworker,
+      },
+    },
+  },
+  {
     files: ["backend/scripts/**/*.js"],
     languageOptions: {
       sourceType: "commonjs",
@@ -110,17 +123,31 @@ export default [
     },
   },
   {
-    // Verification scripts are Node-run asserts, not app code: they need
-    // process/console rather than the browser globals the block above supplies,
-    // but they are still ES modules because frontend/package.json sets
-    // "type": "module". (backend/tests/** is already covered by the
-    // backend/**/*.js block, which is commonjs + node globals.)
-    files: ["frontend/tests/**/*.js"],
+    // Verification and component-test files are Node-run: they need process/console
+    // rather than the browser globals the frontend block supplies, but they are still
+    // ES modules because frontend/package.json sets "type": "module".
+    //
+    // The glob covers .jsx AS WELL AS .js. It used to be `**/*.js` only, so the first
+    // component test -- tests/authFlow.test.jsx -- silently fell through to the
+    // frontend block above and inherited BROWSER globals. That is invisible until
+    // someone writes `process.env` or `__dirname` in a .jsx test and gets two
+    // no-undef errors that the identical code in a .js test compiles clean. Verified:
+    // before this change, a one-line .jsx probe reported both as undefined while the
+    // .js probe reported neither. (backend/tests/** needs no change; it is already
+    // covered by the backend/**/*.js block above.)
+    files: ["frontend/tests/**/*.{js,jsx}"],
     languageOptions: {
       sourceType: "module",
       globals: {
         ...globals.node,
       },
+    },
+    rules: {
+      // react-refresh/only-export-components is a Fast Refresh rule: it warns when a
+      // module exports both components and non-components, because HMR cannot swap
+      // such a module cleanly. Test files are never HMR boundaries and routinely
+      // export helpers alongside components, so the rule only produces noise here.
+      "react-refresh/only-export-components": "off",
     },
   },
 ];

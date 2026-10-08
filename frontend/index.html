@@ -2,7 +2,18 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <!--
+      maximum-scale=1.0 and user-scalable=no were here to stop iOS auto-zooming
+      when a form input received focus. Both have been removed: they also blocked
+      pinch-zoom for every user, which fails WCAG 2.1 SC 1.4.4 (Resize Text) and
+      WCAG 2.2 SC 1.4.4/1.4.10, and iOS honours font-size >= 16px on inputs as the
+      supported way to prevent the focus zoom instead. auth.css sets 16px on
+      form controls at small breakpoints for exactly that reason.
+
+      viewport-fit=cover stays: the bottom navigation bar uses env(safe-area-inset-bottom)
+      to clear the home indicator on notched devices.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
     <!--
       Pre-paint theme bootstrap. Runs before any stylesheet so the very first
@@ -39,14 +50,42 @@
     <title>SLSU LabTrack</title>
     <meta name="description" content="SLSU Laboratory Equipment Borrowing, Return &amp; Logbook Attendance System" />
 
-    <link rel="icon" type="image/png" href="/logo.png" />
+    <!--
+      Was href="/logo.png" -- a 1.2 MB source file (266 kB after the build
+      optimizer) used as the favicon, so every route on every page load fetched a
+      quarter-megabyte to paint a 16x16 slot. favicon.ico is 9.8 kB and carries
+      16/32/48 px images, with the PNG below as the fallback for browsers that
+      prefer it.
+    -->
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/icons/icon-48x48.png" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!--
+      Poppins was a render-blocking <link rel="stylesheet"> to a third party: a
+      DNS lookup, a TLS handshake and a round trip to fonts.googleapis.com all sit
+      in front of first paint, on a campus network. Loaded this way the browser
+      fetches the CSS at normal stylesheet priority but does not block rendering
+      on it; the font files themselves already carry font-display:swap, so text
+      paints in the fallback immediately and swaps when Poppins arrives.
+
+      The rel="preload" is deliberately absent. It would make the request
+      high-priority, which is the opposite of what this change wants.
+    -->
     <link
       href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
       rel="stylesheet"
+      media="print"
+      onload="this.media='all'; this.onload=null;"
     />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
 
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png" />

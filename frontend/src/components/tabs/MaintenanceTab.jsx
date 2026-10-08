@@ -2,11 +2,11 @@ import { useState, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
-import { useMaintenance, useCatalog } from "../../hooks/useQueries";
+import { useMaintenance, useCatalogPreview } from "../../hooks/useQueries";
+import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { fmtDate, fmtDateTime } from "../../utils/helpers";
 import Modal from "../ui/Modal";
 import toast from "react-hot-toast";
-import { filterBySearch } from "../../utils/search";
 import "../../styles/pages/tabs.css";
 import "../../styles/pages/catalog.css";
 import "../../styles/pages/shared-form-panel.css";
@@ -73,21 +73,25 @@ export default function MaintenanceTab() {
   const [page, setPage] = useState(1);
   const [form, setForm] = useState({ ...EMPTY_FORM });
 
-  const [prevResetKeys, setPrevResetKeys] = useState([search, filter]);
-  if (prevResetKeys[0] !== search || prevResetKeys[1] !== filter) {
-    setPrevResetKeys([search, filter]);
+  // Debounced: `search` was part of the query key, so every keystroke fired a
+  // request. Same 300 ms and same hook as FinesTab.
+  const debouncedSearch = useDebouncedValue(search, 300);
+
+  const [prevResetKeys, setPrevResetKeys] = useState([debouncedSearch, filter]);
+  if (prevResetKeys[0] !== debouncedSearch || prevResetKeys[1] !== filter) {
+    setPrevResetKeys([debouncedSearch, filter]);
     setPage(1);
   }
 
   const params = useMemo(() => {
     const p = { page, limit: 10 };
-    if (search.trim()) p.search = search.trim();
+    if (debouncedSearch.trim()) p.search = debouncedSearch.trim();
     if (filter !== "all") p.status = filter;
     return p;
-  }, [page, search, filter]);
+  }, [page, debouncedSearch, filter]);
 
   const { data: maintenanceData, isLoading } = useMaintenance(params);
-  const { data: catalogData } = useCatalog();
+  const { data: catalogData } = useCatalogPreview();
 
   const items = useMemo(() => {
     if (!maintenanceData) return [];
@@ -198,10 +202,16 @@ export default function MaintenanceTab() {
     return { total, scheduled, "in-progress": inProgress, completed, overdue };
   }, [items]);
 
+  /*
+ * Only the completed-last ordering is done here.
+ *
+ * The status filter and the search used to be re-applied on top of `items`, even
+ * though `params` above already sends both to the server -- so the same predicate ran
+ * twice per render over the page. Only the "completed sinks to the bottom" ordering
+ * is a client concern; /maintenance does not sort that way.
+ */
   const filtered = useMemo(() => {
-    let result = [...items];
-    if (filter !== "all") result = result.filter((i) => i.status === filter);
-    if (search.trim()) result = filterBySearch(result, search, ["itemName", "collegeBuilding", "location", "findings", "inspectedBy", "notedBy", "assignedPersonnel", "assignedTo"]);
+    const result = [...items];
     result.sort((a, b) => {
       if (a.status === "completed" && b.status !== "completed") return 1;
       if (a.status !== "completed" && b.status === "completed") return -1;
@@ -210,7 +220,7 @@ export default function MaintenanceTab() {
       return aDate - bDate;
     });
     return result;
-  }, [items, filter, search]);
+  }, [items]);
 
   if (isLoading) return <div className="page-loading"><div className="spinner-lg" /></div>;
 
@@ -252,7 +262,20 @@ export default function MaintenanceTab() {
         </div>
       </div>
 
+      {/*
+       * The panel shell stays mounted so the CSS slide transition still plays; the
+       * form inside it does not.
+       *
+       * WHY: this was previously unconditional, unlike its siblings ManualsTab:430 and
+       * CatalogItemDrawer:184 which both gate on the open flag. The cost was concrete --
+       * the form is ~180 lines with roughly 25 inputs, textareas and selects plus a
+       * COURSES.map of options and 14 icons, and it re-rendered on every keystroke in the
+       * search box above, because both live in this component. Filtering 10 rows while
+       * reconciling 150 form controls is the whole cost of a keystroke.
+       */}
       <div className={`lab-slide-panel ${showForm ? "open" : ""}`}>
+        {showForm && (
+        <>
         <div className="lab-slide-header">
           <h2>{editing ? "Edit MAF" : "New MAF"}</h2>
           <button className="lab-slide-close" onClick={() => setShowForm(false)}><MdClose size={20} /></button>
@@ -445,6 +468,8 @@ export default function MaintenanceTab() {
             </div>
           </form>
         </div>
+        </>
+      )}
       </div>
       {showForm && <div className="lab-slide-backdrop" onClick={() => setShowForm(false)} />}
 

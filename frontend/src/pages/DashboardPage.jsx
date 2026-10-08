@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
@@ -6,7 +6,7 @@ import {
   useMyBorrowed,
   useMyReturned,
   useMyBorrowRequests,
-  useCatalog,
+  useCatalogPreview,
   useReportSummary,
   useStudentAttendance,
   useMyFines,
@@ -19,12 +19,16 @@ import DateRangeFilter from "../components/ui/DateRangeFilter";
 import { DEFAULT_RANGE, rangeToParams, localDayKey } from "../components/ui/dateRange";
 import EmptyChart from "../components/ui/EmptyChart";
 import LoadError from "../components/ui/LoadError";
-import ChartTooltip from "../components/ui/ChartTooltip";
 import KpiCard from "../components/dashboard/KpiCard";
 import DeltaBadge from "../components/dashboard/DeltaBadge";
 import PanelCard from "../components/dashboard/PanelCard";
 import MiniTable from "../components/dashboard/MiniTable";
-import CourseAvailabilityDonut from "../components/dashboard/CourseAvailabilityDonut";
+
+// Both charts are lazy. They are the only reason this route ever needed recharts,
+// and recharts is 401 kB -- see the note in BorrowReturnChart.jsx for why a static
+// import here cost every student that weight.
+const BorrowReturnChart = lazy(() => import("../components/dashboard/BorrowReturnChart"));
+const CourseAvailabilityDonut = lazy(() => import("../components/dashboard/CourseAvailabilityDonut"));
 import { COURSES } from "../constants/courses";
 import { CATALOG_COURSE_UNASSIGNED } from "../constants/catalog";
 import {
@@ -48,15 +52,6 @@ import {
   MdMeetingRoom,
   MdReportProblem,
 } from "react-icons/md";
-import {
-  AreaChart,
-  Area,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
 import "../styles/pages/dashboard.css";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -607,7 +602,20 @@ function AdminDashboard() {
   } = useReportSummary(rangeParams);
   const { data: prevData } = useReportSummary(prevParams);
 
-  const { data: catalogData } = useCatalog();
+  /*
+ * Six columns, not the whole catalog.
+ *
+ * This was useCatalog() with no params, i.e. GET /catalog unpaginated -- the entire
+ * table, every item, on every admin dashboard load -- to compute an item count and a
+ * six-row preview. The same full fetch happened on three other pages (MaintenanceTab,
+ * BorrowRequestsTab, IncidentReportForm), so it was the single most repeated large
+ * response in the app.
+ *
+ * A dedicated lightweight endpoint instead of reusing the paginated one: the fields
+ * listed here are all the dashboard reads, and a preview never needs `description`,
+ * `condition`, `notes` or the other long text columns.
+ */
+const { data: catalogPreviewData } = useCatalogPreview();
 
   const summary = rawData || {};
   const counts = summary.counts || {};
@@ -618,7 +626,7 @@ function AdminDashboard() {
   const hasPrev = !!prevParams;
   const delta = (key) => (hasPrev ? numOr(period[key]) - numOr(prevPeriod[key]) : undefined);
 
-  const catalogRows = useMemo(() => rowsOf(catalogData), [catalogData]);
+  const catalogRows = useMemo(() => rowsOf(catalogPreviewData), [catalogPreviewData]);
 
   /* Available ITEMS per course, not units: one slice per course, sized by how
      many of its items have nothing out. Sorted by size so the legend reads as a
@@ -781,12 +789,14 @@ function AdminDashboard() {
         </PanelCard>
 
         <PanelCard icon={MdCategory} title="Available Items by Course">
-          <CourseAvailabilityDonut
-            data={courseAvailability}
-            total={availableItems}
-            totalLabel="Available"
-            colorMap={COURSE_COLORS}
-          />
+          <Suspense fallback={<EmptyChart text="Loading chart..." />}>
+            <CourseAvailabilityDonut
+              data={courseAvailability}
+              total={availableItems}
+              totalLabel="Available"
+              colorMap={COURSE_COLORS}
+            />
+          </Suspense>
         </PanelCard>
 
         {/* span 3: this is the only panel on the second grid row, so it takes
@@ -794,51 +804,12 @@ function AdminDashboard() {
         <PanelCard icon={MdSwapHoriz} title="Borrow & Return Volume" span={3}>
           <div className="dash-chart-body">
             {hasBorrowActivity ? (
-              <>
-                <ResponsiveContainer width="100%" height={240}>
-                  <AreaChart
-                    data={trendBorrowReturn}
-                    margin={{ top: 5, right: 16, left: -10, bottom: 0 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="var(--border)"
-                      vertical={false}
-                    />
-                    <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} />
-                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} width={40} />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Area
-                      type="monotone"
-                      dataKey="borrowed"
-                      name="Borrows"
-                      stroke="#2e7d32"
-                      fill="#2e7d32"
-                      fillOpacity={0.15}
-                      strokeWidth={2}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="returned"
-                      name="Returns"
-                      stroke="#1976d2"
-                      fill="#1976d2"
-                      fillOpacity={0.15}
-                      strokeWidth={2}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-                <div className="dash-chart-legend">
-                  <span className="dash-legend-item">
-                    <span className="dash-legend-dot" style={{ background: "#2e7d32" }} />
-                    Borrows
-                  </span>
-                  <span className="dash-legend-item">
-                    <span className="dash-legend-dot" style={{ background: "#1976d2" }} />
-                    Returns
-                  </span>
-                </div>
-              </>
+              // Lazy so recharts is not part of this route's static graph -- see the
+              // note in BorrowReturnChart.jsx. EmptyChart is the same placeholder the
+              // non-lazy branch used, so the panel does not collapse while it loads.
+              <Suspense fallback={<EmptyChart text="Loading chart..." />}>
+                <BorrowReturnChart data={trendBorrowReturn} />
+              </Suspense>
             ) : (
               <EmptyChart text="No borrow or return activity in this period" />
             )}

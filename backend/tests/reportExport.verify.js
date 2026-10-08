@@ -10,6 +10,13 @@ const rows = [
   { id: "3", first_name: "Jude", last_name: "Santos", school_id: "25-000777", item_name: "MOUSE", course: "CT", year: "1st Year", equipment_course: "CT", timestamp: "2026-09-20T09:20:00Z", action: "returned", status: "returned", quantity: 1, returned_quantity: 0, returned_at: "2026-09-27T08:07:00Z", borrowed_at: "2026-09-20T09:00:00Z" },
 ];
 
+// Chainable stub that executes its predicates.
+//
+// It used to be `.eq()` returning a bare Promise -- that only worked while
+// queryTransactions ended its SQL at `.eq("action", ...)`. It now continues the
+// chain with .or() for course, .eq() for year, .gte()/.lte() for the date range and
+// .order(), so a Promise-returning stub would throw on the first extra predicate
+// and a filter-ignoring one would let a broken pushdown pass unnoticed.
 require.cache[supabasePath] = {
   id: supabasePath,
   filename: supabasePath,
@@ -17,16 +24,32 @@ require.cache[supabasePath] = {
   exports: {
     supabase: {
       from: () => {
+        let working = [...rows];
         const chain = {
           select: () => chain,
-          in: () => Promise.resolve({ data: [], error: null }),
-          eq: (_action, val) => Promise.resolve({ data: rows.filter((r) => r.action === val), error: null }),
+          eq: (k, v) => {
+            working = working.filter((r) => String(r[k]) === String(v));
+            return chain;
+          },
+          or: (expr) => {
+            // Quoted values (utils/postgrest.js) -- see tests/helpers/orFilter.js.
+            working = applyOr(working, expr);
+            return chain;
+          },
+          gte: (k, v) => { working = working.filter((r) => new Date(r[k]) >= new Date(v)); return chain; },
+          lte: (k, v) => { working = working.filter((r) => new Date(r[k]) <= new Date(v)); return chain; },
+          order: () => chain,
+          // backfillBorrowDates looks up parent borrow rows; no fixture needs one.
+          in: () => chain,
+          then: (resolve) => resolve({ data: working, error: null, count: working.length }),
         };
         return chain;
       },
     },
   },
 };
+
+const { applyOr } = require("./helpers/orFilter");
 
 const ExcelJS = require("exceljs");
 const { borrowedReport, returnedReport } = require("../src/controllers/reportController");

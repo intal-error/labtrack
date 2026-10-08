@@ -501,3 +501,34 @@ body.dark .al-timer-value {
     animation: none;
   }
 }
+
+/* -- Skeleton loaders for the attendance logs panels --
+   The card shape mirrors .al-student so the panel holds its height when the real
+   cards arrive and the page does not jump. */
+.au-loading-skeleton {
+  padding: 4px 0;
+}
+
+.au-loading-skeleton .au-student-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.skeleton-student-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card, transparent);
+}
+
+.skeleton-student-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}

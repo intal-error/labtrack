@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../services/api";
-import { useCatalog } from "../../hooks/useQueries";
+import { useCatalogPreview } from "../../hooks/useQueries";
 import { useAuth } from "../../context/AuthContext";
 import { validateIncidentForm, hasErrors } from "../../utils/incidentValidation";
 import {
@@ -45,7 +45,20 @@ export default function IncidentReportForm({ open, onClose, onSubmitted }) {
   const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef(null);
 
-  const { data: catalogData } = useCatalog();
+  /*
+ * Gated on `open`.
+ *
+ * This form is rendered UNCONDITIONALLY by both IncidentReportsTab and
+ * MyIncidentsPanel -- the slide-out drawer is always in the tree, only hidden by CSS.
+ * So the catalog fetch fired the moment either page was opened, even when the user
+ * never touched "File a Report". That was a full catalog download on a page whose
+ * primary purpose is reading a list.
+ *
+ * `open` is the drawer state, so the request now happens when the drawer is actually
+ * opened -- by which point react-query has usually already served it from cache,
+ * because the admin queue page also renders this form.
+ */
+const { data: catalogData } = useCatalogPreview({ enabled: open });
   const catalog = useMemo(() => (Array.isArray(catalogData) ? catalogData : []), [catalogData]);
 
   // Reset whenever the panel is (re)opened so a previous draft never leaks into

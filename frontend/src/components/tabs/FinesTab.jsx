@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../services/api";
 import { useFines, useMyFines, useOverdueCount } from "../../hooks/useQueries";
 import { useAuth } from "../../context/AuthContext";
+import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { getInitials, getAvatarColor, fmtDate, fmtDateTime } from "../../utils/helpers";
 import Modal from "../ui/Modal";
 import toast from "react-hot-toast";
@@ -21,6 +22,19 @@ export default function FinesTab() {
 
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
+  /*
+   * Debounced.
+   *
+   * `search` went straight into `params` below, which is part of the react-query
+   * key -- so every keystroke produced a new key and a new request. On a campus
+   * network that is one round trip per character while the user is still typing the
+   * first half of a name.
+   *
+   * 300 ms is the same delay IncidentReportsTab and BorrowRequestsTab already use,
+   * and useDebouncedValue clears its timer on every keystroke, so holding a key
+   * down does not queue up requests.
+   */
+  const debouncedSearch = useDebouncedValue(search, 300);
   const [sortBy, setSortBy] = useState("oldest");
   const [page, setPage] = useState(1);
   const [selectedFine, setSelectedFine] = useState(null);
@@ -28,29 +42,50 @@ export default function FinesTab() {
   const [processing, setProcessing] = useState(null);
   const [openKebab, setOpenKebab] = useState(null);
 
-  const [prevResetKeys, setPrevResetKeys] = useState([search, filter]);
-  if (prevResetKeys[0] !== search || prevResetKeys[1] !== filter) {
-    setPrevResetKeys([search, filter]);
+  // Page resets when the filter changes, and when the debounced search actually
+  // changes -- not on every keystroke, which would reset to page 1 and immediately
+  // re-request while the user is still typing.
+  const [prevResetKeys, setPrevResetKeys] = useState([debouncedSearch, filter]);
+  if (prevResetKeys[0] !== debouncedSearch || prevResetKeys[1] !== filter) {
+    setPrevResetKeys([debouncedSearch, filter]);
     setPage(1);
   }
+
+  /*
+   * The click-away listener is registered ONLY while a kebab menu is open.
+   *
+   * It was previously mounted for the whole life of the tab, running
+   * e.target.closest() on every click in the document -- including clicks on
+   * unrelated pages' controls if the tab is ever kept mounted. Registration is cheap
+   * enough that the cost was never the issue; the reason to scope it is that the
+   * listener should not be able to close a menu that does not exist.
+   */
   useEffect(() => {
+    if (openKebab === null) return undefined;
     const handler = (e) => { if (!e.target.closest(".fines-kebab-wrap")) setOpenKebab(null); };
     document.addEventListener("click", handler);
     return () => document.removeEventListener("click", handler);
-  }, []);
+  }, [openKebab]);
 
   const params = useMemo(() => {
     const p = { page, limit: 25 };
-    if (search.trim()) p.search = search.trim();
+    if (debouncedSearch.trim()) p.search = debouncedSearch.trim();
     if (filter !== "all" && filter !== "overdue") p.status = filter;
     return p;
-  }, [page, search, filter]);
+  }, [page, debouncedSearch, filter]);
 
   const finesResult = useFines(params, { enabled: isAdmin });
   const myFinesResult = useMyFines(params, { enabled: !isAdmin });
   const { data: finesData, isLoading, error: queryError } = isAdmin ? finesResult : myFinesResult;
 
-  const { data: overdueData } = useOverdueCount();
+  /*
+   * enabled: isAdmin.
+   *
+   * This fired for students too, and the answer was then discarded on the next line
+   * -- so every student opening My Activity -> Fines made a pointless request to
+   * /fines/overdue-count, an admin-only aggregate that scans every open borrow.
+   */
+const { data: overdueData } = useOverdueCount({ enabled: isAdmin });
   const overdueCount = isAdmin ? (overdueData?.overdueBorrowers ?? 0) : 0;
 
   const fines = useMemo(() => {

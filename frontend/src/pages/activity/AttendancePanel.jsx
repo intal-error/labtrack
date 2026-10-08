@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useStudentAttendance } from "../../hooks/useQueries";
 import { useAuth } from "../../context/AuthContext";
@@ -33,6 +33,34 @@ export default function AttendancePanel() {
 
   const todayStr = getTodayString();
   const hasFilters = Boolean(searchQuery || filterSubject || filterDate);
+
+  /*
+   * Which layout to render, decided in JS instead of by CSS.
+   *
+   * The table and the mobile cards were both mounted at all times and separated only
+   * by .desktop-only / .mobile-only. CSS `display: none` hides a subtree but still
+   * builds it, so a student with a term of attendance paid to render every row TWICE
+   * -- once as an 8-column <tr> and once as a card div -- and re-rendered both copies
+   * on every keystroke in the search box. That is the single most expensive thing on
+   * this panel, and it was pure waste on whichever side was hidden.
+   *
+   * matchMedia is read once and kept in sync via its change event, so a rotation or a
+   * window resize still switches layouts without a reload.
+   *
+   * Rendering only one layout is also better for accessibility: the hidden copy is
+   * still exposed to screen readers on some configurations, so a screen-reader user
+   * previously heard each session twice.
+   */
+  const [isNarrow, setIsNarrow] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 768px)");
+    const onChange = (e) => setIsNarrow(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
 
   const exportCSV = () => {
     if (!filteredRecords.length) return;
@@ -135,6 +163,7 @@ export default function AttendancePanel() {
           </div>
         ) : (
           <>
+            {!isNarrow && (
             <div className="attendance-table-wrap desktop-only">
               <div className="attendance-table-scroll">
                 <table className="attendance-table">
@@ -175,7 +204,9 @@ export default function AttendancePanel() {
                 </table>
               </div>
             </div>
+            )}
 
+            {isNarrow && (
             <div className="mobile-cards mobile-only">
               {filteredRecords.map((r, i) => (
                 <div key={r.id || i} className="mobile-record-card">
@@ -213,6 +244,7 @@ export default function AttendancePanel() {
                 </div>
               ))}
             </div>
+            )}
           </>
         )}
       </div>

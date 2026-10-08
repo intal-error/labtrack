@@ -1,5 +1,43 @@
 const { db, auth } = require("../config/firebase");
 
+/**
+ * Resolves the caller's own Firestore document.
+ *
+ * WHY NOT firebase/firestore ON THE CLIENT: AuthContext.jsx used to do this
+ * exact two-collection lookup with getDoc(), and because the client imported
+ * `firebase/firestore` to do it, the build shipped the ENTIRE Firestore SDK --
+ * WebChannel streaming, offline persistence, the query engine, an inlined
+ * `idb` helper -- in the eagerly-loaded entry chunk. Measured at 215 kB of a
+ * 562 kB entry bundle, re-downloaded on every app-code deploy, to perform two
+ * single-document reads.
+ *
+ * The server already performs this same lookup on every authenticated request
+ * (middleware/auth.js resolveProfile) to decide what the caller may do. So the
+ * lookup happens either way; doing it here and shipping the answer costs one
+ * extra response but removes 215 kB from the critical path.
+ *
+ * Falls back to the `admins` collection exactly as resolveProfile does, because
+ * this used to 404 for every admin, whose documents live there.
+ */
+const getProfile = async (req, res) => {
+  try {
+    const uid = req.user.uid;
+    const userDoc = await db.collection("users").doc(uid).get();
+    if (userDoc.exists) {
+      return res.json({ id: userDoc.id, ...userDoc.data() });
+    }
+
+    const adminDoc = await db.collection("admins").doc(uid).get();
+    if (adminDoc.exists) {
+      return res.json({ id: adminDoc.id, role: "admin", ...adminDoc.data() });
+    }
+
+    return res.status(404).json({ error: "User profile not found" });
+  } catch (err) {
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
+  }
+};
+
 const register = async (req, res) => {
   try {
     const {
@@ -71,19 +109,6 @@ const register = async (req, res) => {
   } catch (err) {
     console.error("Registration error:", err);
     res.status(500).json({ error: "Registration failed. Please try again." });
-  }
-};
-
-const getProfile = async (req, res) => {
-  try {
-    const uid = req.user.uid;
-    const doc = await db.collection("users").doc(uid).get();
-    if (!doc.exists) {
-      return res.status(404).json({ error: "User profile not found" });
-    }
-    res.json({ id: doc.id, ...doc.data() });
-  } catch (err) {
-    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
 };
 

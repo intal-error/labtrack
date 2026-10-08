@@ -1,11 +1,29 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { api } from "../services/api";
 
+/*
+ * Every queryFn below takes ({ signal }) and forwards it to its api method.
+ *
+ * WHY: React Query hands every queryFn an AbortSignal and aborts it when a query is
+ * superseded -- a filter change, a different page, another keystroke. None of these
+ * functions declared it, so the signal never reached fetch and the request ran to
+ * completion anyway. React Query discarded the response, but the server still did the
+ * work.
+ *
+ * That is not a small leak here. Several of these endpoints used to be whole-table
+ * scans (see the SQL pushdown notes in the controllers), so every filter change left
+ * a full scan running in the background with nobody reading the answer.
+ *
+ * api.request combines this signal with its own 30 s timeout and rethrows an
+ * AbortError untouched, which is what React Query needs to recognise a cancellation
+ * and skip its retry.
+ */
+
 // ── Catalog ──
 export function useCatalog(params) {
   return useQuery({
     queryKey: ["catalog", params],
-    queryFn: () => api.getCatalog(params),
+    queryFn: ({ signal }) => api.getCatalog(params, signal),
     staleTime: 5 * 60 * 1000,
     // Keep the previous page on screen while a new filter/page is in flight.
     // Without this, every keystroke flipped `isLoading` true and the page
@@ -16,8 +34,25 @@ export function useCatalog(params) {
 export function useCatalogStats() {
   return useQuery({
     queryKey: ["catalog", "stats"],
-    queryFn: () => api.getCatalogStats(),
+    queryFn: ({ signal }) => api.getCatalogStats(signal),
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Narrow projection for pickers and previews.
+ *
+ * Replaces four useCatalog() calls with no params, each of which fetched the entire
+ * catalog including every long text column to populate a <select> or a six-row
+ * preview. Long staleTime because it is a reference list that only changes when an
+ * admin edits the catalog, and the mutation handlers already invalidate ["catalog"].
+ */
+export function useCatalogPreview({ enabled } = {}) {
+  return useQuery({
+    queryKey: ["catalog", "options"],
+    queryFn: ({ signal }) => api.getCatalogOptions(signal),
+    staleTime: 5 * 60 * 1000,
+    enabled,
   });
 }
 
@@ -28,7 +63,7 @@ export function useCatalogStats() {
 export function useBorrowed(params, { enabled } = {}) {
   return useQuery({
     queryKey: ["borrowed", params],
-    queryFn: () => api.getBorrowed(params),
+    queryFn: ({ signal }) => api.getBorrowed(params, signal),
     staleTime: 2 * 60 * 1000,
     enabled,
     placeholderData: keepPreviousData,
@@ -37,7 +72,7 @@ export function useBorrowed(params, { enabled } = {}) {
 export function useMyBorrowed(params, { enabled } = {}) {
   return useQuery({
     queryKey: ["myBorrowed", params],
-    queryFn: () => api.getMyBorrowed(params),
+    queryFn: ({ signal }) => api.getMyBorrowed(params, signal),
     staleTime: 2 * 60 * 1000,
     enabled,
     placeholderData: keepPreviousData,
@@ -46,7 +81,7 @@ export function useMyBorrowed(params, { enabled } = {}) {
 export function useReturned(params, { enabled } = {}) {
   return useQuery({
     queryKey: ["returned", params],
-    queryFn: () => api.getReturned(params),
+    queryFn: ({ signal }) => api.getReturned(params, signal),
     staleTime: 2 * 60 * 1000,
     enabled,
     placeholderData: keepPreviousData,
@@ -55,7 +90,7 @@ export function useReturned(params, { enabled } = {}) {
 export function useMyReturned(params, { enabled } = {}) {
   return useQuery({
     queryKey: ["myReturned", params],
-    queryFn: () => api.getMyReturned(params),
+    queryFn: ({ signal }) => api.getMyReturned(params, signal),
     staleTime: 2 * 60 * 1000,
     enabled,
     placeholderData: keepPreviousData,
@@ -64,14 +99,14 @@ export function useMyReturned(params, { enabled } = {}) {
 export function useTransactionStats() {
   return useQuery({
     queryKey: ["transactionStats"],
-    queryFn: () => api.getTransactionStats(),
+    queryFn: ({ signal }) => api.getTransactionStats(signal),
     staleTime: 2 * 60 * 1000,
   });
 }
 export function useMyTransactionStats() {
   return useQuery({
     queryKey: ["myTransactionStats"],
-    queryFn: () => api.getMyTransactionStats(),
+    queryFn: ({ signal }) => api.getMyTransactionStats(signal),
     staleTime: 2 * 60 * 1000,
   });
 }
@@ -80,7 +115,7 @@ export function useMyTransactionStats() {
 export function useMaintenance(params) {
   return useQuery({
     queryKey: ["maintenance", params],
-    queryFn: () => api.getMaintenance(params),
+    queryFn: ({ signal }) => api.getMaintenance(params, signal),
     staleTime: 60 * 1000,
   });
 }
@@ -110,14 +145,14 @@ export function useDeleteMaintenance() {
 export function useBorrowRequests(params) {
   return useQuery({
     queryKey: ["borrowRequests", params],
-    queryFn: () => api.getBorrowRequests(params),
+    queryFn: ({ signal }) => api.getBorrowRequests(params, signal),
     staleTime: 60 * 1000,
   });
 }
 export function useMyBorrowRequests() {
   return useQuery({
     queryKey: ["myBorrowRequests"],
-    queryFn: () => api.getMyBorrowRequests(),
+    queryFn: ({ signal }) => api.getMyBorrowRequests(signal),
     staleTime: 60 * 1000,
   });
 }
@@ -126,7 +161,7 @@ export function useMyBorrowRequests() {
 export function useFines(params, { enabled } = {}) {
   return useQuery({
     queryKey: ["fines", params],
-    queryFn: () => api.getFines(params),
+    queryFn: ({ signal }) => api.getFines(params, signal),
     staleTime: 60 * 1000,
     enabled,
   });
@@ -134,16 +169,21 @@ export function useFines(params, { enabled } = {}) {
 export function useMyFines(params, { enabled } = {}) {
   return useQuery({
     queryKey: ["myFines", params],
-    queryFn: () => api.getMyFines(params),
+    queryFn: ({ signal }) => api.getMyFines(params, signal),
     staleTime: 60 * 1000,
     enabled,
   });
 }
-export function useOverdueCount() {
+// Admin-only aggregate (it scans every open borrow in the building). Callers must
+// gate it: `enabled` defaults to undefined, and FinesTab passes { enabled: isAdmin }
+// because the student branch of that page rendered the result and threw it away --
+// so every student opening My Activity was making a pointless request.
+export function useOverdueCount({ enabled } = {}) {
   return useQuery({
     queryKey: ["overdueCount"],
-    queryFn: () => api.getOverdueCount(),
+    queryFn: ({ signal }) => api.getOverdueCount(signal),
     staleTime: 60 * 1000,
+    enabled,
   });
 }
 
@@ -151,14 +191,14 @@ export function useOverdueCount() {
 export function useIncidents(params) {
   return useQuery({
     queryKey: ["incidents", params],
-    queryFn: () => api.getIncidents(params),
+    queryFn: ({ signal }) => api.getIncidents(params, signal),
     staleTime: 60 * 1000,
   });
 }
 export function useMyIncidents(params) {
   return useQuery({
     queryKey: ["myIncidents", params],
-    queryFn: () => api.getMyIncidents(params),
+    queryFn: ({ signal }) => api.getMyIncidents(params, signal),
     staleTime: 60 * 1000,
   });
 }
@@ -169,7 +209,7 @@ export function useMyIncidents(params) {
 export function useIncident(id, { enabled = true } = {}) {
   return useQuery({
     queryKey: ["incident", id],
-    queryFn: () => api.getIncident(id),
+    queryFn: ({ signal }) => api.getIncident(id, signal),
     staleTime: 30 * 1000,
     enabled: Boolean(id) && enabled,
   });
@@ -188,7 +228,7 @@ export function countUnread(list) {
 export function useMyNotifications(params) {
   return useQuery({
     queryKey: ["myNotifications", params],
-    queryFn: () => api.getMyNotifications(params),
+    queryFn: ({ signal }) => api.getMyNotifications(params, signal),
     staleTime: 30 * 1000,
   });
 }
@@ -202,7 +242,7 @@ export function useUnreadCount() {
 export function useReportSummary(params) {
   return useQuery({
     queryKey: ["reportSummary", params || null],
-    queryFn: () => api.getReportSummary(params),
+    queryFn: ({ signal }) => api.getReportSummary(params, signal),
     staleTime: 5 * 60 * 1000,
     placeholderData: keepPreviousData,
   });
@@ -212,7 +252,7 @@ export function useReportSummary(params) {
 export function useStudentAttendance(schoolId) {
   return useQuery({
     queryKey: ["studentAttendance", schoolId],
-    queryFn: () => api.getStudentAttendance(schoolId),
+    queryFn: ({ signal }) => api.getStudentAttendance(schoolId, signal),
     staleTime: 2 * 60 * 1000,
     enabled: !!schoolId,
   });
@@ -220,7 +260,7 @@ export function useStudentAttendance(schoolId) {
 export function useRoomAttendanceHistory(roomId, params) {
   return useQuery({
     queryKey: ["roomAttendance", roomId, params],
-    queryFn: () => api.getRoomAttendanceHistory(roomId, params),
+    queryFn: ({ signal }) => api.getRoomAttendanceHistory(roomId, params, signal),
     staleTime: 60 * 1000,
     enabled: !!roomId,
     // Keeps the fetched rows on screen while a new filter/page request is in
@@ -258,7 +298,7 @@ const LIVE_REFRESH_MS = 30 * 1000;
 export function useAttendanceStats(live) {
   return useQuery({
     queryKey: ["attendance", "stats"],
-    queryFn: () => api.getAttendanceStats(),
+    queryFn: ({ signal }) => api.getAttendanceStats(signal),
     staleTime: LIVE_REFRESH_MS,
     refetchInterval: live ? LIVE_REFRESH_MS : false,
   });
@@ -269,7 +309,7 @@ export function useAttendanceStats(live) {
 export function useActiveStudents(room, live) {
   return useQuery({
     queryKey: ["attendance", "active", room || "all"],
-    queryFn: () => api.getActiveStudents(room || ""),
+    queryFn: ({ signal }) => api.getActiveStudents(room || "", signal),
     staleTime: LIVE_REFRESH_MS,
     refetchInterval: live ? LIVE_REFRESH_MS : false,
     placeholderData: keepPreviousData,
@@ -291,7 +331,7 @@ export function useTodayAttendance(filters, { enabled } = {}) {
 
   return useQuery({
     queryKey: ["attendance", "today", qs],
-    queryFn: () => api.getTodayAttendance(qs),
+    queryFn: ({ signal }) => api.getTodayAttendance(qs, signal),
     staleTime: 60 * 1000,
     enabled,
     placeholderData: keepPreviousData,
@@ -305,7 +345,7 @@ export function useTodayAttendance(filters, { enabled } = {}) {
 export function useAttendanceFacets({ enabled } = {}) {
   return useQuery({
     queryKey: ["attendance", "facets"],
-    queryFn: () => api.getAttendanceFacets(),
+    queryFn: ({ signal }) => api.getAttendanceFacets(signal),
     staleTime: 5 * 60 * 1000,
     enabled,
   });
@@ -314,7 +354,7 @@ export function useAttendanceFacets({ enabled } = {}) {
 export function useAttendanceRooms() {
   return useQuery({
     queryKey: ["attendance", "rooms"],
-    queryFn: () => api.getRooms(),
+    queryFn: ({ signal }) => api.getRooms(signal),
     // Rooms change rarely, but the list feeds three surfaces at once (the Room
     // Logs grid, the "All Rooms" filter and the room history hero chips) and a
     // 5 minute staleTime meant a rename or delete was invisible for minutes.
@@ -360,7 +400,7 @@ export function useDeleteAttendance() {
 export function useActiveAdmins() {
   return useQuery({
     queryKey: ["activeAdmins"],
-    queryFn: () => api.getActiveAdmins(),
+    queryFn: ({ signal }) => api.getActiveAdmins(signal),
     staleTime: 5 * 60 * 1000,
   });
 }

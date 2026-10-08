@@ -127,8 +127,11 @@ async function getAll(req, res) {
       return res.status(403).json({ error: "Only course handlers can view all incident reports" });
     }
 
-    const reviewerDoc = await db.collection("users").doc(req.user.uid).get();
-    const reviewer = reviewerDoc.exists ? reviewerDoc.data() : {};
+    // authorize("admin") already read this document to check the role and left it
+    // on req.profile, so re-reading it here was a second Firestore round trip on
+    // every list render. Falling back to {} keeps the pre-middleware behaviour
+    // (fail closed) if this handler is ever called without the middleware.
+    const reviewer = req.profile || {};
 
     let query = supabase.from(TABLE).select("*");
 
@@ -243,8 +246,7 @@ async function getOne(req, res) {
         return res.status(403).json({ error: "Not authorized to view this report" });
       }
     } else {
-      const reviewerDoc = await db.collection("users").doc(req.user.uid).get();
-      const reviewer = reviewerDoc.exists ? reviewerDoc.data() : {};
+      const reviewer = req.profile || {};
       if (!canHandleIncident(reviewer, incident)) {
         return res.status(403).json({ error: "You are not the handler for this course" });
       }
@@ -260,13 +262,13 @@ async function getOne(req, res) {
 async function create(req, res) {
   try {
     const { catalogId, incidentDate, type, severity, description, photos } = req.body;
-    const uid = req.user.uid;
-
     // Identity and course come from Firestore, never the request body. Trusting
     // req.body here is what let a client label any report as any other student.
-    const userSnap = await db.collection("users").doc(uid).get();
-    if (!userSnap.exists) return res.status(404).json({ error: "User not found" });
-    const user = userSnap.data();
+    // attachRole put the document on req.profile; this is the same read, not a
+    // second one, so the 404 below still fires for a uid in neither collection.
+    const user = req.profile;
+    if (!user) return res.status(404).json({ error: "User not found" });
+    const uid = user.id;
 
     // Item name and its owning course likewise come from the catalog, so a
     // report cannot claim a different item than the one selected.
@@ -375,8 +377,8 @@ async function updateStatus(req, res) {
     const incident = await fetchIncident(id);
     if (!incident) return res.status(404).json({ error: "Incident report not found" });
 
-    const reviewerDoc = await db.collection("users").doc(reviewerId).get();
-    const reviewer = reviewerDoc.exists ? reviewerDoc.data() : {};
+    // Already resolved by authorize("admin") on this route -- see the note in getAll.
+    const reviewer = req.profile || {};
     if (!canHandleIncident(reviewer, incident)) {
       return res.status(403).json({ error: "You are not the handler for this course" });
     }
@@ -454,8 +456,7 @@ async function addRemark(req, res) {
     const incident = await fetchIncident(id);
     if (!incident) return res.status(404).json({ error: "Incident report not found" });
 
-    const reviewerDoc = await db.collection("users").doc(reviewerId).get();
-    const reviewer = reviewerDoc.exists ? reviewerDoc.data() : {};
+    const reviewer = req.profile || {};
     if (!canHandleIncident(reviewer, incident)) {
       return res.status(403).json({ error: "You are not the handler for this course" });
     }
@@ -511,12 +512,13 @@ async function reassign(req, res) {
       return res.status(400).json({ error: "Cannot reassign a resolved report" });
     }
 
-    const reviewerDoc = await db.collection("users").doc(reassignedBy).get();
-    const reviewer = reviewerDoc.exists ? reviewerDoc.data() : {};
+    const reviewer = req.profile || {};
     if (!canHandleIncident(reviewer, incident)) {
       return res.status(403).json({ error: "You are not the handler for this course" });
     }
 
+    // This one is NOT already resolved: newHandlerId is someone else, so the
+    // reviewer's document cannot answer for them.
     const newHandlerDoc = await db.collection("users").doc(newHandlerId).get();
     if (!newHandlerDoc.exists) return res.status(404).json({ error: "Handler not found" });
     const newHandler = newHandlerDoc.data();
@@ -589,8 +591,7 @@ async function remove(req, res) {
     const incident = await fetchIncident(id);
     if (!incident) return res.status(404).json({ error: "Incident report not found" });
 
-    const reviewerDoc = await db.collection("users").doc(req.user.uid).get();
-    const reviewer = reviewerDoc.exists ? reviewerDoc.data() : {};
+    const reviewer = req.profile || {};
     if (!isSuperAdmin(reviewer)) {
       return res.status(403).json({ error: "Only a super-admin can delete an incident report" });
     }

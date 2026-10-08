@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 
 const ThemeContext = createContext(null);
 
@@ -35,10 +35,18 @@ export function ThemeProvider({ children }) {
     if (meta) meta.setAttribute("content", dark ? "#000000" : "#f5f5f0");
   }, [dark]);
 
-  const toggleTheme = () => setDark((prev) => !prev);
+  // Stable across renders. As an inline arrow it was a new function on every provider
+  // render, so every useTheme() consumer re-rendered whenever anything else in the
+  // provider did. With the value memoised as well, the theme now costs a re-render
+  // only when the theme actually changes.
+  const toggleTheme = useCallback(() => setDark((prev) => !prev), []);
+
+  // AuthContext.jsx:73 does this the same way; matching it keeps the two providers
+  // consistent.
+  const value = useMemo(() => ({ dark, toggleTheme }), [dark, toggleTheme]);
 
   return (
-    <ThemeContext.Provider value={{ dark, toggleTheme }}>
+    <ThemeContext.Provider value={value}>
       {children}
     </ThemeContext.Provider>
   );

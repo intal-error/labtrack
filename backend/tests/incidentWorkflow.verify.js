@@ -258,7 +258,13 @@ async function call(handler, { uid, role = "student", body, query = {}, params =
   resetDb();
   if (setup) setup();
   const res = makeRes();
-  await handler({ user: { uid, role }, body: body || {}, query, params }, res);
+  // req.profile is what attachRole/authorize park on the request: the caller's
+  // whole Firestore document. The controllers read their own course-scoping
+  // fields from it rather than re-reading the document themselves, so the
+  // harness has to supply it the way the middleware does. `role` from the caller
+  // wins so a case can still ask for a role the stored document disagrees with.
+  const profile = { ...(USERS[uid] || {}), id: uid, role };
+  await handler({ user: { uid, role }, profile, body: body || {}, query, params }, res);
   return res;
 }
 

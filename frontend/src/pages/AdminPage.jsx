@@ -141,7 +141,7 @@ export default function AdminPage() {
       {view === "main" && (
         <div className="admin-main-card fade-in-up">
           <div className="admin-logo-wrap">
-            <img src="/logo.png" alt="Logo" className="admin-logo" />
+            <img src="/icons/icon-192x192.png" alt="Logo" className="admin-logo" width="48" height="48" decoding="async" />
           </div>
           <div className="admin-actions-grid">
             <button className="admin-action-card" onClick={() => { openCreate(); setView("list"); }}>

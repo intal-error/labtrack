@@ -43,6 +43,7 @@ const TODAY = todayKey();
 
 const supabasePath = require.resolve("../src/config/supabase");
 const firebasePath = require.resolve("../src/config/firebase");
+const { applyOr } = require("./helpers/orFilter");
 
 const rooms = [
   { id: "room-cet", room_code: "cet-center", room_name: "CET CENTER" },
@@ -63,26 +64,99 @@ const records = [
   rec({ id: "b5", course: "MT", year: "4th Year", room_code: "net-lab" }),
 ];
 
+// Minimal PostgREST query-builder stub.
+//
+// WHY THIS IS NOT JUST select/eq: the controller now pushes predicates into SQL
+// rather than reading the whole table and filtering in JS -- that pushdown is the
+// point of the exercise, so the stub has to actually execute the predicates or the
+// suite would pass without exercising any of it.
+//
+// Supported: eq, neq, gt/gte/lt/lte (numeric or string, matching PostgREST's
+// comparison semantics), in, not, or, range, limit, order, single, maybeSingle, and
+// head:true/count:"exact" for the head-count queries in getStats.
+//
+// Every method is a pure transformation of a local `working` array, so chains
+// built in parallel (getStats fires three at once) cannot trample each other.
+function makeChain(initial) {
+  let working = [...initial];
+  let ordered = false;
+  // PostgREST's head:true returns a count header and an EMPTY body -- no rows at
+  // all. getStats depends on that: it asks for `.count` instead of shipping every
+  // open session to count them in JS, so a stub that kept returning rows would let
+  // a regression back in unnoticed.
+  let headOnly = false;
+
+  const chain = {
+    select: (_cols, opts = {}) => {
+      if (opts.head) headOnly = true;
+      return chain;
+    },
+    eq: (k, v) => {
+      if (v === null) working = working.filter((r) => r[k] != null);
+      else working = working.filter((r) => String(r[k]) === String(v));
+      return chain;
+    },
+    neq: (k, v) => {
+      if (v === null) working = working.filter((r) => r[k] == null);
+      else working = working.filter((r) => String(r[k]) !== String(v));
+      return chain;
+    },
+    gt: (k, v) => { working = working.filter((r) => cmp(r[k], v) > 0); return chain; },
+    gte: (k, v) => { working = working.filter((r) => cmp(r[k], v) >= 0); return chain; },
+    lt: (k, v) => { working = working.filter((r) => cmp(r[k], v) < 0); return chain; },
+    lte: (k, v) => { working = working.filter((r) => cmp(r[k], v) <= 0); return chain; },
+    in: (k, list) => { working = working.filter((r) => list.map(String).includes(String(r[k]))); return chain; },
+    not: (k, neg) => {
+      // PostgREST's .not(column, "is"|"is not", value) is a null-check, not a
+      // general negation.
+      if (neg === "is") working = working.filter((r) => r[k] != null);
+      else if (neg === "is not") working = working.filter((r) => r[k] == null);
+      return chain;
+    },
+    // Values arrive QUOTED (utils/postgrest.js orEq), so a comma inside a room code must
+    // not split the clause. See tests/helpers/orFilter.js.
+    or: (expr) => {
+        working = applyOr(working, expr);
+        return chain;
+      },
+    range: (from, to) => { working = working.slice(from, to + 1); return chain; },
+    limit: (n) => { working = working.slice(0, n); return chain; },
+    order: (k, opts = {}) => {
+      if (ordered) return chain;
+      ordered = true;
+      const dir = opts.ascending === false ? -1 : 1;
+      working = [...working].sort((a, b) => cmp(a[k], b[k]) * dir);
+      return chain;
+    },
+    single: () => Promise.resolve({ data: working[0] || null, error: null }),
+    maybeSingle: () => Promise.resolve({ data: working[0] || null, error: null }),
+    then: (resolve) =>
+      resolve({ data: headOnly ? null : working, error: null, count: working.length }),
+  };
+  return chain;
+}
+
+// PostgREST orders NULLs last for ascending order, and compares as text when the
+// value is not numeric. Both details matter for date columns, which arrive as
+// "YYYY-MM-DD" strings that must compare chronologically.
+function cmp(a, b) {
+  if (a == null) return b == null ? 0 : 1;
+  if (b == null) return -1;
+  const na = Number(a);
+  const nb = Number(b);
+  if (Number.isFinite(na) && Number.isFinite(nb) && String(a).trim() !== "" && String(b).trim() !== "") {
+    return na === nb ? 0 : na < nb ? -1 : 1;
+  }
+  const sa = String(a);
+  const sb = String(b);
+  return sa === sb ? 0 : sa < sb ? -1 : 1;
+}
+
 require.cache[supabasePath] = {
   id: supabasePath, filename: supabasePath, loaded: true,
   exports: {
     supabase: {
-      from: (table) => {
-        const source = table === "lab_rooms" ? rooms : records;
-        // Per-chain working copy, so the three queries getStats fires in parallel
-        // cannot trample each other's filters.
-        let working = [...source];
-        const chain = {
-          select: () => chain,
-          eq: (k, v) => { working = working.filter((r) => String(r[k]) === String(v)); return chain; },
-          gte: () => chain,
-          lte: () => chain,
-          single: () => Promise.resolve({ data: working[0] || null, error: null }),
-          maybeSingle: () => Promise.resolve({ data: working[0] || null, error: null }),
-          then: (resolve) => resolve({ data: working, error: null }),
-        };
-        return chain;
-      },
+      from: (table) => makeChain(table === "lab_rooms" ? rooms : records),
     },
   },
 };

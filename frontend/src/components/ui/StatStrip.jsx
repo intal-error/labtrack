@@ -9,7 +9,14 @@ import "./stat-strip.css";
 // needs a `key`, the matching one gets `activeKey`, and the tile renders as a
 // real <button> with aria-pressed. Without `onSelect` the markup is unchanged
 // (a plain div), so the read-only KPI strips elsewhere cannot regress.
-export default function StatStrip({ items, variant, onSelect, activeKey }) {
+// Memoised. Every one of the eight call sites builds a fresh `items` array inline
+// (and often fresh icon elements) on every parent render, so without memo this strip
+// re-rendered whenever its parent did -- for a handful of numbers that rarely change.
+// The parent-side arrays would need stabilising to get real value out of this; the
+// memo is what makes that the next step rather than a re-render every time.
+import { memo } from "react";
+
+function StatStrip({ items, variant, onSelect, activeKey }) {
   const interactive = typeof onSelect === "function";
 
   return (
@@ -47,7 +54,13 @@ export default function StatStrip({ items, variant, onSelect, activeKey }) {
             {body}
           </button>
         );
-      })}
+})}
     </div>
   );
 }
+
+// `items` is compared by reference, which is the shallow default. That is correct
+// here: every call site passes a newly-built array, so an unchanged reference really
+// does mean nothing changed, and a deep-compare would cost more than the render it
+// saved.
+export default memo(StatStrip);

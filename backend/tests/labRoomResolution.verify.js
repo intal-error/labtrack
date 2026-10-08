@@ -37,6 +37,13 @@ require.cache[supabasePath] = {
         const chain = {
           select: () => chain,
           eq: (k, v) => { key = k; value = v; rows = rows.filter((r) => String(r[key]) === String(value)); return chain; },
+          // timeIn now asks for the open session and today's newest row with
+          // .order().limit(1) instead of reading every row for the student, so the
+          // stub has to honour ordering for the "no open session yet" case to still
+          // resolve. lab_attendance is empty in this suite, so ordering is a no-op
+          // here -- but an unimplemented .order() would be an own-property undefined,
+          // which the controller calls directly.
+          order: () => chain,
           limit: () => chain,
           insert: (record) => { inserted.push({ ...record }); return chain; },
           update: (patch) => { updated.push({ ...patch }); return chain; },

@@ -32,4 +32,9 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 const auth = admin.auth();
 
-module.exports = { admin, db, auth };
+// Exported so callers can build batched `where(documentId(), "in", [...])` reads
+// instead of N individual doc gets. Firestore caps `in` at 30 values, which is why
+// transactionController chunks its lookups.
+const FieldPath = admin.firestore.FieldPath;
+
+module.exports = { admin, db, auth, FieldPath };

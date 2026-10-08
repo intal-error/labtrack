@@ -1,6 +1,11 @@
 const router = require("express").Router();
 const { attachRole, authorize } = require("../middleware/auth");
+const { invalidateFeature } = require("../utils/cache");
 const { getAllFines, getMyFines, checkRestriction, getOverdueCount, payFine, waiveFine } = require("../controllers/finesController");
+
+// Paying or waiving a fine must clear the cached list, or the admin's own action
+// appears not to have taken effect for up to 15 seconds.
+const CLEAR = invalidateFeature("/api/fines");
 
 router.get("/", authorize("admin"), getAllFines);
 router.get("/my", getMyFines);
@@ -11,7 +16,7 @@ router.get("/check-restriction/:userId", attachRole, (req, res, next) => {
   }
   next();
 }, checkRestriction);
-router.put("/:id/pay", authorize("admin"), payFine);
-router.put("/:id/waive", authorize("admin"), waiveFine);
+router.put("/:id/pay", authorize("admin"), CLEAR, payFine);
+router.put("/:id/waive", authorize("admin"), CLEAR, waiveFine);
 
 module.exports = router;

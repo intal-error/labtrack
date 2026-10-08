@@ -1,5 +1,6 @@
-import { useState, useRef, lazy, Suspense } from "react";
+import { useState, useRef, useEffect, lazy, Suspense } from "react";
 import { api } from "../../services/api";
+import { hapticSuccess, hapticError } from "../../utils/haptics";
 import { toDate, numOr, getAvailableQuantity, isOpenBorrow, normalize, parseFutureDate } from "../../utils/helpers";
 import { resolveUser } from "../../components/scanner/BorrowerLookup";
 import { resolveItem } from "../../components/scanner/ItemLookup";
@@ -85,8 +86,32 @@ export default function EquipmentScanner() {
     }
   }
 
+  /*
+   * Timers owned here so they can be cancelled on unmount.
+   *
+   * Both of these were untracked setTimeouts. A successful scan often navigates or
+   * unmounts within the 100-200 ms window, and the callback then fired against a dead
+   * component: lookupBorrower/lookupItem issue a network request and then call eight
+   * or ten setState functions, so the request went out and the updates landed on
+   * nothing. On a shared scanner terminal that is a request with no visible result,
+   * and React logs the state-after-unmount warnings.
+   */
+  const scrollTimerRef = useRef(null);
+  const scanTimerRef = useRef(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      clearTimeout(scrollTimerRef.current);
+      clearTimeout(scanTimerRef.current);
+    };
+  }, []);
+
   const scrollToStep2 = () => {
-    setTimeout(() => {
+    clearTimeout(scrollTimerRef.current);
+    scrollTimerRef.current = setTimeout(() => {
       step2Ref.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 200);
   };
@@ -95,9 +120,25 @@ export default function EquipmentScanner() {
     const sid = idOverride || schoolId;
     if (!sid.trim()) { setTxStatus("Enter a school ID first."); setTxStatusType("error"); return; }
     setTxStatus("Looking for borrower..."); setTxStatusType("");
-    const user = await resolveUser(sid.trim());
+    let user = null;
+    try {
+      user = await resolveUser(sid.trim());
+    } catch (err) {
+      // resolveUser now THROWS on a network or auth failure rather than returning
+      // null, because a dropped connection must not be reported to the operator as
+      // "no registered borrower found" -- they would send a real student away and
+      // retry by re-scanning when the fix is simply to wait for the network.
+      if (!mountedRef.current) return;
+      setSelectedUser(null); setBorrowerResult(null);
+      setTxStatus(err.message || "Could not reach the server. Check the connection and try again.");
+      setTxStatusType("error");
+      hapticError();
+      return;
+    }
+    if (!mountedRef.current) return;
     if (!user) {
       setSelectedUser(null); setBorrowerResult(null);
+      hapticError();
       setTxStatus("No registered borrower found. Fill in name fields to create on borrow."); setTxStatusType("error");
       return;
     }
@@ -107,6 +148,7 @@ export default function EquipmentScanner() {
     setLastName(d.lastName || d.lastname || "");
     setEmail(d.email || "");
     setBorrowerResult({ name: `${d.firstName || ""} ${d.lastName || ""}`.trim(), schoolID: d.schoolId || d.employeeId || d.schoolID || d.studentID || schoolId, role: d.role, course: d.course });
+    hapticSuccess();
     setTxStatus("Borrower found."); setTxStatusType("success");
     setStep1Collapsed(true);
     scrollToStep2();
@@ -116,9 +158,20 @@ export default function EquipmentScanner() {
     const code = codeOverride || itemCode;
     if (!code.trim()) { setTxStatus("Enter an item code first."); setTxStatusType("error"); return; }
     setTxStatus("Looking for item..."); setTxStatusType("");
-    const item = await resolveItem(code.trim());
+    let item = null;
+    try {
+      item = await resolveItem(code.trim());
+    } catch (err) {
+      if (!mountedRef.current) return;
+      setTxStatus(err.message || "Could not reach the server. Check the connection and try again.");
+      setTxStatusType("error");
+      hapticError();
+      return;
+    }
+    if (!mountedRef.current) return;
     if (!item) {
       setSelectedItem(null); setItemResult(null);
+      hapticError();
       setTxStatus("No matching catalog item found."); setTxStatusType("error");
       return;
     }
@@ -127,13 +180,23 @@ export default function EquipmentScanner() {
     const avail = getAvailableQuantity(d);
     setItemResult({ name: d.itemName, available: avail, total: numOr(d.quantity), condition: d.condition, category: d.category, course: d.course || "" });
     setTargetCourse(d.course || "");
+    hapticSuccess();
     setTxStatus("Item found."); setTxStatusType("success");
     setStep2Collapsed(true);
   };
 
   const handleCameraScan = async (decodedText) => {
-    if (cameraTarget === "borrower") { setSchoolId(decodedText); setTimeout(() => lookupBorrower(decodedText), 100); }
-    else { setItemCode(decodedText); setTimeout(() => lookupItem(decodedText), 100); }
+    // The 100 ms delay is deliberate: it lets the camera teardown finish before the
+    // lookup starts, which matters on a low-end phone where the stream release and
+    // the next request otherwise contend. Cancelled rather than leaked now.
+    clearTimeout(scanTimerRef.current);
+    if (cameraTarget === "borrower") {
+      setSchoolId(decodedText);
+      scanTimerRef.current = setTimeout(() => lookupBorrower(decodedText), 100);
+    } else {
+      setItemCode(decodedText);
+      scanTimerRef.current = setTimeout(() => lookupItem(decodedText), 100);
+    }
     setCameraTarget(null);
   };
 

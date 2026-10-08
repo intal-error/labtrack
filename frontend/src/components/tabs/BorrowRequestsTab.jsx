@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../services/api";
 import { timeAgo, toDate } from "../../utils/helpers";
 import { useAuth } from "../../context/AuthContext";
-import { useBorrowRequests, useCatalog, useActiveAdmins } from "../../hooks/useQueries";
+import { useBorrowRequests, useCatalogPreview, useActiveAdmins } from "../../hooks/useQueries";
 import Modal from "../ui/Modal";
 import Pagination from "../ui/Pagination";
 import toast from "react-hot-toast";
@@ -86,7 +86,7 @@ export default function BorrowRequestsTab() {
   }, [page, filter, debouncedSearch]);
 
   const { data: requestsData, isLoading } = useBorrowRequests(params);
-  const { data: catalogData } = useCatalog();
+  const { data: catalogData } = useCatalogPreview();
   const { data: adminsData } = useActiveAdmins();
 
   const requests = useMemo(() => {

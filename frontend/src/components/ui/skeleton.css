@@ -1,0 +1,85 @@
+/*
+ * Loading skeletons.
+ *
+ * Colour comes from the app's existing tokens (--border, --text-muted) so the
+ * placeholders sit correctly in both themes without a dark-mode override.
+ */
+
+.skeleton {
+  display: block;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--border) 0%,
+    color-mix(in srgb, var(--border) 45%, var(--bg)) 50%,
+    var(--border) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.4s ease-in-out infinite;
+}
+
+/* Slightly blockier than the text variant, for icon and thumbnail slots. */
+.skeleton-circle {
+  border-radius: 50%;
+}
+
+.skeleton-block {
+  border-radius: 10px;
+}
+
+/*
+ * Animated with background-position rather than transform.
+ *
+ * A transform-based shimmer would need an extra element per skeleton (the gradient on
+ * a child, translated on the parent). Animating background-position keeps it to one
+ * node, and it only touches paint -- no layout, no reflow of the surrounding table.
+ */
+@keyframes skeletonShimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* The pulse is decoration. A user who has asked for reduced motion gets a static
+   placeholder rather than an endlessly moving one. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background: var(--border);
+  }
+}
+
+.skeleton-row td {
+  padding: 14px 12px;
+}
+
+.skeleton-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.skeleton-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card, transparent);
+}
+
+/* Height is fixed so the region occupies the space the real content will, which is
+   what stops the page jumping when data arrives. */
+.skeleton-region {
+  display: block;
+}
+
+@media (max-width: 768px) {
+  .skeleton-tiles {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

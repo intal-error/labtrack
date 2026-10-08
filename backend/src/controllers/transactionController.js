@@ -1,9 +1,26 @@
-const { db } = require("../config/firebase");
+const { db, FieldPath } = require("../config/firebase");
 const { supabase } = require("../config/supabase");
 const { parsePagination, paginatedResponse } = require("../middleware/pagination");
 const { randomUUID } = require("crypto");
 const { transformKeys } = require("../utils/transformKeys");
 const { getRemainingQuantity, isOpenBorrow, queryTransactions, sortTransactions } = require("../utils/transactionFilters");
+
+// Firestore's hard limit on `in` queries.
+const FIRESTORE_IN_CHUNK = 30;
+const PROFILE_URL_TTL_MS = 5 * 60 * 1000;
+const profileUrlCache = new Map();
+let profileUrlSweptAt = 0;
+
+/**
+ * Drop a memoised avatar.
+ *
+ * Mounted as middleware on PUT /api/auth/profile (see routes/auth.js), which is why
+ * it takes (req, res, next) despite doing no I/O: the caller's uid is the cache key.
+ */
+function invalidateProfileUrl(req, _res, next) {
+  profileUrlCache.delete(req.user?.uid);
+  next();
+}
 
 function numberOr(value, fallback = 0) {
   const parsed = Number(value);
@@ -76,20 +93,52 @@ async function createFineForLateReturn(borrowData, transactionId) {
   }
 }
 
+// Batched, memoised, and capped.
+//
+// WHY: this ran once per unique student per request, so a 25-row page from 25
+// different students opened 25 parallel Firestore gRPC streams -- on every page
+// change, every sort and every search keystroke. The calls are parallel so latency
+// was one round trip, but the connection and quota cost scaled with the page size.
+//
+// Firestore caps an `in` query at 30 values, hence the chunking. The memo means a
+// student's avatar is read once per process rather than once per page view --
+// profile URLs change rarely, and this endpoint is polled.
+//
+// Callers pass the PAGE, never the full result set: getBorrowed/getReturned slice
+// before enriching, so the N here is the page size and not the table size.
 async function enrichWithProfileURL(items) {
   const userIds = [...new Set(items.map((i) => i.user_id || i.userId).filter(Boolean))];
   if (userIds.length === 0) return items;
-  const userSnaps = await Promise.all(userIds.map((id) => db.collection("users").doc(id).get()));
-  const profileMap = {};
-  userSnaps.forEach((snap) => {
-    if (snap.exists) {
-      const data = snap.data();
-      if (data.profileURL) profileMap[snap.id] = data.profileURL;
+
+  // Age-based sweep, not per-entry TTL checks: this map is bounded by the number of
+  // students who have ever appeared on a page of transactions, and dropping the
+  // whole cache once its oldest entry is past the TTL keeps eviction O(1) amortised
+  // instead of scanning on every read.
+  if (Date.now() - profileUrlSweptAt > PROFILE_URL_TTL_MS) {
+    profileUrlSweptAt = Date.now();
+    profileUrlCache.clear();
+  }
+
+  const uncached = userIds.filter((id) => !profileUrlCache.has(id));
+  for (let i = 0; i < uncached.length; i += FIRESTORE_IN_CHUNK) {
+    const chunk = uncached.slice(i, i + FIRESTORE_IN_CHUNK);
+    const snap = await db
+      .collection("users")
+      .where(FieldPath.documentId(), "in", chunk)
+      .get();
+    for (const doc of snap.docs) {
+      profileUrlCache.set(doc.id, doc.data().profileURL || "");
     }
-  });
+    // Ids with no document (deleted users) must be recorded too, or every request
+    // re-queries them forever.
+    for (const id of chunk) {
+      if (!profileUrlCache.has(id)) profileUrlCache.set(id, "");
+    }
+  }
+
   return items.map((item) => ({
     ...item,
-    profileURL: item.profileURL || item.profile_url || profileMap[item.user_id || item.userId] || "",
+    profileURL: item.profileURL || item.profile_url || profileUrlCache.get(item.user_id || item.userId) || "",
   }));
 }
 
@@ -562,4 +611,8 @@ const recordMyReturn = async (req, res) => {
   }
 };
 
-module.exports = { getBorrowed, getReturned, getMyBorrowed, getMyReturned, getStats, getMyStats, recordBorrow, recordReturn, recordMyReturn };
+module.exports = {
+  getBorrowed, getReturned, getMyBorrowed, getMyReturned,
+  getStats, getMyStats, recordBorrow, recordReturn, recordMyReturn,
+  invalidateProfileUrl,
+};

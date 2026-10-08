@@ -7,7 +7,6 @@ const cron = require("node-cron");
 const { verifyToken, authorize, errorHandler } = require("./src/middleware/auth");
 const {
   generalLimiter,
-  authLimiter,
   attendanceLimiter,
   uploadLimiter,
   backupLimiter,
@@ -113,7 +112,20 @@ function cacheMiddleware(ttl = 30) {
 }
 
 // Public routes
-app.use("/api/auth", authLimiter, authRoutes);
+//
+// authLimiter is deliberately NOT on this mount. It exists to slow credential
+// guessing (20 requests / 15 min, keyed by IP), and a signed-in user re-reading
+// their own profile is not that threat model -- but the client now calls
+// GET /api/auth/profile once per app load to resolve its role, so mounting the
+// limiter here meant a shared-NAT lab (one IP for a whole building) could spend the
+// entire login budget on profile reads and lock everyone out.
+//
+// The two routes that DO take credentials, /register and /password, apply
+// authLimiter themselves in src/routes/auth.js. It used to be mounted from here
+// instead, on lines AFTER this one -- which meant Express had already dispatched
+// into this router and produced a response by the time the limiter ran, so those
+// two endpoints were effectively unlimited while the comment claimed otherwise.
+app.use("/api/auth", authRoutes);
 
 // Public attendance kiosk routes (kiosk-authenticated)
 app.use("/api/attendance", attendanceLimiter, (req, res, next) => {
@@ -150,6 +162,17 @@ app.get("/api/health", async (req, res) => {
 });
 
 // Protected routes (any authenticated user)
+//
+// NOTE ON THE /api/transactions CACHE: it is deliberately ABSENT. Nothing on that
+// router invalidates a cached transactions response, and the endpoint's data changes
+// on the very actions a user is watching (borrow, return, admin approve). A cached
+// list here would show a student their loan as still open after signing it out. The
+// read cost was addressed in queryTransactions instead -- indexed predicates,
+// server-side sort, an explicit column list -- which is a fix that cannot go stale.
+//
+// /api/attendance is absent for the same reason: time-in and time-out write the same
+// table the admin KPI tiles read, every 30 seconds, and the figures are wrong if they
+// lag by even one poll interval.
 app.use("/api/catalog", verifyToken, methodAwareLimiter, cacheMiddleware(30), catalogRoutes);
 app.use("/api/transactions", verifyToken, methodAwareLimiter, transactionRoutes);
 app.use("/api/users", verifyToken, methodAwareLimiter, userRoutes);

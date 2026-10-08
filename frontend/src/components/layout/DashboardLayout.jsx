@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef, useCallback, Suspense } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, Suspense } from "react";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { api } from "../../services/api";
-import { useMyNotifications, pickNotifications, useUnreadCount } from "../../hooks/useQueries";
+import ProfileGate from "../ui/ProfileGate";
+import { useMyNotifications, pickNotifications, useUnreadCount, useStudentAttendance } from "../../hooks/useQueries";
 import { prefetchRoute } from "../../utils/prefetchRoute";
 import { timeAgo } from "../../utils/helpers";
 import { FiMenu, FiX } from "react-icons/fi";
@@ -103,12 +104,14 @@ export default function DashboardLayout() {
   const [openSections, setOpenSections] = useState(
     Object.fromEntries(NAV_ITEMS.map((s) => [s.label, true]))
   );
-  const [logbookActive, setLogbookActive] = useState(false);
+  // logbookActive is no longer state -- it is derived from useStudentAttendance
+  // below, which removed both this setter and a duplicate network call.
   const [notifOpen, setNotifOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const notifRef = useRef(null);
   const userRef = useRef(null);
-  const { user, role, userProfile, logout, loading } = useAuth();
+  const contentRef = useRef(null);
+  const { user, role, userProfile, logout, loading, profileError, refreshProfile } = useAuth();
   const { dark, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -128,20 +131,49 @@ export default function DashboardLayout() {
     if (!loading && !user) navigate("/login", { replace: true });
   }, [loading, user, navigate]);
 
-  useEffect(() => {
-    if (role !== "student" || !userProfile?.schoolId) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await api.getStudentAttendance(userProfile.schoolId);
-        if (cancelled) return;
-        setLogbookActive((data.records || []).some((r) => r.status === "active"));
-      } catch {
-        if (!cancelled) setLogbookActive(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [role, userProfile?.schoolId]);
+  /*
+   * Reset the scroll position on every navigation.
+   *
+   * .main-content is the scroll container, not the window (overflow-y: auto in
+   * layout.css), and nothing ever reset its offset -- a grep across src for
+   * scrollTo / scrollTop / ScrollRestoration returns nothing. So: scroll to row 40
+   * of the attendance table, tap "My Activity" in the bottom nav, and you land
+   * 2000px down a page 800px tall, often on blank space with the tab strip off
+   * screen. It looks like a rendering bug rather than a missing reset.
+   *
+   * useLayoutEffect rather than useEffect so the reset lands in the same frame as
+   * the new route's paint. With useEffect the browser paints the new page at the old
+   * offset first, which is a visible flash on slow connections.
+   *
+   * "instant" beats behavior: "auto" would inherit the CSS scroll-behavior: smooth
+   * from global.css:174 and animate the jump.
+   */
+  useLayoutEffect(() => {
+    contentRef.current?.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [location.pathname]);
+
+  /*
+   * Was a raw api.getStudentAttendance() call here.
+   *
+   * Two problems, both fixed by using the hook instead:
+   *   1. It bypassed react-query entirely -- no cache, no dedupe, no staleTime --
+   *      so it refetched on every DashboardLayout mount.
+   *   2. DashboardPage calls useStudentAttendance(schoolId) with the SAME key.
+   *      Because this one bypassed the cache, a student's dashboard load issued two
+   *      identical GET /attendance/my/:schoolId requests in parallel, and each
+   *      surface that mounted the hook later fetched a third time.
+   *
+   * useStudentAttendance is keyed ["studentAttendance", schoolId] with a 2-minute
+   * staleTime and is already shared with DashboardPage and AttendancePanel, so this
+   * now reads from the cache the first time and reuses it after.
+   */
+  const { data: attendanceData } = useStudentAttendance(
+    role === "student" ? userProfile?.schoolId : null
+  );
+  const logbookActive = useMemo(
+    () => (attendanceData?.records || []).some((r) => r.status === "active"),
+    [attendanceData]
+  );
 
   const handleLogout = async () => {
     setUserOpen(false);
@@ -195,7 +227,7 @@ export default function DashboardLayout() {
     };
   }, []);
 
-  if (loading || !role) {
+  if (loading) {
     return (
       <div className="loading-screen">
         <div className="spinner-lg" />
@@ -203,12 +235,29 @@ export default function DashboardLayout() {
     );
   }
 
+  /*
+   * Authenticated but no role -- the profile lookup failed.
+   *
+   * This was folded into `if (loading || !role)` above, which meant a failed
+   * getProfile() produced a FULL-SCREEN SPINNER with no sidebar. So no logout
+   * button, no explanation, no retry: the only escape was a full page reload, which
+   * would fail the same way. On a flaky campus network that locked people out of
+   * the app entirely.
+   *
+   * ProfileGate renders the message, a retry when retrying can help, and always a
+   * sign-out. It must stay ABOVE the layout so the sidebar never has to render for
+   * a user whose role we do not know.
+   */
+  if (!role) {
+    return <ProfileGate error={profileError} onRetry={refreshProfile} onSignOut={handleLogout} />;
+  }
+
   return (
     <div className="app-layout">
       <aside className={`sidebar ${collapsed ? "collapsed" : ""} ${sidebarOpen ? "active" : ""}`}>
         <div className="sidebar-header">
           <div className="sidebar-logo-wrap">
-            <img className="sidebar-logo-icon" src="/logo.png" alt="SLSU" loading="lazy" width="40" height="40" decoding="async" />
+            <img className="sidebar-logo-icon" src="/icons/icon-192x192.png" alt="SLSU" loading="lazy" width="40" height="40" decoding="async" />
             {!collapsed && (
               <div className="sidebar-brand">
                 <div className="sidebar-brand-title">LabTrack</div>
@@ -247,6 +296,7 @@ export default function DashboardLayout() {
                             className={({ isActive }) => isActive ? "active" : ""}
                             onClick={() => setSidebarOpen(false)}
                             onMouseEnter={() => prefetchRoute(path)}
+          onFocus={() => prefetchRoute(path)}
                             data-label={label}
                           >
                             <span className="nav-icon"><Icon size={18} /></span>
@@ -374,8 +424,15 @@ export default function DashboardLayout() {
           </div>
         </header>
 
-        <main className="main-content">
-          <Suspense fallback={<div className="page-loading"><div className="spinner-lg" /></div>}>
+        <main className="main-content" ref={contentRef}>
+          <Suspense
+            fallback={
+              // Fixed height so the surrounding layout does not collapse and
+              // reflow while a route chunk loads, which is what turned every
+              // navigation into a visible jump.
+              <div className="page-loading"><div className="spinner-lg" /></div>
+            }
+          >
             <Outlet />
           </Suspense>
         </main>

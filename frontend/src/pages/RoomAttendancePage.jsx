@@ -24,6 +24,7 @@ import {
 } from "../hooks/useQueries";
 import useDebouncedValue from "../hooks/useDebouncedValue";
 import useRowMenu from "../hooks/useRowMenu";
+import { SkeletonRegion, SkeletonRows } from "../components/ui/Skeleton";
 import AttendanceFilterSelect from "../components/attendance/AttendanceFilterSelect";
 import RowActions from "../components/attendance/RowActions";
 import ExportReportModal from "../components/ui/ExportReportModal";
@@ -182,13 +183,31 @@ const roomName = data?.roomName || room?.roomName || "Room Attendance";
   // needs the facet lists, which arrive with the response, which is itself
   // produced by the query those params build. Deriving instead would be a cycle.
   const clampedPage = Math.min(Math.max(1, page), Math.max(1, totalPages));
-  const pruned = pruneFilters(filters, {
-    year: facets.years,
-    course: facets.courses,
-    section: facets.sections,
-    subject: facets.subjects,
-    professor: facets.professors,
-  });
+
+  /*
+   * Memoised, and the memo is what makes the identity check below meaningful.
+   *
+   * pruneFilters walked Object.entries(facets) and, for every non-empty filter value,
+   * did a .map() over the whole facet array converting each entry with String(v).
+   * Facets come from the entire room's history, so that is O(total facet entries) --
+   * in the render body, on every keystroke in the search box, every page change, and
+   * every 30s data refresh.
+   *
+   * The memo also returns the SAME object when nothing was pruned (attendanceHelpers
+   * returns `filters` unchanged in that case), which is what lets the `pruned !==
+   * filters` comparison below stay a valid identity test.
+   */
+  const pruned = useMemo(
+    () =>
+      pruneFilters(filters, {
+        year: facets.years,
+        course: facets.courses,
+        section: facets.sections,
+        subject: facets.subjects,
+        professor: facets.professors,
+      }),
+    [filters, facets]
+  );
   const [prevRoomId, setPrevRoomId] = useState(roomId);
   const [prevTotalPages, setPrevTotalPages] = useState(totalPages);
   if (prevRoomId !== roomId) {
@@ -465,10 +484,18 @@ const roomName = data?.roomName || room?.roomName || "Room Attendance";
             "No attendance recorded yet" before the first response landed and
             then swap to the table. */}
         {isPending ? (
-          <div className="au-empty">
-            <div className="spinner-lg" />
-            <h3>Loading history...</h3>
-          </div>
+          // Table-shaped skeleton rather than a spinner. This panel is normally 50
+          // rows tall; the spinner collapsed it to a few lines and then expanded it,
+          // which reflowed the whole page on every room switch.
+          <SkeletonRegion label={`Loading attendance history for ${roomName || "this room"}`}>
+            <div className="au-table-wrap">
+              <table className="au-table">
+                <tbody>
+                  <SkeletonRows rows={12} columns={6} />
+                </tbody>
+              </table>
+            </div>
+          </SkeletonRegion>
         ) : isError ? (
           <PanelMessage
             error

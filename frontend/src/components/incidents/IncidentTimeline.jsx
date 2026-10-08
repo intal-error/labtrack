@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { fmtDateTime, timeAgo } from "../../utils/helpers";
 import { INCIDENT_STATUS_LABELS } from "../../constants/incidents";
 
@@ -28,7 +29,16 @@ function eventIcon(eventType) {
   return "remark";
 }
 
-export default function IncidentTimeline({ events }) {
+/*
+ * Memoised because of where this sits.
+ *
+ * IncidentDetailModal renders this next to a remark <textarea>. Typing a remark
+ * re-renders the modal on every keystroke, and without the memo that re-rendered the
+ * whole event trail above the textarea -- an unbounded list of rows, each doing a
+ * timeAgo() and a fmtDateTime() -- for no reason at all. `events` arrives from
+ * react-query so its reference is stable between refetches.
+ */
+function IncidentTimeline({ events }) {
   const list = Array.isArray(events) ? events : [];
 
   if (list.length === 0) {
@@ -82,3 +92,5 @@ export default function IncidentTimeline({ events }) {
     </ol>
   );
 }
+
+export default memo(IncidentTimeline);

@@ -173,7 +173,23 @@ body.dark .card:hover{box-shadow:0 4px 16px rgba(0,0,0,.25)}
 @media (max-width: 1024px) {
   .main-content {
     -webkit-overflow-scrolling: touch;
+    /*
+     * scroll-behavior: smooth was here before the route-change scroll reset, and the
+     * two interacted badly: the reset in DashboardLayout asks for `behavior:
+     * "instant"` specifically to override this, and every browser honours that. But
+     * any OTHER programmatic scroll inside this container animated, including scrolls
+     * a user did not ask for.
+     *
+     * Kept, because it is genuinely nicer for in-page anchor jumps, and now
+     * explicitly overridable per call.
+     */
     scroll-behavior: smooth;
+    /*
+     * Stop iOS rubber-banding the whole page when the list hits its end. Without
+     * this, scrolling to the bottom of the attendance table drags the header and
+     * bottom nav with it, which is the classic "this app doesn't feel native" tell.
+     */
+    overscroll-behavior: contain;
   }
 }
 
@@ -221,4 +237,73 @@ body.dark .hero-action-btn.ghost {
 }
 body.dark .hero-action-btn.ghost:hover {
   background: rgba(255, 255, 255, 0.15);
+}
+
+/* -- Offline / reconnection banner --
+   Rendered by components/ui/OfflineBanner.jsx. Lives here rather than in a
+   component-scoped sheet because it is fixed to the viewport and must sit above
+   the splash overlay's stacking context on the login and kiosk routes, which do
+   not mount DashboardLayout. */
+.offline-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  padding-top: calc(10px + env(safe-area-inset-top, 0px));
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 500;
+  color: #fff;
+  background: #37474f;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.28);
+  animation: offlineBannerIn 0.22s ease-out;
+}
+
+/* transform-only so this composites on the GPU. Animating `top` would relayout
+   the page on every frame while the user is trying to scan a QR code. */
+@keyframes offlineBannerIn {
+  from { transform: translateY(-100%); }
+  to   { transform: translateY(0); }
+}
+
+.offline-banner.is-offline {
+  background: #b3261e;
+}
+
+.offline-banner.is-online {
+  background: #2e7d32;
+}
+
+.offline-banner-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.offline-banner-text strong {
+  font-weight: 700;
+}
+
+@media (max-width: 480px) {
+  .offline-banner {
+    font-size: 12px;
+    padding: 8px 12px;
+    gap: 8px;
+  }
+  .offline-banner-text {
+    /* The full sentence is long for a 320 px screen; let it wrap to two lines
+       rather than truncating the part that tells the user data is not saving. */
+    line-height: 1.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .offline-banner {
+    animation: none;
+  }
 }

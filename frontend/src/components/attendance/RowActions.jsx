@@ -44,7 +44,19 @@ export default function RowActions({ label, open, onToggle, onClose, children })
     // Right-align with the trigger, clamped so it never leaves the viewport.
     const left = Math.min(Math.max(GAP, rect.right - MENU_W), window.innerWidth - MENU_W - GAP);
 
-    setPos({ top, left });
+    // WHY THE IDENTITY GUARD: this runs on EVERY scroll tick (see the capture-phase
+    // listener below), and it used to allocate a new object each time. Two consequences:
+    //
+    //   1. A scroll event is roughly once per frame while scrolling, and each one
+    //      re-rendered the row plus its menu.
+    //   2. Worse, `pos` is a dependency of the focus effect at :88-90. A fresh object
+    //      each tick made that effect re-run, so the menu stole focus back to its
+    //      first button on every scroll event -- moving focus out of whatever the user
+    //      was doing while the list scrolled.
+    //
+    // Returning the previous object when the numbers are unchanged makes both effects
+    // bail out, and returning a new object only when it actually moved.
+    setPos((prev) => (prev && prev.top === top && prev.left === left ? prev : { top, left }));
   }, []);
 
   // Measured before paint so the menu never flashes at the wrong position.

@@ -44,14 +44,23 @@ export default function MyIncidentsPanel() {
   const [showForm, setShowForm] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
 
-  const params = useMemo(() => {
+  /*
+ * `search` is NOT part of this key, deliberately.
+ *
+ * It used to be, which meant every keystroke minted a new query key and fired a
+ * request to /incidents/mine -- and that endpoint does not take a search param (see
+ * the comment on `visible` below), so every one of those requests returned the same
+ * rows. The search is filtered client-side by `visible` instead, which is the correct
+ * design for a student's own short list; sending it to the server was cost with no
+ * effect.
+ */
+const params = useMemo(() => {
     const p = new URLSearchParams();
     p.set("page", page);
     p.set("limit", PAGE_LIMIT);
     if (statusFilter !== "all") p.set("status", statusFilter);
-    if (search.trim()) p.set("search", search.trim());
     return p.toString();
-  }, [page, statusFilter, search]);
+  }, [page, statusFilter]);
 
   const [prevResetKeys, setPrevResetKeys] = useState([statusFilter, search]);
   if (prevResetKeys[0] !== statusFilter || prevResetKeys[1] !== search) {
@@ -80,8 +89,14 @@ export default function MyIncidentsPanel() {
     return counts;
   }, [incidents]);
 
-  // Simple client-side search: a student's own list is small and /mine does not
-  // take a search param, so round-tripping would be cost without benefit.
+  // Client-side search, applied to the CURRENT PAGE only.
+  //
+  // This is the same filter that used to be duplicated in the query key, where it
+  // also triggered a pointless refetch per keystroke. Now it runs on whatever the
+  // server returned for this page -- so it narrows within the page rather than
+  // across all of the student's reports. Pagination is therefore page-scoped with
+  // respect to search, which is the behaviour a student's own (short) list needs and
+  // matches what the other panels already do.
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return incidents;

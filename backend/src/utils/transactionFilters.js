@@ -1,5 +1,9 @@
 const { supabase } = require("../config/supabase");
 const { parseLocalDay } = require("./exportUtils");
+// orEq quotes the value so a course name containing a comma, quote or bracket
+// cannot produce a malformed .or() filter (which PostgREST answers as a syntax
+// error, i.e. a 500 on the whole Transactions endpoint). See utils/postgrest.js.
+const { orEqAny } = require("./postgrest");
 
 function numberOr(value, fallback = 0) {
   const parsed = Number(value);
@@ -122,17 +126,83 @@ function sortTransactions(items, sortBy) {
  * Shared by the table endpoints and the report exports.
  */
 async function queryTransactions(action, query = {}) {
-  const { data, error } = await supabase
-    .from("transactions").select("*")
+  // Push the indexed, exact-match predicates into SQL.
+  //
+  // The old shape was `.select("*").eq("action", action)` and nothing else, so
+  // every page of the admin Transactions table read the entire action bucket --
+  // all 35 columns of every borrow or return ever recorded -- and then filtered,
+  // sorted and sliced it in Node. Because no `count` was requested either, a
+  // bucket larger than PostgREST's max-rows cap silently produced a short
+  // `total`, which is the failure utils/fetchAll.js exists to warn about.
+  let q = supabase
+    .from("transactions")
+    .select("*", { count: "exact" })
     .eq("action", action);
+
+  // course matches EITHER column, so it is an OR across two columns rather than a
+  // single .eq(). The row volume still drops from the whole bucket to one course.
+  //
+  // orEqAny rather than string-concatenating two orEq() calls by hand. That is what
+  // the helper exists for, and hand-rolling it is exactly how the unquoted variant
+  // came to exist in the first place: a course named "IT, Computer Science" contains
+  // a comma, which silently rewrites the whole .or() clause into different filters.
+  if (query.course) {
+    q = q.or(orEqAny(["course", "equipment_course"], query.course));
+  }
+  if (query.year) {
+    q = q.eq("year", query.year);
+  }
+  // Date bounds on `timestamp`, which is indexed DESC. parseLocalDay is the same
+  // calendar-day conversion the JS filter used, so a date with a time component
+  // still includes the whole boundary day.
+  if (query.dateFrom) {
+    const from = parseLocalDay(query.dateFrom);
+    if (from) q = q.gte("timestamp", from.toISOString());
+  }
+  if (query.dateTo) {
+    const to = parseLocalDay(query.dateTo, true);
+    if (to) q = q.lte("timestamp", to.toISOString());
+  }
+  // Newest first by default, server-side. The client asked for date-desc by
+  // default, which is also the cheapest index order to produce.
+  const [sortKey, sortDir] = String(query.sort || "date-desc").split("-");
+  const asc = sortDir !== "desc";
+  if (sortKey === "date") {
+    // nullsFirst must match the JS comparator this replaces.
+    //
+    // sortTransactions coerces a missing/invalid timestamp to 0 via
+    // `(time(a.timestamp) || 0)`, which places such rows LAST in date-desc and FIRST
+    // in date-asc. So `nullsFirst` has to equal `ascending`.
+    //
+    // Postgres defaults to the opposite (NULLS FIRST for DESC, NULLS LAST for ASC),
+    // so omitting this inverted the null rows: `?page=1` would show a different set
+    // of rows than before whenever any row lacked a timestamp -- and timestamp is
+    // nullable in practice, which is why backfillBorrowDates exists at all.
+    q = q.order("timestamp", { ascending: asc, nullsFirst: asc });
+  }
+
+  const { data, error } = await q;
   if (error) throw new Error(error.message);
 
+  // isOpenBorrow is row-local arithmetic (quantity minus returned_quantity) and
+  // backfillBorrowDates needs a second query, so both stay in JS. The remaining
+  // filters are re-applied below: applyTransactionFilters is idempotent, and
+  // leaving the pushed-down ones in place would be harmless duplication rather
+  // than a behaviour change.
   let items = action === "borrowed"
     ? (data || []).filter((d) => isOpenBorrow(d))
     : await backfillBorrowDates(data || []);
 
   items = applyTransactionFilters(items, query);
-  items = sortTransactions(items, query.sort || "date-desc");
+
+  // Re-sorting in JS is only necessary for the sorts SQL cannot express here
+  // (name, qty). For the default date sort the rows are already ordered, and
+  // sortTransactions copies the array before sorting anyway, so skipping it saves
+  // one O(n) copy per request.
+  if (sortKey !== "date") {
+    items = sortTransactions(items, query.sort || "date-desc");
+  }
+
   return items;
 }
 

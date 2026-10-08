@@ -29,6 +29,7 @@ import { buildAttendanceQuery } from "../components/ui/exportReport";
 import Modal from "../components/ui/Modal";
 import RoomManagementTab from "../components/tabs/RoomManagementTab";
 import StatStrip from "../components/ui/StatStrip";
+import { SkeletonRegion, SkeletonRows, Skeleton } from "../components/ui/Skeleton";
 import useRowMenu from "../hooks/useRowMenu";
 import AttendanceFilterSelect from "../components/attendance/AttendanceFilterSelect";
 import RowActions from "../components/attendance/RowActions";
@@ -86,12 +87,44 @@ function PanelMessage({ icon: Icon, title, message, action, error = false }) {
   );
 }
 
-function LoadingPanel({ label = "Loading records" }) {
+/*
+ * Skeleton rather than a centred spinner.
+ *
+ * A spinner here collapses the panel to zero height and then expands it again when
+ * data lands, so every tab switch on this page reflowed the layout. A skeleton holds
+ * the shape of the content, so nothing moves -- and it communicates the shape of what
+ * is coming rather than just "busy".
+ *
+ * The count matches the real page sizes so the placeholder is roughly the right
+ * height on arrival (50 for the log, 8 for the live list).
+ */
+function LoadingPanel({ label = "Loading records", rows = 8, kind = "cards" }) {
+  if (kind === "rows") {
+    return (
+      <SkeletonRegion label={label} className="au-loading-skeleton">
+        <table className="au-table">
+          <tbody>
+            <SkeletonRows rows={rows} columns={6} />
+          </tbody>
+        </table>
+      </SkeletonRegion>
+    );
+  }
+
   return (
-    <div className="au-empty">
-      <div className="spinner-lg" />
-      <h3>{label}...</h3>
-    </div>
+    <SkeletonRegion label={label} className="au-loading-skeleton">
+      <div className="au-student-grid">
+        {Array.from({ length: rows }).map((_, i) => (
+          <div className="skeleton-student-card" key={i} aria-hidden="true">
+            <Skeleton variant="circle" width={44} height={44} />
+            <div className="skeleton-student-lines">
+              <Skeleton variant="text" width="70%" />
+              <Skeleton variant="text" width="45%" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </SkeletonRegion>
   );
 }
 
@@ -488,6 +521,12 @@ function ActiveTab({ students, rooms, filterRoom, onFilterRoom, busy, error, onR
               </button>
             }
           />
+        ) : students.length === 0 && busy ? (
+          // Skeleton only while genuinely loading. `busy` is isFetching, which is also
+          // true during the 30 s poll -- and rendering a skeleton then would replace a
+          // populated live list with a loading state every 30 seconds, which is far
+          // worse than the spinner it replaces.
+          <LoadingPanel label="Loading students currently inside" rows={8} />
         ) : students.length === 0 ? (
           <PanelMessage
             icon={MdPeople}
@@ -652,6 +691,19 @@ function TodayTab({
               </button>
             }
           />
+        ) : records.length === 0 && busy ? (
+          // Table-shaped placeholder, same column count as the real header. As on the
+          // Active tab, gated on records.length === 0 so the 30 s poll never blanks a
+          // populated table.
+          <SkeletonRegion label="Loading today's attendance log">
+            <div className="au-table-wrap">
+              <table className="au-table">
+                <tbody>
+                  <SkeletonRows rows={10} columns={7} />
+                </tbody>
+              </table>
+            </div>
+          </SkeletonRegion>
         ) : records.length === 0 ? (
           <PanelMessage
             icon={MdEventNote}

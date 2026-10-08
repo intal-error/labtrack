@@ -25,6 +25,7 @@ process.env.SUPABASE_SERVICE_KEY = "placeholder-key";
 
 const supabasePath = require.resolve("../src/config/supabase");
 const firebasePath = require.resolve("../src/config/firebase");
+const { applyOr } = require("./helpers/orFilter");
 
 // Mutable, so an update is observable.
 const db = {
@@ -93,6 +94,14 @@ require.cache[supabasePath] = {
             return chain;
           },
           limit: () => chain,
+          // getRoomAttendanceHistory scopes the room in SQL with .or() over the
+          // casing variants of room_code. Without this the endpoint would run
+          // unfiltered and report the whole building's attendance for one room.
+          // Variants are QUOTED (utils/postgrest.js), hence the shared parser.
+          or: (expr) => {
+            rows = applyOr(rows, expr);
+            return chain;
+          },
           // Writes are queued and applied on read. single()/maybeSingle() count
           // as reads: createRoom ends in .insert().select().single(), so
           // flushing only in then() would never run the insert and the created

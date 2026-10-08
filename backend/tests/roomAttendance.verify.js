@@ -22,6 +22,10 @@ process.env.SUPABASE_SERVICE_KEY = "placeholder-key";
 
 const supabasePath = require.resolve("../src/config/supabase");
 const firebasePath = require.resolve("../src/config/firebase");
+// Shared or() parser. The controller QUOTES its room_code variants, so a stub that
+// split on every comma would treat a comma inside a value as a clause separator and
+// silently match nothing -- see tests/helpers/orFilter.js.
+const { applyOr } = require("./helpers/orFilter");
 
 // CET-01 has four sessions across two sections and three professors.
 // lab-2 has one. "unused-lab" is a configured room with NO attendance at all.
@@ -31,6 +35,16 @@ const rooms = [
   { id: "room-unused", room_code: "unused-lab", room_name: "UNUSED LAB", location: null, status: "inactive" },
 ];
 
+/**
+ * Strict parser for the PostgREST `or=` mini-language, mirroring what the server
+ * does: split on TOP-LEVEL commas only, honour backslash escapes inside a quoted
+ * value, reject anything malformed.
+ *
+ * Needed because the controller now QUOTES its room_code variants
+ * (utils/postgrest.js orEq) so a code containing a comma cannot produce a malformed
+ * filter. A stub that split on every comma would silently match nothing, which is
+ * exactly what these stubs did when the escaping landed.
+ */
 const att = (over) => ({
   student_school_id: "23-000039",
   // The controller matches on room_code, so CET-01 rows must carry it.
@@ -79,11 +93,20 @@ require.cache[supabasePath] = {
             rows = rows.filter((r) => String(r[eqKey]) === String(eqValue));
             return chain;
           },
+          // getRoomAttendanceHistory scopes the room in SQL via .or() with one
+          // `room_code.eq."<value>"` clause per casing variant. The stub has to
+          // execute that predicate, or the endpoint would appear to work while
+          // returning every row in the building.
+          //
+          // Values are QUOTED now (utils/postgrest.js orEq), so this has to split
+          // on top-level commas only and unquote -- a comma inside a room code must
+          // not be treated as a clause separator.
+          or: (expr) => { rows = applyOr(rows, expr); return chain; },
           // The controller resolves the room with .single() and 404s on null, so
           // this must actually narrow by the eq() applied above.
           single: () => Promise.resolve({ data: rows[0] || null, error: null }),
           maybeSingle: () => Promise.resolve({ data: rows[0] || null, error: null }),
-          then: (resolve) => resolve({ data: rows, error: null }),
+          then: (resolve) => resolve({ data: rows, error: null, count: rows.length }),
         };
         return chain;
       },

@@ -35,6 +35,7 @@ process.env.TZ = REAL_TZ;
 // --- Controller, against a stubbed Supabase + Firestore -------------------
 const supabasePath = require.resolve("../src/config/supabase");
 const firebasePath = require.resolve("../src/config/firebase");
+const { applyOr } = require("./helpers/orFilter");
 
 let rows = [];
 let pendingPatch = null;
@@ -49,14 +50,58 @@ require.cache[supabasePath] = {
         // trample each other's filters, which is a bug in the stub, not in the
         // controller.
         let working = [...rows];
+        // head:true must return a count and NO rows -- PostgREST sends a count
+        // header with an empty body. getStats relies on this: it asks for
+        // `.count` instead of transferring every open session in order to count
+        // them in JS, so a stub that kept returning rows would let that regression
+        // pass unnoticed while the assertion below still saw a stale field.
+        let headOnly = false;
+
+        // order() must actually order: timeIn/timeOut/autoScan now ask for the
+        // newest active session with .order("time_in", {ascending:false}).limit(1)
+        // instead of reading every row for the student and sorting in JS, so a
+        // stub that ignored both would silently return the wrong session -- which
+        // is exactly the "today's session wins" behaviour this suite pins.
         const chain = {
-          select: () => chain,
+          select: (_cols, opts = {}) => {
+            if (opts.head) headOnly = true;
+            return chain;
+          },
           eq: (k, v) => { working = working.filter((r) => String(r[k]) === String(v)); return chain; },
           gte: (k, v) => { working = working.filter((r) => String(r[k]) >= String(v)); return chain; },
           lte: (k, v) => { working = working.filter((r) => String(r[k]) <= String(v)); return chain; },
+          order: (k, opts = {}) => {
+            const dir = opts.ascending === false ? -1 : 1;
+            working = [...working].sort((a, b) => {
+              const av = a[k] == null ? null : new Date(a[k]).getTime();
+              const bv = b[k] == null ? null : new Date(b[k]).getTime();
+              // PostgREST puts nulls last for ascending order.
+              if (av === null) return 1;
+              if (bv === null) return -1;
+              return (av - bv) * dir;
+            });
+            return chain;
+          },
+          limit: (n) => { working = working.slice(0, n); return chain; },
+neq: (k, v) => {
+              // SQL semantics, NOT JavaScript ones: `col <> v` is NULL (and therefore
+              // excluded) when col is NULL. `r[k] !== String(v)` would be true for a
+              // NULL and wrongly keep it.
+              working = working.filter((r) => r[k] != null && String(r[k]) !== String(v));
+              return chain;
+            },
+            or: (expr) => {
+              // getStats derives staleInside from `.or("date.neq.<today>,date.is.null")`
+              // rather than a bare .neq(), because SQL would otherwise exclude
+              // NULL-date rows -- which the JS it replaced counted as stale.
+              // See utils/attendanceController.js.
+              working = applyOr(working, expr);
+              return chain;
+            },
           update: (patch) => { pendingPatch = patch; return chain; },
           insert: () => chain,
-          then: (resolve) => resolve({ data: working, error: null }),
+          then: (resolve) =>
+            resolve({ data: headOnly ? null : working, error: null, count: working.length }),
         };
         return chain;
       },

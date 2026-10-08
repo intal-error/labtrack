@@ -28,6 +28,8 @@ function stub(modulePath, exports) {
   };
 }
 
+const { applyOr } = require("./helpers/orFilter");
+
 const BORROWED = [
   { id: "b1", user_id: "u1", action: "borrowed", status: "borrowed", first_name: "Zoe", last_name: "Adams", quantity: 1, course: "BIT", timestamp: "2026-01-05T00:00:00Z" },
   { id: "b2", user_id: "u1", action: "borrowed", status: "borrowed", first_name: "Ana", last_name: "Reyes", quantity: 5, course: "CT", timestamp: "2026-03-05T00:00:00Z" },
@@ -44,24 +46,65 @@ const RETURNED = BORROWED.map((r) => ({
   returned_quantity: r.quantity,
 }));
 
-// Every select().eq().eq() chain resolves to this; the endpoints filter and sort
-// in Node afterwards, which is the behaviour under test.
-const CHAINABLE = {
-  select: () => CHAINABLE,
-  eq: () => CHAINABLE,
-  in: () => CHAINABLE,
-  then: (resolve, reject) => {
-    const action = CURRENT_ACTION;
-    const rows = action === "borrowed" ? BORROWED : RETURNED;
-    return Promise.resolve({ data: rows, error: null }).then(resolve, reject);
-  },
-};
+/**
+ * Query-builder stub that actually executes the predicates.
+ *
+ * It used to ignore every filter and hand back the whole action bucket, with the
+ * comment "the endpoints filter and sort in Node afterwards". That was true when
+ * queryTransactions pushed nothing into SQL; it now pushes course, year and the
+ * date range down, so a stub that ignores them would let a broken pushdown pass
+ * this suite unnoticed -- which is exactly the regression this file exists to
+ * catch. The predicates below are the real contract.
+ */
+function makeChain(initial) {
+  let rows = [...initial];
+  const chain = {
+    select: () => chain,
+    eq: (k, v) => {
+      rows = rows.filter((r) => String(r[k]) === String(v));
+      return chain;
+    },
+    // Values arrive QUOTED (utils/postgrest.js orEq), so a comma inside a course name
+    // must not be read as a clause separator. See tests/helpers/orFilter.js.
+    or: (expr) => {
+      rows = applyOr(rows, expr);
+      return chain;
+    },
+    gte: (k, v) => { rows = rows.filter((r) => new Date(r[k]) >= new Date(v)); return chain; },
+    lte: (k, v) => { rows = rows.filter((r) => new Date(r[k]) <= new Date(v)); return chain; },
+    order: (k, opts = {}) => {
+      const dir = opts.ascending === false ? -1 : 1;
+      rows = [...rows].sort((a, b) => {
+        const av = k === "timestamp" ? new Date(a[k]).getTime() : a[k];
+        const bv = k === "timestamp" ? new Date(b[k]).getTime() : b[k];
+        return (av < bv ? -1 : av > bv ? 1 : 0) * dir;
+      });
+      return chain;
+    },
+    in: () => chain,
+    then: (resolve, reject) =>
+      Promise.resolve({ data: rows, error: null, count: rows.length }).then(resolve, reject),
+  };
+  return chain;
+}
 
 let CURRENT_ACTION = "borrowed";
 
-stub("../src/config/supabase", { supabase: { from: () => CHAINABLE } });
+stub("../src/config/supabase", {
+  supabase: {
+    from: () => makeChain(CURRENT_ACTION === "borrowed" ? BORROWED : RETURNED),
+  },
+});
+// FieldPath is exported by config/firebase for batched `where(documentId(), "in")`
+// reads, which enrichWithProfileURL now uses instead of N individual doc gets.
 stub("../src/config/firebase", {
-  db: { collection: () => ({ doc: () => ({ get: () => Promise.resolve({ exists: false }) }) }) },
+  db: {
+    collection: () => ({
+      doc: () => ({ get: () => Promise.resolve({ exists: false }) }),
+      where: () => ({ get: async () => ({ docs: [], empty: true }) }),
+    }),
+  },
+  FieldPath: { documentId: () => "__name__" },
 });
 
 const { getMyBorrowed, getMyReturned } = require("../src/controllers/transactionController");

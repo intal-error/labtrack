@@ -139,6 +139,35 @@ const getStats = async (req, res) => {
   }
 };
 
+/**
+ * Lightweight projection for dropdowns and previews.
+ *
+ * WHY A SEPARATE ENDPOINT: four surfaces used to call the full getAll to populate a
+ * <select> or a six-row preview -- the dashboard, the maintenance form, the
+ * borrow-requests thumbnails and the incident report form. Each one transferred the
+ * entire catalog including every long text column (`description`, `condition`,
+ * `notes`) to read four or five short fields.
+ *
+ * It is also mounted behind the same cacheMiddleware as /catalog, so it inherits the
+ * 30 s window and the mutation invalidation added in routes/catalog.js.
+ *
+ * Deliberately not paginated: a picker needs every option, and the payload is small
+ * enough that paging would only add a round trip.
+ */
+const getOptions = async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("catalog")
+      .select("id,item_name,course,category,status,quantity,available_quantity,image_url")
+      .order("item_name", { ascending: true });
+    if (error) throw new Error(error.message);
+
+    res.json(transformKeys(data || []));
+  } catch (err) {
+    res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
+  }
+};
+
 const getById = async (req, res) => {
   try {
     const { data, error } = await supabase.from("catalog").select("*").eq("id", req.params.id).single();
@@ -340,4 +369,4 @@ const lookupByBarcode = async (req, res) => {
   }
 };
 
-module.exports = { getAll, getStats, getById, create, update, remove, lookupByBarcode };
+module.exports = { getAll, getStats, getOptions, getById, create, update, remove, lookupByBarcode };

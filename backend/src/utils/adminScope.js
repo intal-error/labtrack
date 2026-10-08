@@ -39,11 +39,36 @@ function isSuperAdmin(admin) {
   return admin?.role === "admin" && getAdminCourses(admin).length === 0;
 }
 
+// The admin roster changes only when an admin is added, renamed or deactivated --
+// all admin-only actions, all rare. It was being re-read from Firestore two to
+// three times per incident or borrow-request creation (autoAssignAdmin, then
+// getTargetCourseAdmins, then a fallback when the course had no handler), each
+// read pulling every admin document in full.
+//
+// Cached for a minute. That is short enough that a deactivation takes effect
+// almost immediately, and long enough to collapse a burst of concurrent requests
+// onto one read. Kept OUTSIDE autoAssignAdmin's try/catch on purpose: that
+// function swallows Firestore errors so a hiccup cannot block a student from
+// filing a report, and a stale-cache read is not an error worth swallowing.
+let adminsCache = { at: 0, list: [] };
+const ADMINS_TTL_MS = 60 * 1000;
+
 async function getActiveAdminsList() {
+  if (Date.now() - adminsCache.at < ADMINS_TTL_MS) return adminsCache.list;
+
   const snap = await db.collection("users").where("role", "==", "admin").get();
-  return snap.docs
+  const list = snap.docs
     .map((doc) => ({ id: doc.id, ...doc.data() }))
     .filter((a) => (a.status || "active") === "active");
+
+  adminsCache = { at: Date.now(), list };
+  return list;
+}
+
+// Called by the admin-management controller after it adds, edits or deactivates an
+// admin, so a role change is visible immediately rather than up to a minute later.
+function invalidateAdminsCache() {
+  adminsCache = { at: 0, list: [] };
 }
 
 async function getTargetCourseAdmins(course) {
@@ -132,6 +157,7 @@ module.exports = {
   isAdminForCourse,
   isSuperAdmin,
   getActiveAdminsList,
+  invalidateAdminsCache,
   getTargetCourseAdmins,
   autoAssignAdmin,
   canHandleIncident,

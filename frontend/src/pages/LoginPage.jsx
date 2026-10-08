@@ -47,10 +47,21 @@ export default function LoginPage() {
 
   return (
     <div className="login-page auth-page">
-      <picture>
-        <source srcSet="/Lucena.webp" type="image/webp" />
-        <img src="/Lucena.png" alt="" className="auth-bg" loading="eager" width="1920" height="1080" decoding="async" />
-      </picture>
+      {/* 1280x720 @ q52 rather than the 1600x900 original: this sits behind
+          .auth-overlay, a blurred/darkened scrim, so the extra resolution was
+          invisible while costing 121 kB on the one page whose first paint is
+          entirely in the critical path. The <picture>/WebP-fallback pair is gone
+          because every browser that can run this bundle supports WebP. */}
+      <img
+        src="/Lucena.bg.webp"
+        alt=""
+        className="auth-bg"
+        loading="eager"
+        width="1280"
+        height="720"
+        decoding="async"
+        fetchPriority="high"
+      />
       <div className="auth-overlay" />
 
       <button
@@ -66,7 +77,10 @@ export default function LoginPage() {
       <div className={`auth-content${view === "signup" ? " is-wide" : ""}`}>
         <div className="auth-left">
           <div className="auth-brand">
-            <img src="/logo.png" alt="SLSU Logo" className="auth-logo" loading="eager" width="48" height="48" decoding="async" />
+            {/* icon-192x192, not the old /logo.png: that file was 1.2 MB (266 kB after the
+              build optimizer) rendered at 48x48, and it was also the page favicon,
+              so it was fetched on every single route. */}
+            <img src="/icons/icon-192x192.png" alt="SLSU Logo" className="auth-logo" loading="eager" width="48" height="48" decoding="async" />
             <span className="auth-brand-name">SLSU</span>
           </div>
           <h1 className="auth-title">LAB<span className="auth-title-accent">TRACK</span></h1>

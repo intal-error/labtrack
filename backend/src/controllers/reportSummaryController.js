@@ -158,18 +158,92 @@ const getSummary = async (req, res) => {
     }
     const toStr = toParam || today;
 
-    const attendanceRangeQuery = () => {
-      let q = supabase.from("lab_attendance").select("date", { count: "exact" }).lte("date", toStr);
-      if (fromParam) q = q.gte("date", fromParam);
-      return q.order("id", { ascending: true });
-    };
+    // Only `date` is read from lab_attendance -- one column, not the row -- and the
+    // range is bounded from below even without ?from.
+    //
+    // That lower bound matters: the old query was `.lte("date", to)` with no floor
+    // unless the caller passed ?from, so the default dashboard request fetched the
+    // ENTIRE attendance history to count this period's sessions. The floor below is
+    // the earliest borrowing date (or 90 days back), and the series below can only
+    // ever report dates inside [fromStr, toStr], so nothing outside it could have
+    // contributed.
+    let attendanceFloor = fromParam;
+    if (!attendanceFloor) {
+      // Two single-row MIN probes, run together, rather than deriving the floor from
+      // whichever table happens to have rows.
+      //
+      // An earlier version took the floor from the earliest BORROW alone. That was
+      // circular: lab_attendance is then read with `.gte("date", attendanceFloor)`, so
+      // the "earliest attendance" compensation further down could only ever observe
+      // dates at or after the floor it had just imposed. Attendance recorded before
+      // the first equipment borrow was silently dropped from `period.sessions` and
+      // from the `period.from` the dashboard displays -- a plausible deployment
+      // (lab attendance used first, equipment borrowing later) and a quiet
+      // under-report.
+      //
+      // Both probes are `.limit(1)` so they cost one row each, and taking the minimum
+      // of the two keeps the range bounded without assuming either table is
+      // populated.
+      const [earliestBorrowRes, earliestAttendanceRes] = await Promise.all([
+        supabase
+          .from("transactions")
+          .select("borrowed_at,timestamp,created_at")
+          .eq("action", "borrowed")
+          .order("borrowed_at", { ascending: true, nullsFirst: true })
+          .limit(1),
+        supabase
+          .from("lab_attendance")
+          .select("date")
+          .order("date", { ascending: true, nullsFirst: false })
+          .limit(1),
+      ]);
+
+      const candidates = [];
+      const borrow = earliestBorrowRes?.data?.[0];
+      for (const v of [borrow?.borrowed_at, borrow?.timestamp, borrow?.created_at]) {
+        if (v) candidates.push(dayKey(new Date(v)));
+      }
+      const earliestAtt = earliestAttendanceRes?.data?.[0]?.date;
+      if (earliestAtt) candidates.push(dayKey(new Date(earliestAtt)));
+
+      // Nothing anywhere: fall back to 90 days, which is what the dashboard's default
+      // range already is.
+      candidates.sort();
+      attendanceFloor = candidates.length ? candidates[0] : dayKey(new Date(Date.now() - 90 * DAY_MS));
+      // A floor after the range end would build an empty series; collapse to one day.
+      if (attendanceFloor > toStr) attendanceFloor = toStr;
+    }
+
+    const attendanceRangeQuery = () =>
+      supabase
+        .from("lab_attendance")
+        .select("date", { count: "exact" })
+        .gte("date", attendanceFloor)
+        .lte("date", toStr)
+        .order("id", { ascending: true });
+
+    // Column lists, not select("*").
+    //
+    // This endpoint is the most expensive read in the app and it was pulling 35
+    // columns of every transaction ever recorded -- borrow_photo_url, condition
+    // descriptions, the lot -- to compute six integers and a daily series. Only
+    // these fields are ever read below; the rest was pure transfer cost, and
+    // fetchAll would keep issuing round trips until the bucket was exhausted.
+    const BORROW_COLS = "borrowed_at,timestamp,created_at,due_date,returned_at,last_returned_at,status";
+    const RETURN_COLS = "returned_at,timestamp,created_at";
+
+    // Incident reports contribute exactly two numbers, so they are two head
+    // counts instead of the whole table. The old read shipped every report's
+    // `description` text, `photos` array and `reassignment_history` JSONB blob.
+    const OPEN_INCIDENT_STATUSES = ["pending", "under_review", "open"];
 
     const [
       usersAgg,
       studentsAgg,
       borrowedRows,
       returnedRows,
-      incidents,
+      totalIncidentsAgg,
+      openIncidentsAgg,
       attendanceRange,
       roomsAgg,
       activeRoomsAgg,
@@ -179,25 +253,29 @@ const getSummary = async (req, res) => {
       fetchAll(() =>
         supabase
           .from("transactions")
-          .select("*", { count: "exact" })
+          .select(BORROW_COLS, { count: "exact" })
           .eq("action", "borrowed")
           .order("id", { ascending: true })
       ),
       fetchAll(() =>
         supabase
           .from("transactions")
-          .select("*", { count: "exact" })
+          .select(RETURN_COLS, { count: "exact" })
           .eq("action", "returned")
           .order("id", { ascending: true })
       ),
-      fetchAll(() => supabase.from("incidents").select("*", { count: "exact" }).order("id", { ascending: true })),
+      // `head: true` asks PostgREST for the count header only, so these cost
+      // nothing regardless of how many reports exist.
+      supabase.from("incidents").select("id", { count: "exact", head: true }),
+      supabase
+        .from("incidents")
+        .select("id", { count: "exact", head: true })
+        .in("status", OPEN_INCIDENT_STATUSES),
       fetchAll(attendanceRangeQuery),
-      // `head: true` asks PostgREST for the count header only, so the room
-      // totals cost nothing regardless of how many labs are registered.
-      supabase.from("lab_rooms").select("*", { count: "exact", head: true }),
+      supabase.from("lab_rooms").select("id", { count: "exact", head: true }),
       supabase
         .from("lab_rooms")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("status", "active"),
     ]);
 
@@ -206,8 +284,14 @@ const getSummary = async (req, res) => {
     // or schema problem would surface as "0 rooms" instead of an error.
     if (roomsAgg?.error) throw roomsAgg.error;
     if (activeRoomsAgg?.error) throw activeRoomsAgg.error;
+    if (totalIncidentsAgg?.error) throw totalIncidentsAgg.error;
+    if (openIncidentsAgg?.error) throw openIncidentsAgg.error;
 
-    // Effective range start: explicit ?from, otherwise earliest data (all-time)
+    // Effective range start: explicit ?from, otherwise earliest data (all-time).
+    //
+    // Bounded by the earliest borrowing date, which is a single MIN() instead of a
+    // scan: attendance can legitimately predate any transaction, so attendance rows
+    // are still considered when narrowing further below.
     let fromStr = fromParam;
     if (!fromStr) {
       let minMs = null;
@@ -217,10 +301,16 @@ const getSummary = async (req, res) => {
       };
       borrowedRows.forEach((t) => consider(t.borrowed_at || t.timestamp || t.created_at));
       returnedRows.forEach((t) => consider(t.returned_at || t.timestamp || t.created_at));
-      (attendanceRange || []).forEach((r) => consider(r.date));
+      const earliestAttendance = (attendanceRange || [])
+        .map((r) => r.date)
+        .filter(Boolean)
+        .sort()[0];
+      consider(earliestAttendance);
+
       const to = parseDay(toStr);
       const fallback = minMs === null ? new Date(to.getFullYear(), to.getMonth(), to.getDate() - 90) : new Date(minMs);
       fromStr = dayKey(fallback);
+      if (fromStr > toStr) fromStr = toStr;
     }
     // A ?from later than the range end would otherwise build an empty series.
     if (fromStr > toStr) fromStr = toStr;
@@ -289,12 +379,18 @@ const getSummary = async (req, res) => {
         // handler still owes the student an answer, which is the two workflow
         // states that are neither a verdict nor a close-out. Matching on the
         // old "open" string here silently pinned the dashboard KPI to 0.
-        openIncidents: (incidents || []).filter((i) =>
-          i.status === "pending" || i.status === "under_review" || i.status === "open"
-        ).length,
+        // Incident reports moved from open|investigating|resolved to
+        // pending|under_review|approved|rejected|resolved. "Open" means the
+        // handler still owes the student an answer, which is the two workflow
+        // states that are neither a verdict nor a close-out. Matching on the
+        // old "open" string here silently pinned the dashboard KPI to 0.
+        //
+        // OPEN_INCIDENT_STATUSES above is the same three values, kept as a list so
+        // the .in() filter and this comment cannot drift apart.
+        openIncidents: openIncidentsAgg?.count || 0,
         // Every report ever filed, so the dashboard's headline incident figure is
         // the total workload rather than only the part still open.
-        totalIncidents: (incidents || []).length,
+        totalIncidents: totalIncidentsAgg?.count || 0,
         // A head-count query returns no rows, so `count` is the whole payload and
         // is null only if the count was not requested at all.
         totalRooms: roomsAgg?.count || 0,

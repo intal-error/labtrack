@@ -38,6 +38,7 @@ export default function BottomNav() {
             `bottom-nav-item ${isActive ? "active" : ""}`
           }
           onMouseEnter={() => prefetchRoute(item.path)}
+          onFocus={() => prefetchRoute(item.path)}
         >
           <span className="bottom-nav-icon-wrap">
             <item.icon size={22} />

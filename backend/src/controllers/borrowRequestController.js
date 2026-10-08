@@ -11,6 +11,7 @@ const {
   isAdminForCourse,
   getAdminCourses,
   getTargetCourseAdmins,
+  getActiveAdminsList,
   autoAssignAdmin,
 } = require("../utils/adminScope");
 
@@ -36,14 +37,10 @@ function getAvailableQuantity(item) {
   return (item?.status || "").toLowerCase() === "borrowed" ? 0 : quantity;
 }
 
-async function getActiveAdminsList() {
-  const snap = await db.collection("users")
-    .where("role", "==", "admin")
-    .get();
-  return snap.docs
-    .map((doc) => ({ id: doc.id, ...doc.data() }))
-    .filter((a) => (a.status || "active") === "active");
-}
+// getActiveAdminsList used to be defined here as a second copy of the one in
+// utils/adminScope.js -- so importing from adminScope and calling the local copy
+// in the same request issued the identical Firestore query twice. It is gone:
+// the shared version is cached for a minute, which is what makes reusing it free.
 
 const getAllRequests = async (req, res) => {
   try {
@@ -54,8 +51,9 @@ const getAllRequests = async (req, res) => {
 
     let filtered = requests || [];
 
-    const reviewerDoc = await db.collection("users").doc(req.user.uid).get();
-    const reviewer = reviewerDoc.exists ? reviewerDoc.data() : {};
+    // authorize("admin") already read this document; see the note in
+    // incidentController.getAll.
+    const reviewer = req.profile || {};
 
     if (!isSuperAdmin(reviewer)) {
       const adminCourses = getAdminCourses(reviewer);
@@ -137,43 +135,43 @@ const getMyRequests = async (req, res) => {
 const createRequest = async (req, res) => {
   try {
     const { itemId, quantity, dueDate, purpose, targetCourse } = req.body;
-    const uid = req.user.uid;
 
-    const userSnap = await db.collection("users").doc(uid).get();
-    if (!userSnap.exists) return res.status(404).json({ error: "User not found" });
-    const user = userSnap.data();
+    // attachRole read this document; see the note in incidentController.create.
+    const user = req.profile;
+    if (!user) return res.status(404).json({ error: "User not found" });
+    const uid = user.id;
 
-    const { data: item, error: itemError } = await supabase
-      .from("catalog").select("*").eq("id", itemId).single();
-    if (itemError || !item) return res.status(404).json({ error: "Catalog item not found" });
+    // These four reads do not depend on each other, so they used to be four
+    // sequential round trips for one form submission. They are issued together
+    // and the guard order below is unchanged, so the first error the caller sees
+    // is still the same one they saw before.
+    const [itemRes, pendingReqRes, pendingFinesRes, settingsRes] = await Promise.all([
+      supabase.from("catalog").select("*").eq("id", itemId).single(),
+      supabase.from("borrow_requests").select("id")
+        .eq("user_id", uid).eq("status", "pending"),
+      supabase.from("fines").select("total_fine")
+        .eq("user_id", uid).eq("status", "pending"),
+      supabase.from("settings").select("*").eq("id", "appSettings").single(),
+    ]);
+
+    const item = itemRes.data;
+    if (itemRes.error || !item) return res.status(404).json({ error: "Catalog item not found" });
 
     const available = getAvailableQuantity(item);
     if (available < quantity) {
       return res.status(400).json({ error: `Only ${available} available for "${item.item_name}"` });
     }
 
-    const { data: pendingRequests } = await supabase
-      .from("borrow_requests").select("id")
-      .eq("user_id", uid)
-      .eq("status", "pending");
-    if (pendingRequests && pendingRequests.length > 0 && user.role === "student") {
+    if (pendingReqRes.data && pendingReqRes.data.length > 0 && user.role === "student") {
       return res.status(400).json({ error: "You already have a pending borrow request. Please wait for approval." });
     }
 
-    const { data: pendingFines } = await supabase
-      .from("fines").select("total_fine")
-      .eq("user_id", uid)
-      .eq("status", "pending");
-    let totalPendingFines = 0;
-    if (pendingFines) {
-      pendingFines.forEach((f) => {
-        totalPendingFines += Number(f.total_fine) || 0;
-      });
-    }
+    const totalPendingFines = (pendingFinesRes.data || []).reduce(
+      (sum, f) => sum + (Number(f.total_fine) || 0),
+      0
+    );
 
-    const { data: settings } = await supabase
-      .from("settings").select("*").eq("id", "appSettings").single();
-    const threshold = Number(settings?.fine_restriction_threshold) || 50;
+    const threshold = Number(settingsRes.data?.fine_restriction_threshold) || 50;
 
     if (totalPendingFines >= threshold) {
       return res.status(400).json({ error: `Your account is restricted due to unpaid fines (₱${totalPendingFines}). Please settle your fines first.` });
@@ -219,8 +217,12 @@ const createRequest = async (req, res) => {
     if (insertError) throw new Error(insertError.message);
 
     try {
+      // The notification fan-out needs every admin responsible for this course, not
+      // just the one autoAssignAdmin picked. Both helpers read the same roster, which
+      // adminScope memoises for a minute -- so this is a cache read rather than the
+      // third identical Firestore query this request used to issue.
       const targetAdmins = await getTargetCourseAdmins(finalTargetCourse);
-      const adminList = targetAdmins.length > 0 ? targetAdmins : (await getActiveAdminsList());
+      const adminList = targetAdmins.length > 0 ? targetAdmins : await getActiveAdminsList();
       const notifications = adminList.map((admin) => ({
         id: randomUUID(),
         target_user_id: admin.id,
@@ -261,8 +263,8 @@ const approveRequest = async (req, res) => {
     if (reqError || !request) return res.status(404).json({ error: "Request not found" });
     if (request.status !== "pending") return res.status(400).json({ error: "Request already processed" });
 
-    const reviewerDoc = await db.collection("users").doc(reviewerId).get();
-    const reviewer = reviewerDoc.exists ? reviewerDoc.data() : {};
+    // authorize("admin") already read this document on this route.
+    const reviewer = req.profile || {};
     const targetCourse = request.target_course || request.equipment_course || "";
 
     if (targetCourse && !isSuperAdmin(reviewer) && !isAdminForCourse(reviewer, targetCourse)) {
@@ -364,8 +366,8 @@ const rejectRequest = async (req, res) => {
     if (reqError || !request) return res.status(404).json({ error: "Request not found" });
     if (request.status !== "pending") return res.status(400).json({ error: "Request already processed" });
 
-    const reviewerDoc = await db.collection("users").doc(reviewerId).get();
-    const reviewer = reviewerDoc.exists ? reviewerDoc.data() : {};
+    // authorize("admin") already read this document on this route.
+    const reviewer = req.profile || {};
     const targetCourse = request.target_course || request.equipment_course || "";
 
     if (targetCourse && !isSuperAdmin(reviewer) && !isAdminForCourse(reviewer, targetCourse)) {
@@ -459,22 +461,19 @@ const reassignRequest = async (req, res) => {
       return res.status(400).json({ error: "Admin is not assigned to the target course" });
     }
 
+    // authorize("admin") already read the reassigner's own document; this used to
+    // be a fourth Firestore round trip on one request.
+    const rd = req.profile || {};
     const historyEntry = {
       previous_admin_id: request.assigned_admin_id || "",
       previous_admin_name: request.assigned_admin_name || "",
       new_admin_id: newAdminId,
       new_admin_name: `${newAdminData.firstName || ""} ${newAdminData.lastName || ""}`.trim(),
       reassigned_by: reassignedBy,
-      reassigned_by_name: "",
+      reassigned_by_name: `${rd.firstName || ""} ${rd.lastName || ""}`.trim(),
       date: new Date().toISOString(),
       reason: reason || "",
     };
-
-    const reassignerDoc = await db.collection("users").doc(reassignedBy).get();
-    if (reassignerDoc.exists) {
-      const rd = reassignerDoc.data();
-      historyEntry.reassigned_by_name = `${rd.firstName || ""} ${rd.lastName || ""}`.trim();
-    }
 
     const reassignmentHistory = [...(request.reassignment_history || []), historyEntry];
 

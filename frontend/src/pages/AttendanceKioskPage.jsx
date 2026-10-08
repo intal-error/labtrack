@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Html5Qrcode } from "html5-qrcode";
 import { api } from "../services/api";
+import { hapticSuccess, hapticError } from "../utils/haptics";
 import { SUBJECTS } from "../constants/subjects";
 import { formatDuration } from "../utils/attendanceHelpers";
 import "../styles/pages/attendance-kiosk.css";
@@ -67,7 +68,19 @@ export default function AttendanceKioskPage() {
     setStep(STEPS.MODE_SELECT);
   }, []);
 
+  /*
+   * Cancelled between an await inside startScanner and its completion.
+   *
+   * Camera start() takes a few hundred ms. Without this, leaving the kiosk, or
+   * changing step twice in quick succession (resetToScan -> MODE_SELECT -> SCAN),
+   * could start a second scanner while the first was still initialising. On a shared
+   * kiosk tablet that means two Html5Qrcode instances fighting over one
+   * #kiosk-qr-reader element, and a camera light that never goes off.
+   */
+  const startCancelledRef = useRef(false);
+
   const startScanner = useCallback(async () => {
+    startCancelledRef.current = false;
     await stopScanner();
     try {
       const scanner = new Html5Qrcode("kiosk-qr-reader");
@@ -83,6 +96,11 @@ export default function AttendanceKioskPage() {
         },
         () => {}
       );
+      // Unmounted (or superseded) mid-start: release the stream we just opened.
+      if (startCancelledRef.current) {
+        await stopScanner();
+        return;
+      }
       runningRef.current = true;
     } catch {
       try {
@@ -100,8 +118,13 @@ export default function AttendanceKioskPage() {
           },
           () => {}
         );
+        if (startCancelledRef.current) {
+          await stopScanner();
+          return;
+        }
         runningRef.current = true;
       } catch {
+        if (startCancelledRef.current) return;
         setErrorMessage("Camera unavailable. Please try again.");
         setStep(STEPS.ERROR);
       }
@@ -119,9 +142,21 @@ export default function AttendanceKioskPage() {
   }
 
   useEffect(() => {
-    if (step === STEPS.SCAN) {
-      setTimeout(() => startScanner(), 100);
-    }
+    if (step !== STEPS.SCAN) return undefined;
+    // The handle was previously discarded, so the 100 ms timer outlived this effect.
+    // Leaving the kiosk inside that window meant the unmount cleanup had already run
+    // when startScanner() fired: it created an Html5Qrcode, started the camera, and
+    // there was no cleanup left to stop it. The camera stayed on for the life of the
+    // tab on a device that is meant to be shared.
+    const timer = setTimeout(() => startScanner(), 100);
+
+    return () => {
+      clearTimeout(timer);
+      // Also covers the case where the timer already fired: stopScanner runs in the
+      // unmount cleanup above, and this flag makes startScanner release its stream if
+      // it is still mid-await.
+      startCancelledRef.current = true;
+    };
   }, [step, startScanner]);
 
   const handleModeSelect = (selectedMode) => {
@@ -144,9 +179,11 @@ export default function AttendanceKioskPage() {
         roomCode: roomName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
       });
       setResultData(result.record);
+      hapticSuccess();
       setStep(STEPS.SUCCESS);
     } catch (err) {
       setErrorMessage(err.message || "Failed to record time-in");
+      hapticError();
       setStep(STEPS.ERROR);
     } finally {
       setSubmitting(false);
@@ -162,9 +199,11 @@ export default function AttendanceKioskPage() {
         roomCode: roomName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
       });
       setResultData(result.record);
+      hapticSuccess();
       setStep(STEPS.SUCCESS);
     } catch (err) {
       setErrorMessage(err.message || "Failed to record time-out");
+      hapticError();
       setStep(STEPS.ERROR);
     } finally {
       setSubmitting(false);
@@ -197,7 +236,7 @@ export default function AttendanceKioskPage() {
     <div className="kiosk-page">
       <div className="kiosk-header">
         <div className="kiosk-logo">
-          <img src="/logo.png" alt="SLSU" loading="lazy" width="40" height="40" decoding="async" />
+          <img src="/icons/icon-192x192.png" alt="SLSU" loading="lazy" width="40" height="40" decoding="async" />
           <span className="kiosk-logo-text">LabTrack</span>
         </div>
         <div className="kiosk-room-badge">

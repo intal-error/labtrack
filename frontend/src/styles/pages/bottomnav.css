@@ -21,6 +21,17 @@
   flex: 1;
   min-width: 0;
   padding: 8px 2px;
+  /*
+   * 44px minimum target.
+   *
+   * The item was only as tall as its content -- a 22px icon, a 2px gap and a 10px
+   * label, roughly 38px including padding. That is below the 44x44 that both the
+   * WCAG 2.5.5 (AAA) and the platform HIGs ask for on a bar the user is expected to
+   * hit repeatedly with a thumb, and it was the most-tapped control in the app on
+   * mobile. Padding-top absorbs the difference so the bar's visual height is
+   * unchanged and no other layout shifts.
+   */
+  min-height: 44px;
   color: rgba(255, 255, 255, 0.45);
   text-decoration: none;
   font-size: 10px;
@@ -28,6 +39,17 @@
   transition: color 0.15s ease;
   position: relative;
   -webkit-tap-highlight-color: transparent;
+  /* Transforms only, so the press feedback composites on the GPU rather than
+     triggering layout on every touch start. */
+  will-change: transform;
+}
+
+/* Visible focus for keyboard users. The tab bar is currently unreachable by keyboard
+   without this -- :focus-visible rather than :focus so it does not appear on tap. */
+.bottom-nav-item:focus-visible {
+  outline: 2px solid #66bb6a;
+  outline-offset: -2px;
+  border-radius: 8px;
 }
 
 .bottom-nav-item:active {

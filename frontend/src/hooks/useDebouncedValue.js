@@ -3,11 +3,19 @@ import { useEffect, useState } from "react";
 /**
  * Mirrors `value` after it has stopped changing for `delay` ms.
  *
- * Used by the room attendance history search box. That endpoint does a
- * `.select("*")` on the whole lab_attendance table and filters in JS on the
- * server, so every keystroke was a full-table scan — a 10-character student
- * name fired 10 scans. Debouncing collapses that to one request per settled
- * query without changing what the user sees.
+ * Used wherever a text box feeds a react-query key. That is the common case: the
+ * query key includes the search term, so every keystroke mints a new key and fires a
+ * request. Debouncing collapses that to one request per settled query without
+ * changing what the user sees.
+ *
+ * Current callers:
+ *   RoomAttendancePage  room history search (also passes a resetKey, below)
+ *   FinesTab            admin/student fines search
+ *   MaintenanceTab      maintenance search
+ *
+ * The Fines and Maintenance cases are exactly the room-history problem the hook was
+ * written for: their search terms went into the query key undebounced, so a
+ * 10-character item name fired 10 round trips.
  *
  * `resetKey` discards any pending debounce immediately and re-seeds from the
  * CURRENT `value`. The room history page passes `roomId`: switching rooms clears
@@ -16,7 +24,10 @@ import { useEffect, useState } from "react";
  *
  * `delay = 0` passes the value straight through, so a caller can opt out.
  */
-export default function useDebouncedValue(value, delay = 300, resetKey) {
+// Named export as well as default: RoomAttendancePage imports it as a default, but
+// new call sites can use whichever reads better at the call site without a
+// default-plus-named dance.
+export function useDebouncedValue(value, delay = 300, resetKey) {
   const [debounced, setDebounced] = useState(value);
 
   useEffect(() => {
@@ -41,3 +52,5 @@ export default function useDebouncedValue(value, delay = 300, resetKey) {
   // cascading render).
   return delay > 0 ? debounced : value;
 }
+
+export default useDebouncedValue;

@@ -19,13 +19,37 @@ export default function Modal({ title, onClose, children, wide }) {
   // users are not dumped at the top of the document.
   const restoreTo = useRef(null);
 
+  /*
+   * WHY onClose IS HELD IN A REF
+   *
+   * This effect previously depended on [onClose]. Every call site passes an inline
+   * arrow -- `onClose={() => setShowModal(false)}` -- so that function is a new
+   * identity on every parent render, and the effect re-ran each time. Re-running it
+   * is not harmless here: it re-attaches the keydown listener, re-writes
+   * document.body.style.overflow, and RE-FIRES the requestAnimationFrame focus
+   * call below.
+   *
+   * The visible symptom: type one character in a dialog that contains an input --
+   * FinesTab's waive-reason textarea is the clearest case -- the component
+   * re-renders, the effect re-runs, and focus jumps out of the textarea mid-word.
+   *
+   * A ref gives the handler the current callback without making it a dependency,
+   * which is the same pattern useRowMenu.js already uses correctly. The effect now
+   * runs exactly once per mount, which is what "set up on open, tear down on close"
+   * was always supposed to mean.
+   */
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   useEffect(() => {
     restoreTo.current = document.activeElement;
 
     const onKeyDown = (event) => {
       if (event.key === "Escape") {
         event.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab") return;
@@ -68,7 +92,9 @@ export default function Modal({ title, onClose, children, wide }) {
       const target = restoreTo.current;
       if (target && typeof target.focus === "function") target.focus();
     };
-  }, [onClose]);
+    // Mount/unmount only. onClose is read through onCloseRef precisely so it does
+    // not have to appear here -- see the note above.
+  }, []);
 
   return (
     <div className="modal-overlay" onClick={onClose}>

@@ -34,8 +34,80 @@ function toError(body, status) {
   return new Error(details.length ? `${message}: ${details.join("; ")}` : message);
 }
 
+/**
+ * Combines the caller's abort signal with our own timeout into one.
+ *
+ * WHY THIS EXISTS: React Query passes an AbortSignal to every queryFn, but none of
+ * them declared it, so cancellation never reached fetch. Superseding a request (change
+ * a filter, click page 2, type another character) told React Query to discard the
+ * response -- while the server kept working on it. On this app that mattered: the
+ * superseded request was typically a full-table scan, so every filter change left
+ * expensive queries running to completion in the background with nobody reading the
+ * answer.
+ *
+ * AbortSignal.any would be tidier but needs a polyfill on older Safari, which is
+ * exactly where a lab tablet or an older Android phone might sit. So the two signals
+ * are wired together by hand.
+ */
+function combineSignals(externalSignal, timeoutMs) {
+  const controller = new AbortController();
+  // Set by the timer, and read at CATCH time. Inferring the cause from
+  // `externalSignal.aborted` instead is a race: both causes abort this same
+  // controller, and a query superseded in the few milliseconds AFTER a timeout would
+  // make a genuine timeout look like a cancellation -- which React Query drops
+  // silently, turning "server was too slow, retry" into "user moved on, discard"
+  // and losing the record of a real failure.
+  let timedOut = false;
+
+  const onExternalAbort = () => controller.abort();
+  if (externalSignal) {
+    if (externalSignal.aborted) controller.abort();
+    else externalSignal.addEventListener("abort", onExternalAbort, { once: true });
+  }
+
+  // Abort with a TimeoutError reason so the cause survives in the thrown error too,
+  // not only in this closure.
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort(new DOMException("Request timed out", "TimeoutError"));
+  }, timeoutMs);
+
+  return {
+    signal: controller.signal,
+    didTimeout: () => timedOut,
+    cleanup: () => {
+      clearTimeout(timer);
+      externalSignal?.removeEventListener("abort", onExternalAbort);
+    },
+  };
+}
+
+/**
+ * Maps a fetch rejection to the message a user should actually see.
+ *
+ * The distinction matters more than it looks: "Server is offline" sends someone to
+ * troubleshoot their Wi-Fi, "Request timed out" tells them the server is slow and the
+ * data is unchanged. Conflating them makes a slow report export look like a dead
+ * network -- and the offline banner, which keys off navigator.onLine, stays hidden
+ * while the app claims to be offline.
+ */
+function describeNetworkError(err) {
+  if (err.name === "TimeoutError") return "Request timed out. The server is slow to respond.";
+  if (err.name === "AbortError") return "Request cancelled.";
+  // `Failed to fetch` is Chrome's wording only: Firefox says "NetworkError when
+  // attempting to fetch resource." and iOS Safari says "Load failed" -- and iOS is
+  // exactly where a kiosk tablet would be. A rejected fetch is a TypeError in all of
+  // them, which is the portable test.
+  if (err instanceof TypeError) return "Server is offline. Please try again later.";
+  return "Network error. Please try again.";
+}
+
 async function request(path, options = {}) {
-  let headers = { "Content-Type": "application/json", ...options.headers };
+  // Pulled out of `options` so it is never spread into the fetch init, and so the
+  // timeout wrapper can combine with it.
+  const { signal: externalSignal, ...rest } = options;
+
+  let headers = { "Content-Type": "application/json", ...rest.headers };
 
   if (auth.currentUser) {
     try {
@@ -46,78 +118,121 @@ async function request(path, options = {}) {
     }
   }
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const abort = combineSignals(externalSignal, TIMEOUT_MS);
 
   let res;
   try {
     res = await fetch(`${API_URL}${path}`, {
-      ...options,
-      headers: { ...headers, ...options.headers },
-      signal: controller.signal,
+      ...rest,
+      headers,
+      signal: abort.signal,
     });
-  } catch {
-    throw new Error("Server is offline. Please try again later.");
+  } catch (err) {
+    // A superseded query rethrows the raw AbortError untouched, which React Query
+    // recognises as "this was cancelled" and does not retry. A timeout becomes an
+    // ordinary Error, so it IS retried -- which is the intended difference.
+    if (err.name === "AbortError" && !abort.didTimeout()) throw err;
+    throw new Error(describeNetworkError(err));
   } finally {
-    clearTimeout(timer);
+    abort.cleanup();
   }
-  if (!res.ok) {
-    const body = await res.json().catch(() => null);
-    throw toError(body, res.status);
+
+  // `res.json()` is inside the try because it is still part of the request: an HTML
+  // error page served with a 200 (a misconfigured proxy does this) would otherwise
+  // surface as a raw SyntaxError in a toast. The timeout is also still armed here,
+  // so a stalled body read is bounded -- previously cleanup() ran first, leaving the
+  // body read with no ceiling at all.
+  try {
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw toError(body, res.status);
+    }
+    return await res.json();
+  } catch (err) {
+    if (err.name === "AbortError" || err.name === "TimeoutError") {
+      throw new Error(describeNetworkError(err));
+    }
+    throw err;
+  } finally {
+    abort.cleanup();
   }
-  return res.json();
 }
 
-function kioskRequest(path, options = {}) {
+/*
+ * The kiosk path, which authenticates with a shared secret rather than a token.
+ *
+ * It now composes signals the same way request() does. It previously did
+ * `{ ...options, signal: controller.signal }` -- signal LAST, so it silently
+ * overwrote any caller-supplied signal. Latent only because nothing passed one, but
+ * the first person to thread one through would get a cancellation that never fired
+ * and a kiosk request that held a socket for the full 30 s timeout.
+ *
+ * It also used `err.message === "Failed to fetch"` to detect a network failure,
+ * which is Chrome's wording only -- iOS Safari says "Load failed", and the kiosk is
+ * precisely where that matters.
+ */
+async function kioskRequest(path, options = {}) {
+  const { signal: externalSignal, ...rest } = options;
   const headers = {
     "Content-Type": "application/json",
     "X-Kiosk-Token": KIOSK_SECRET,
-    ...options.headers,
+    ...rest.headers,
   };
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  return fetch(`${API_URL}${path}`, { ...options, headers, signal: controller.signal })
-    .then(async (res) => {
-      clearTimeout(timer);
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw toError(body, res.status);
-      }
-      return res.json();
-    })
-    .catch((err) => {
-      clearTimeout(timer);
-      if (err.name === "AbortError") throw new Error("Request timed out");
-      if (err.message === "Failed to fetch") throw new Error("Server is offline. Please try again later.");
-      throw err;
-    });
+
+  const abort = combineSignals(externalSignal, TIMEOUT_MS);
+
+  try {
+    const res = await fetch(`${API_URL}${path}`, { ...rest, headers, signal: abort.signal });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw toError(body, res.status);
+    }
+    return await res.json();
+  } catch (err) {
+    if (err.name === "AbortError" || err.name === "TimeoutError") {
+      throw new Error(describeNetworkError(err));
+    }
+    if (err instanceof TypeError) {
+      throw new Error("Server is offline. Please try again later.");
+    }
+    throw err;
+  } finally {
+    abort.cleanup();
+  }
 }
 
 export const api = {
-  getBorrowed: (params) => request(`/transactions/borrowed${toQuery(params)}`),
-  getReturned: (params) => request(`/transactions/returned${toQuery(params)}`),
-  getMyBorrowed: (params) => request(`/transactions/my-borrowed${toQuery(params)}`),
-  getMyReturned: (params) => request(`/transactions/my-returned${toQuery(params)}`),
-  getMyTransactionStats: () => request("/transactions/my-stats"),
-  getTransactionStats: () => request("/transactions/stats"),
+  getBorrowed: (params, signal) => request(`/transactions/borrowed${toQuery(params)}`, { signal }),
+  getReturned: (params, signal) => request(`/transactions/returned${toQuery(params)}`, { signal }),
+  getMyBorrowed: (params, signal) => request(`/transactions/my-borrowed${toQuery(params)}`, { signal }),
+  getMyReturned: (params, signal) => request(`/transactions/my-returned${toQuery(params)}`, { signal }),
+  getMyTransactionStats: (signal) => request("/transactions/my-stats", { signal }),
+  getTransactionStats: (signal) => request("/transactions/stats", { signal }),
   recordBorrow: (data) => request("/transactions/borrow", { method: "POST", body: JSON.stringify(data) }),
   recordReturn: (data) => request("/transactions/return", { method: "POST", body: JSON.stringify(data) }),
   recordMyReturn: (data) => request("/transactions/my-return", { method: "POST", body: JSON.stringify(data) }),
 
-  getCatalog: (params) => request(`/catalog${toQuery(params)}`),
-  getCatalogStats: () => request("/catalog/stats"),
+getCatalog: (params, signal) => request(`/catalog${toQuery(params)}`, { signal }),
+  // Narrow projection for pickers and previews: no long text columns, no
+  // pagination envelope. See catalogController.getOptions.
+  getCatalogOptions: (signal) => request("/catalog/options", { signal }),
+  getCatalogStats: (signal) => request("/catalog/stats", { signal }),
   createCatalogItem: (data) => request("/catalog", { method: "POST", body: JSON.stringify(data) }),
   updateCatalogItem: (id, data) => request(`/catalog/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteCatalogItem: (id) => request(`/catalog/${id}`, { method: "DELETE" }),
 
-  searchUser: (firstName, lastName) => request(`/users/search?firstName=${encodeURIComponent(firstName)}&lastName=${encodeURIComponent(lastName)}`),
+  searchUser: (firstName, lastName, signal) => request(`/users/search?firstName=${encodeURIComponent(firstName)}&lastName=${encodeURIComponent(lastName)}`, { signal }),
 
-  getAdmins: () => request("/admin"),
+  // Replaces a client-side Firestore lookup in BorrowerLookup.jsx.
+  resolveUserCode: ({ code, candidates, ids }) =>
+    request(`/users/resolve${toQuery({ code, candidates, ids })}`),
+
+  getAdmins: (signal) => request("/admin", { signal }),
   createAdmin: (data) => request("/admin", { method: "POST", body: JSON.stringify(data) }),
   updateAdmin: (id, data) => request(`/admin/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteAdmin: (id) => request(`/admin/${id}`, { method: "DELETE" }),
 
-  getReportSummary: (params) => request(`/reports/summary${toQuery(params)}`),
+  getReportSummary: (params, signal) => request(`/reports/summary${toQuery(params)}`, { signal }),
 
   downloadReport: async (type, params = "") => {
     let headers = {};
@@ -133,8 +248,10 @@ export const api = {
     let res;
     try {
       res = await fetch(`${API_URL}/reports/${type}${query}`, { headers, signal: controller.signal });
-    } catch {
-      throw new Error("Server is offline. Please try again later.");
+    } catch (err) {
+      // A 30 s timeout on a large report used to be reported as "Server is offline",
+      // sending the user to troubleshoot a network that was working fine.
+      throw new Error(describeNetworkError(err));
     } finally {
       clearTimeout(timer);
     }
@@ -165,8 +282,8 @@ export const api = {
     let res;
     try {
       res = await fetch(`${API_URL}/upload/image`, { method: "POST", headers, body: formData, signal: controller.signal });
-    } catch {
-      throw new Error("Server is offline. Please try again later.");
+    } catch (err) {
+      throw new Error(describeNetworkError(err));
     } finally {
       clearTimeout(timer);
     }
@@ -207,29 +324,34 @@ export const api = {
 
   generateQR: (text) => request("/upload/qr", { method: "POST", body: JSON.stringify({ text }) }),
 
-  // Auth
   register: (data) => request("/auth/register", { method: "POST", body: JSON.stringify(data) }),
+  // Resolves the signed-in user's own Firestore document.
+  //
+  // This replaced two client-side getDoc() calls in AuthContext, which is what
+  // forced `firebase/firestore` into the eagerly-loaded entry chunk. See the
+  // note on authController.getProfile for the full reasoning.
+  getProfile: (signal) => request("/auth/profile", { signal }),
   updateProfile: (data) => request("/auth/profile", { method: "PUT", body: JSON.stringify(data) }),
   changePassword: (data) => request("/auth/password", { method: "PUT", body: JSON.stringify(data) }),
 
   // Notifications
-  getNotifications: (params) => request(`/notifications${toQuery(params)}`),
-  getMyNotifications: (params) => request(`/notifications/user${toQuery(params)}`),
+  getNotifications: (params, signal) => request(`/notifications${toQuery(params)}`, { signal }),
+  getMyNotifications: (params, signal) => request(`/notifications/user${toQuery(params)}`, { signal }),
   createNotification: (data) => request("/notifications", { method: "POST", body: JSON.stringify(data) }),
   markNotificationRead: (id) => request(`/notifications/${id}/read`, { method: "PUT" }),
   markAllNotificationsRead: () => request("/notifications/read-all", { method: "PUT" }),
   dismissNotification: (id) => request(`/notifications/${id}`, { method: "DELETE" }),
 
   // Documents
-  getDocuments: () => request("/documents"),
+  getDocuments: (signal) => request("/documents", { signal }),
   deleteDocument: (id) => request(`/documents/${id}`, { method: "DELETE" }),
 
   // Settings
-  getSettings: () => request("/settings"),
+  getSettings: (signal) => request("/settings", { signal }),
   saveSettings: (data) => request("/settings", { method: "PUT", body: JSON.stringify(data) }),
 
   // Maintenance
-  getMaintenance: (params) => request(`/maintenance${toQuery(params)}`),
+  getMaintenance: (params, signal) => request(`/maintenance${toQuery(params)}`, { signal }),
   createMaintenance: (data) => request("/maintenance", { method: "POST", body: JSON.stringify(data) }),
   updateMaintenance: (id, data) => request(`/maintenance/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteMaintenance: (id) => request(`/maintenance/${id}`, { method: "DELETE" }),
@@ -238,9 +360,9 @@ export const api = {
   // One endpoint per intent so the workflow cannot be short-circuited by a
   // generic update: status, remark and reassignment are separate verbs, each
   // re-validating the current state server-side.
-  getIncidents: (params) => request(`/incidents${toQuery(params)}`),
-  getMyIncidents: (params) => request(`/incidents/mine${toQuery(params)}`),
-  getIncident: (id) => request(`/incidents/${id}`),
+  getIncidents: (params, signal) => request(`/incidents${toQuery(params)}`, { signal }),
+  getMyIncidents: (params, signal) => request(`/incidents/mine${toQuery(params)}`, { signal }),
+  getIncident: (id, signal) => request(`/incidents/${id}`, { signal }),
   createIncident: (data) => request("/incidents", { method: "POST", body: JSON.stringify(data) }),
   updateIncidentStatus: (id, status, note) =>
     request(`/incidents/${id}/status`, { method: "PUT", body: JSON.stringify({ status, note }) }),
@@ -251,23 +373,23 @@ export const api = {
   deleteIncident: (id) => request(`/incidents/${id}`, { method: "DELETE" }),
 
   // Manuals
-  getManuals: () => request("/manuals"),
-  getManual: (id) => request(`/manuals/${id}`),
+  getManuals: (signal) => request("/manuals", { signal }),
+  getManual: (id, signal) => request(`/manuals/${id}`, { signal }),
   createManual: (data) => request("/manuals", { method: "POST", body: JSON.stringify(data) }),
   updateManual: (id, data) => request(`/manuals/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteManual: (id) => request(`/manuals/${id}`, { method: "DELETE" }),
 
   // Fines
-  getFines: (params) => request(`/fines${toQuery(params)}`),
-  getMyFines: (params) => request(`/fines/my${toQuery(params)}`),
-  getOverdueCount: () => request("/fines/overdue-count"),
+  getFines: (params, signal) => request(`/fines${toQuery(params)}`, { signal }),
+  getMyFines: (params, signal) => request(`/fines/my${toQuery(params)}`, { signal }),
+  getOverdueCount: (signal) => request("/fines/overdue-count", { signal }),
   checkRestriction: (userId) => request(`/fines/check-restriction/${userId}`),
   payFine: (id) => request(`/fines/${id}/pay`, { method: "PUT" }),
   waiveFine: (id, reason) => request(`/fines/${id}/waive`, { method: "PUT", body: JSON.stringify({ reason }) }),
 
   // Borrow Requests
-  getBorrowRequests: (params) => request(`/borrow-requests${toQuery(params)}`),
-  getMyBorrowRequests: (params) => request(`/borrow-requests/my${toQuery(params)}`),
+  getBorrowRequests: (params, signal) => request(`/borrow-requests${toQuery(params)}`, { signal }),
+  getMyBorrowRequests: (params, signal) => request(`/borrow-requests/my${toQuery(params)}`, { signal }),
   createBorrowRequest: (data) => request("/borrow-requests", { method: "POST", body: JSON.stringify(data) }),
   approveBorrowRequest: (id, reviewNotes) => request(`/borrow-requests/${id}/approve`, { method: "PUT", body: JSON.stringify({ reviewNotes }) }),
   rejectBorrowRequest: (id, reviewNotes) => request(`/borrow-requests/${id}/reject`, { method: "PUT", body: JSON.stringify({ reviewNotes }) }),
@@ -275,7 +397,7 @@ export const api = {
   reassignBorrowRequest: (id, data) => request(`/borrow-requests/${id}/reassign`, { method: "PUT", body: JSON.stringify(data) }),
 
   // Admin Management
-  getActiveAdmins: () => request("/admin/active"),
+  getActiveAdmins: (signal) => request("/admin/active", { signal }),
   toggleAdminStatus: (id) => request(`/admin/${id}/toggle-status`, { method: "PUT" }),
 
   // Backup
@@ -308,7 +430,7 @@ export const api = {
     }
   },
   importBackup: (backupData, overwrite) => request("/backup/import", { method: "POST", body: JSON.stringify({ backupData, overwrite }) }),
-  getBackupHistory: () => request("/backup/history"),
+  getBackupHistory: (signal) => request("/backup/history", { signal }),
 
   // Condition Photo Upload
   uploadConditionPhoto: async (file) => {
@@ -343,14 +465,21 @@ export const api = {
   timeIn: (data) => kioskRequest("/attendance/time-in", { method: "POST", body: JSON.stringify(data) }),
   timeOut: (data) => kioskRequest("/attendance/time-out", { method: "POST", body: JSON.stringify(data) }),
   autoScan: (data) => kioskRequest("/attendance/auto-scan", { method: "POST", body: JSON.stringify(data) }),
-  getActiveStudents: (params) => request(`/attendance/active${toQuery(params)}`),
-  getTodayAttendance: (params) => request(`/attendance/today${toQuery(params)}`),
-  getAttendanceFacets: () => request("/attendance/facets"),
-  getDailyLog: (date) => request(`/attendance/daily-log/${date}`),
-  getAttendanceHistory: (params) => request(`/attendance/history?${params}`),
-  getRoomAttendanceHistory: (roomId, params) => request(`/attendance/room/${roomId}/history?${params}`),
-  getStudentAttendance: (schoolId) => request(`/attendance/my/${schoolId}`),
-  getAttendanceStats: () => request("/attendance/stats"),
+  getActiveStudents: (params, signal) => request(`/attendance/active${toQuery(params)}`, { signal }),
+  getTodayAttendance: (params, signal) => request(`/attendance/today${toQuery(params)}`, { signal }),
+  getAttendanceFacets: (signal) => request("/attendance/facets", { signal }),
+  getDailyLog: (date, signal) => request(`/attendance/daily-log/${date}`, { signal }),
+// `params` is an already-serialised query string (RoomAttendancePage builds it with
+  // URLSearchParams), which is why these interpolate rather than use toQuery -- an
+  // OBJECT here would stringify to "[object Object]". getAttendanceHistory is the
+  // only endpoint still shaped this way with no caller: the room page replaced it.
+  // Kept, because the backend route exists, but it now goes through toQuery so a
+  // future caller passing an object gets a correct URL instead of a silent 400.
+  getAttendanceHistory: (params, signal) => request(`/attendance/history${toQuery(params)}`, { signal }),
+  getRoomAttendanceHistory: (roomId, params, signal) =>
+    request(`/attendance/room/${encodeURIComponent(roomId)}/history${toQuery(params)}`, { signal }),
+  getStudentAttendance: (schoolId, signal) => request(`/attendance/my/${schoolId}`, { signal }),
+  getAttendanceStats: (signal) => request("/attendance/stats", { signal }),
   updateAttendance: (id, data) => request(`/attendance/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteAttendance: (id) => request(`/attendance/${id}`, { method: "DELETE" }),
   exportAttendance: async (params) => {
@@ -367,8 +496,8 @@ export const api = {
     let res;
     try {
       res = await fetch(`${API_URL}/attendance/export${query}`, { headers, signal: controller.signal });
-    } catch {
-      throw new Error("Server is offline. Please try again later.");
+    } catch (err) {
+      throw new Error(describeNetworkError(err));
     } finally {
       clearTimeout(timer);
     }
@@ -385,14 +514,14 @@ export const api = {
   },
 
   // Lab Rooms
-  getRooms: () => request("/attendance/rooms"),
+  getRooms: (signal) => request("/attendance/rooms", { signal }),
   createRoom: (data) => request("/attendance/rooms", { method: "POST", body: JSON.stringify(data) }),
   updateRoom: (id, data) => request(`/attendance/rooms/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteRoom: (id) => request(`/attendance/rooms/${id}`, { method: "DELETE" }),
-  getRoomQR: (id) => request(`/attendance/rooms/${id}/qr`),
+  getRoomQR: (id, signal) => request(`/attendance/rooms/${id}/qr`, { signal }),
 
   // Student QR
-  getStudentQR: (schoolId) => request(`/attendance/student-qr/${schoolId}`),
+  getStudentQR: (schoolId, signal) => request(`/attendance/student-qr/${schoolId}`, { signal }),
 
 
 

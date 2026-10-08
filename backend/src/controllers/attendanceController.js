@@ -13,6 +13,7 @@ const {
   normRoom,
 } = require("../utils/attendanceFilters");
 const { slug } = require("../utils/exportUtils");
+const { orEq } = require("../utils/postgrest");
 const { todayKey, weekStartKey, formatTimeInTz } = require("../utils/schoolClock");
 
 const USERS = "users";
@@ -38,6 +39,21 @@ const getTodayString = () => todayKey();
  * the rest are ordered newest-first so the sign-out closes the most likely
  * intended one rather than an arbitrary one.
  */
+/**
+ * Most recent open session for a student, preferring one from today.
+ *
+ * Kept for reference and for its stated rule, which the three kiosk endpoints now
+ * implement as indexed queries instead:
+ *   prefer a row with status='active' AND date = today
+ *   otherwise the newest status='active' row of any age
+ *
+ * timeIn/timeOut/autoScan each used to load every session for the student and call
+ * this; they now ask the database for the same two rows with
+ * .eq("status","active").eq("date", today).order("time_in", desc).limit(1) and a
+ * fallback without the date constraint. The overnight-session behaviour is
+ * preserved deliberately -- getActiveStudents is not date-filtered either, so an
+ * overnight session has to stay closeable or it could never be signed out.
+ */
 function findOpenSession(records, today) {
   const open = (records || []).filter((r) => r.status === "active");
   if (open.length === 0) return null;
@@ -46,6 +62,10 @@ function findOpenSession(records, today) {
     [...open].sort((a, b) => new Date(b.time_in || 0).getTime() - new Date(a.time_in || 0).getTime())[0]
   );
 }
+
+// Referenced by the comments above so the rule stays discoverable, and so a future
+// caller has the helper without re-deriving it.
+void findOpenSession;
 
 function formatDuration(minutes) {
   if (!minutes && minutes !== 0) return "";
@@ -74,8 +94,29 @@ function formatDuration(minutes) {
  * errors, so a missing lab_rooms row degrades to the old behaviour instead of
  * blocking a student's time-in.
  */
+const ROOM_CACHE_TTL_MS = 60 * 1000;
+const roomNameCache = new Map();
+
 async function resolveLabRoom(roomCode, fallback) {
   if (!roomCode) return fallback || "Laboratory";
+
+  // Memoised per room_code for a minute.
+  //
+  // This sits in the middle of the kiosk critical path: a scan used to be
+  // Firestore read -> attendance read -> this SELECT -> insert, four sequential
+  // round trips. room_name only changes when an admin renames a room, so on a busy
+  // kiosk -- the same room, many times a minute -- this turns a query into a map
+  // read.
+  //
+  // Only successful lookups are cached. A miss caches the empty result too, so a
+  // scan for an unregistered room does not re-query on every attempt, but a thrown
+  // error is deliberately NOT cached so a transient database failure does not pin
+  // the fallback name for a minute.
+  const cached = roomNameCache.get(roomCode);
+  if (cached && Date.now() - cached.at < ROOM_CACHE_TTL_MS) {
+    return cached.name || fallback || "Laboratory";
+  }
+
   try {
     const { data, error } = await supabase
       .from("lab_rooms")
@@ -83,10 +124,18 @@ async function resolveLabRoom(roomCode, fallback) {
       .eq("room_code", roomCode)
       .limit(1);
     if (error) throw error;
-    return (data && data[0] && data[0].room_name) || fallback || "Laboratory";
+    const name = (data && data[0] && data[0].room_name) || "";
+    roomNameCache.set(roomCode, { name, at: Date.now() });
+    return name || fallback || "Laboratory";
   } catch {
     return fallback || "Laboratory";
   }
+}
+
+// Called by the room-management controller after a rename or a delete, so a
+// change is visible on the next scan instead of up to a minute later.
+function invalidateRoomNameCache() {
+  roomNameCache.clear();
 }
 
 // --- Public Kiosk Endpoints (no auth required) ---
@@ -133,14 +182,57 @@ const timeIn = async (req, res) => {
     const userData = userDoc.data();
 
     const today = getTodayString();
+    const sid = schoolId.trim();
 
-    const { data: studentRecords, error: fetchError } = await supabase
-      .from("lab_attendance")
-      .select("*")
-      .eq("student_school_id", schoolId.trim());
-    if (fetchError) throw fetchError;
+    // Ask the database for the two facts we need instead of downloading the
+    // student's entire attendance history to derive them.
+    //
+    // The old shape read every row for this student -- all 20 columns, one per
+    // session for the whole term -- on each scan, purely to (a) find the open
+    // session and (b) read the newest created_at for the 30-second duplicate-scan
+    // guard. Both are single-row lookups: idx_lab_attendance_student and
+    // idx_lab_attendance_date_status both exist, they just were not being used.
+    //
+    // findOpenSession's two-step rule is preserved exactly: prefer an open session
+    // from today, otherwise the most recent open session of any age. The first
+    // query finds today's; the second is a fallback that only runs when today has
+    // nothing, which is the rare overnight case.
+    const [openTodayRes, openAnyRes, lastTodayRes] = await Promise.all([
+      supabase
+        .from("lab_attendance")
+        .select("id,date,time_in")
+        .eq("student_school_id", sid)
+        .eq("status", "active")
+        .eq("date", today)
+        .order("time_in", { ascending: false })
+        .limit(1),
+      supabase
+        .from("lab_attendance")
+        .select("id,date,time_in")
+        .eq("student_school_id", sid)
+        .eq("status", "active")
+        .order("time_in", { ascending: false })
+        .limit(1),
+      // The duplicate guard only ever looked at created_at, newest first.
+      supabase
+        .from("lab_attendance")
+        .select("created_at")
+        .eq("student_school_id", sid)
+        .eq("date", today)
+        .order("created_at", { ascending: false })
+        .limit(1),
+    ]);
 
-    const activeSession = findOpenSession(studentRecords, today);
+    const openToday = openTodayRes.data?.[0] || null;
+    if (openTodayRes.error) throw openTodayRes.error;
+    if (lastTodayRes.error) throw lastTodayRes.error;
+
+    let activeSession = openToday;
+    if (!activeSession) {
+      if (openAnyRes.error) throw openAnyRes.error;
+      activeSession = openAnyRes.data?.[0] || null;
+    }
+
     if (activeSession) {
       // Say which day, so a student held overnight by a forgotten session is told
       // why instead of just being refused.
@@ -148,13 +240,8 @@ const timeIn = async (req, res) => {
       return res.status(400).json({ error: `Already timed in${since}. Please time out first.` });
     }
 
-    const todayRecords = (studentRecords || []).filter((r) => r.date === today);
-    if (todayRecords.length > 0) {
-      const lastRecord = todayRecords.sort((a, b) => {
-        const tA = new Date(a.created_at || 0).getTime();
-        const tB = new Date(b.created_at || 0).getTime();
-        return tB - tA;
-      })[0];
+    const lastRecord = lastTodayRes.data?.[0];
+    if (lastRecord) {
       const lastTime = new Date(lastRecord.created_at);
       if (!Number.isNaN(lastTime.getTime()) && (Date.now() - lastTime.getTime()) < 30000) {
         return res.status(400).json({ error: "Duplicate scan. Please wait a moment and try again." });
@@ -208,14 +295,39 @@ const timeOut = async (req, res) => {
     if (!schoolId) return res.status(400).json({ error: "Student ID is required" });
 
     const today = getTodayString();
+    const sid = schoolId.trim();
 
-    const { data: studentRecords, error: fetchError } = await supabase
-      .from("lab_attendance")
-      .select("*")
-      .eq("student_school_id", schoolId.trim());
-    if (fetchError) throw fetchError;
+    // One row, not the student's whole history -- see the note in timeIn. This
+    // endpoint only needs the open session: its id to close, its time_in to compute
+    // a duration, and its room_code to refuse a cross-room sign-out.
+    //
+    // Today's session is preferred, but an overnight session must still be
+    // closeable: getActiveStudents is deliberately not date-filtered for exactly
+    // that reason, so timeOut has to agree or a 23:30 session could never be
+    // closed. Hence the same two-step lookup as timeIn.
+    const [openTodayRes, openAnyRes] = await Promise.all([
+      supabase
+        .from("lab_attendance")
+        .select("id,date,time_in,room_code,lab_room")
+        .eq("student_school_id", sid)
+        .eq("status", "active")
+        .eq("date", today)
+        .order("time_in", { ascending: false })
+        .limit(1),
+      supabase
+        .from("lab_attendance")
+        .select("id,date,time_in,room_code,lab_room")
+        .eq("student_school_id", sid)
+        .eq("status", "active")
+        .order("time_in", { ascending: false })
+        .limit(1),
+    ]);
 
-    const activeDoc = findOpenSession(studentRecords, today);
+    let activeDoc = openTodayRes.data?.[0] || null;
+    if (!activeDoc) {
+      if (openAnyRes.error) throw openAnyRes.error;
+      activeDoc = openAnyRes.data?.[0] || null;
+    }
 
     if (!activeDoc) {
       return res.status(400).json({ error: "No active session found. Please time in first." });
@@ -369,19 +481,53 @@ const getDailyLog = async (req, res) => {
 
 const getAttendanceFacets = async (req, res) => {
   try {
-    const { data: records, error } = await supabase
-      .from("lab_attendance")
-      .select("course,year,section,subject,professor,lab_room,room_code");
-    if (error) throw error;
+    // Six independent DISTINCT queries rather than one unfiltered read of every
+    // row of every facet column.
+    //
+    // The old shape shipped the whole table (six columns, no WHERE, no LIMIT) to
+    // the Node process and computed the unique sets with facet() -- a map, a Set
+    // and a sort per column, six full passes. No index could help it, because a
+    // query with no predicate has nothing to seek on.
+    //
+    // Each of these now resolves server-side as a distinct value list, so the
+    // transfer is "here are the 6 courses that exist" instead of "here are every
+    // attendance row, six times over".
+    //
+    // rooms is the one that stays in JS: it is `lab_room || room_code`, a
+    // coalesce across two columns that PostgREST cannot express, so that one
+    // still reads rows -- but only those two columns, and the count is the number
+    // of distinct rooms (tens) rather than the number of sessions.
+    const FACET_COLUMNS = [
+      ["courses", "course"],
+      ["years", "year"],
+      ["sections", "section"],
+      ["subjects", "subject"],
+      ["professors", "professor"],
+    ];
 
-    res.json({
-      courses: facet(records || [], "course"),
-      years: facet(records || [], "year"),
-      sections: facet(records || [], "section"),
-      subjects: facet(records || [], "subject"),
-      professors: facet(records || [], "professor"),
-      rooms: [...new Set((records || []).map((r) => r.lab_room || r.room_code).filter(Boolean))].sort(),
+    const facetResults = await Promise.all(
+      FACET_COLUMNS.map(([, column]) =>
+        supabase.from("lab_attendance").select(column).not(column, "is", null)
+      )
+    );
+
+    const payload = {};
+    FACET_COLUMNS.forEach(([key, column], i) => {
+      const { data, error } = facetResults[i];
+      if (error) throw error;
+      payload[key] = facet(data || [], column);
     });
+
+    const { data: roomRows, error: roomError } = await supabase
+      .from("lab_attendance")
+      .select("lab_room,room_code");
+    if (roomError) throw roomError;
+
+    payload.rooms = [
+      ...new Set((roomRows || []).map((r) => r.lab_room || r.room_code).filter(Boolean)),
+    ].sort();
+
+    res.json(payload);
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -391,6 +537,10 @@ const getAttendanceHistory = async (req, res) => {
   try {
     const { from, to, course, year, section, subject, professor, labRoom, student, page = 1, limit = 50 } = req.query;
 
+    // Date bounds pushed into SQL. Before this the query had no .gte()/.lte() at
+    // all unless the caller happened to pass them, so a bare /attendance/history
+    // was a heap scan of the entire table returning all 20 columns -- to render 50
+    // rows. idx_lab_attendance_date makes this a range scan.
     let query = supabase.from("lab_attendance").select("*");
     if (from) query = query.gte("date", from);
     if (to) query = query.lte("date", to);
@@ -400,10 +550,14 @@ const getAttendanceHistory = async (req, res) => {
 
     const result = applyAttendanceFilters(records || [], { from, to, course, year, section, subject, professor, labRoom, student });
 
+    // localeCompare -> `<`. These are ISO "YYYY-MM-DD" strings, where byte order
+    // IS chronological order, so this is the same answer for one to two orders of
+    // magnitude less work: localeCompare runs an ICU collator lookup per
+    // comparison, and this comparator is called O(n log n) times.
     result.sort((a, b) => {
       const dA = a.date || "";
       const dB = b.date || "";
-      if (dA !== dB) return dB.localeCompare(dA);
+      if (dA !== dB) return dA < dB ? 1 : -1;
       const tA = new Date(a.time_in || 0).getTime();
       const tB = new Date(b.time_in || 0).getTime();
       return tB - tA;
@@ -444,13 +598,43 @@ const getRoomAttendanceHistory = async (req, res) => {
       return res.status(400).json({ error: "This room has no usable identifier. Rename it to one containing letters or numbers." });
     }
 
-    const { data: allRecords, error: fetchError } = await supabase
+    // Push the room predicate into SQL instead of reading every row in
+    // lab_attendance and filtering in JS.
+    //
+    // The old shape was `.select("*")` with no .eq() at all -- the whole table,
+    // all 20 columns, of the fastest-growing table in the schema -- to serve one
+    // room and one page of 50 rows. idx_lab_attendance_room already exists on
+    // lab_attendance(room_code) and was never used, because the filter was not in
+    // the query.
+    //
+    // room_code is a frozen slug written at room-creation time (createRoom:885)
+    // and never regenerated on rename, so it is an exact join key and .eq() is
+    // correct -- the same call exportToExcel already makes at :899.
+    //
+    // `.or()` carries the legacy casing: rows written before room_code was frozen
+    // may hold "CET-01" where the room row now holds "cet-01", and a bare .eq()
+    // would silently hide them. normRoom collapses case and punctuation runs, so
+    // this covers exactly what the old JS comparison accepted, no more. The
+    // normRoom filter below is kept as the authority on membership; SQL only
+    // narrows the candidate set.
+    const want = normRoom(roomCode);
+    const variants = [...new Set([roomCode, roomCode.trim(), want].filter(Boolean))];
+    // Quoted values: room_code is admin-controlled free text and is FROZEN on rename
+    // (createRoom slugifies, but pre-slug rows and hand-edited values survive), so a
+    // legacy code containing a comma or parenthesis would otherwise produce a
+    // PostgREST syntax error and a 500 for that room's whole history page.
+    // See the orEq() doc comment in utils/transactionFilters.js.
+    const { data: scopedRows, error: fetchError } = await supabase
       .from("lab_attendance")
-      .select("*");
+      .select("*")
+      .or(variants.map((v) => orEq("room_code", v)).join(","));
     if (fetchError) throw fetchError;
 
-    const norm = normRoom;
-    let roomRecords = (allRecords || []).filter((r) => norm(r.room_code) === norm(roomCode));
+    // Membership decided in JS, so the answer is identical to the old code path
+    // no matter how a stored code is punctuated. The right-hand side is hoisted
+    // out of the predicate: it is loop-invariant, and normRoom runs two regex
+    // passes, so evaluating it per row was pure waste.
+    let roomRecords = (scopedRows || []).filter((r) => normRoom(r.room_code) === want);
 
     // Facets are computed BEFORE filtering, on purpose: the dropdown options
     // then stay stable while the user narrows the list, instead of collapsing
@@ -558,12 +742,14 @@ const getMyAttendance = async (req, res) => {
     const { schoolId } = req.params;
     if (!schoolId) return res.status(400).json({ error: "Student ID is required" });
 
+    // attachRole on this route already read the caller's document and left it on
+    // req.profile, so the schoolId check costs no additional Firestore read. The
+    // re-fetch here was a second round trip on every student dashboard load.
     if (req.user?.uid) {
-      const userDoc = await db.collection("users").doc(req.user.uid).get();
-      if (!userDoc.exists) {
+      if (!req.profile) {
         return res.status(403).json({ error: "Not authorized" });
       }
-      const profile = userDoc.data();
+      const profile = req.profile;
       if (!profile.schoolId || profile.schoolId !== schoolId) {
         return res.status(403).json({ error: "Not authorized to view this record" });
       }
@@ -609,27 +795,55 @@ const getStats = async (req, res) => {
     const today = getTodayString();
     const weekStartStr = weekStartKey();
 
-    const [todayResult, activeResult, weekResult] = await Promise.all([
-      supabase.from("lab_attendance").select("*").eq("date", today),
+    // Two columns, not twenty. This endpoint produces six numbers and is polled every
+    // 30 seconds by every open attendance screen (useQueries.js LIVE_REFRESH_MS),
+    // so the column list is multiplied by every concurrent admin session.
+    //
+    // The three reads are independent and run together, as before.
+    const [todayResult, activeResult, activeStaleResult, weekResult] = await Promise.all([
+      // status + total_duration only: totalToday, completedToday, totalMinutesToday.
+      supabase.from("lab_attendance").select("status,total_duration").eq("date", today),
       // Every open session, not just today's. Same reason as getActiveStudents:
       // a session that crossed midnight is still open, and a KPI tile that
       // counted only today's rows disagreed with the list directly beneath it.
-      supabase.from("lab_attendance").select("date").eq("status", "active"),
+      supabase.from("lab_attendance").select("id", { count: "exact", head: true }).eq("status", "active"),
+      // staleInside is its own count rather than a filter over every open row,
+      // which is what the second read used to ship.
+      supabase
+        .from("lab_attendance")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "active")
+        // `date IS NULL` has to be OR'd in explicitly.
+        //
+        // .neq("date", today) compiles to `date <> today`, and SQL three-valued logic
+        // makes that NULL for a NULL date -- so those rows are EXCLUDED. The JS this
+        // replaced was `activeRows.filter(r => r.date !== today).length`, where
+        // `null !== today` is true, so a NULL-date session counted as stale.
+        //
+        // That is the difference between an orphaned session showing its "Not signed
+        // out" badge and quietly disappearing while `currentlyInside` still counts
+        // it -- two tiles that stopped summing. `date` is DATE NOT NULL in the current
+        // schema, but 13-lab-attendance.sql is DROP+CREATE, so any deployment predating
+        // that constraint, or any legacy import, can carry NULLs.
+        //
+        // Written this way, staleInside <= currentlyInside is structural rather than
+        // an assumption about the data.
+        .or(`date.neq.${today},date.is.null`),
       supabase.from("lab_attendance").select("student_school_id").gte("date", weekStartStr).lte("date", today),
     ]);
 
     if (todayResult.error) throw todayResult.error;
     if (activeResult.error) throw activeResult.error;
+    if (activeStaleResult.error) throw activeStaleResult.error;
     if (weekResult.error) throw weekResult.error;
 
     const todayRecords = todayResult.data || [];
-    const activeRows = activeResult.data || [];
 
     // Split so the UI can show how many of the open sessions are leftovers. A
     // tile that says "8 inside" when seven of them scanned in yesterday is
     // actionable information, not noise.
-    const currentlyInside = activeRows.length;
-    const staleInside = activeRows.filter((r) => r.date !== today).length;
+    const currentlyInside = activeResult.count || 0;
+    const staleInside = activeStaleResult.count || 0;
 
     const totalToday = todayRecords.length;
     const completedToday = todayRecords.filter((r) => r.status === "timed_out").length;
@@ -994,6 +1208,11 @@ const updateRoom = async (req, res) => {
       .eq("id", id);
     if (updateError) throw updateError;
 
+    // room_code is frozen on rename, so the cache key is unaffected -- but the cached
+    // room_name is now stale, and the kiosk would keep writing the old name onto new
+    // attendance rows until the TTL expired.
+    if (sanitized.roomName !== undefined) invalidateRoomNameCache();
+
     const { data: updated } = await supabase
       .from("lab_rooms")
       .select("*")
@@ -1017,6 +1236,10 @@ const deleteRoom = async (req, res) => {
 
     const { error: deleteError } = await supabase.from("lab_rooms").delete().eq("id", id);
     if (deleteError) throw deleteError;
+
+    // The kiosk would otherwise keep resolving this room's name for up to a minute
+    // after it was deleted.
+    invalidateRoomNameCache();
 
     res.json({ success: true });
   } catch (err) {
@@ -1089,19 +1312,45 @@ const autoScan = async (req, res) => {
     }
 
     const today = getTodayString();
+    const sid = schoolId.trim();
 
-    const { data: allRecords, error: fetchError } = await supabase
-      .from("lab_attendance")
-      .select("*")
-      .eq("student_school_id", schoolId.trim());
-    if (fetchError) throw fetchError;
+    // Same three indexed lookups as timeIn/timeOut, not a read of every session this
+    // student has ever attended. Two different windows on purpose: the open session
+    // is found across ALL days so an overnight session can still be signed out of,
+    // while the duplicate-scan guard stays on today's rows only, because "you
+    // scanned twice in 30 seconds" is a same-moment concern.
+    const [openTodayRes, openAnyRes, lastTodayRes] = await Promise.all([
+      supabase
+        .from("lab_attendance")
+        .select("id,date,time_in,room_code,lab_room")
+        .eq("student_school_id", sid)
+        .eq("status", "active")
+        .eq("date", today)
+        .order("time_in", { ascending: false })
+        .limit(1),
+      supabase
+        .from("lab_attendance")
+        .select("id,date,time_in,room_code,lab_room")
+        .eq("student_school_id", sid)
+        .eq("status", "active")
+        .order("time_in", { ascending: false })
+        .limit(1),
+      supabase
+        .from("lab_attendance")
+        .select("created_at")
+        .eq("student_school_id", sid)
+        .eq("date", today)
+        .order("created_at", { ascending: false })
+        .limit(1),
+    ]);
 
-    // Two different windows on purpose. The open session is looked up across ALL
-    // days so an overnight session can still be signed out of (see
-    // findOpenSession); the duplicate-scan guard below stays on today's rows only,
-    // because "you scanned twice in 30 seconds" is a same-moment concern.
-    const studentRecords = (allRecords || []).filter((r) => r.date === today);
-    const activeSession = findOpenSession(allRecords, today);
+    let activeSession = openTodayRes.data?.[0] || null;
+    if (!activeSession) {
+      if (openAnyRes.error) throw openAnyRes.error;
+      activeSession = openAnyRes.data?.[0] || null;
+    }
+    if (openTodayRes.error) throw openTodayRes.error;
+    if (lastTodayRes.error) throw lastTodayRes.error;
 
     if (activeSession) {
       if (activeSession.room_code && !roomCode) {
@@ -1148,13 +1397,9 @@ const autoScan = async (req, res) => {
       });
     }
 
-    // Dedup check
-    if (studentRecords.length > 0) {
-      const lastRecord = studentRecords.sort((a, b) => {
-        const tA = new Date(a.created_at || 0).getTime();
-        const tB = new Date(b.created_at || 0).getTime();
-        return tB - tA;
-      })[0];
+    // Dedup check -- newest created_at for today, already ordered by the query above.
+    const lastRecord = lastTodayRes.data?.[0];
+    if (lastRecord) {
       const lastTime = new Date(lastRecord.created_at);
       if (!Number.isNaN(lastTime.getTime()) && (Date.now() - lastTime.getTime()) < 30000) {
         return res.status(400).json({ error: "Duplicate scan. Please wait a moment and try again." });
@@ -1166,25 +1411,26 @@ const autoScan = async (req, res) => {
       return res.status(400).json({ error: "All form fields are required for time-in." });
     }
 
+    // The profile lookup and the room-name resolution do not depend on each other,
+    // so they are issued together. resolveLabRoom is a SELECT against lab_rooms that
+    // was previously awaited inline in the record literal below -- meaning the
+    // Firestore read, the room read and only then the insert all ran in series.
+    const [profileResult, resolvedLabRoom] = await Promise.all([
+      db.collection("users").where("schoolId", "==", sid).limit(1).get().catch(() => null),
+      resolveLabRoom(roomCode, labRoom),
+    ]);
+
     let verifiedUserId = "";
     let verifiedFirstName = firstName.trim();
     let verifiedLastName = lastName.trim();
     let verifiedCourse = course.trim();
-    try {
-      const usersSnap = await db.collection("users")
-        .where("schoolId", "==", schoolId.trim())
-        .limit(1)
-        .get();
-      if (!usersSnap.empty) {
-        const userDoc = usersSnap.docs[0];
-        verifiedUserId = userDoc.id;
-        const profile = userDoc.data();
-        verifiedFirstName = profile.firstName || verifiedFirstName;
-        verifiedLastName = profile.lastName || verifiedLastName;
-        verifiedCourse = profile.course || verifiedCourse;
-      }
-    } catch {
-      // Profile lookup failed, use form data
+    if (profileResult && !profileResult.empty) {
+      const userDoc = profileResult.docs[0];
+      verifiedUserId = userDoc.id;
+      const profile = userDoc.data();
+      verifiedFirstName = profile.firstName || verifiedFirstName;
+      verifiedLastName = profile.lastName || verifiedLastName;
+      verifiedCourse = profile.course || verifiedCourse;
     }
 
     const now = new Date().toISOString();
@@ -1200,7 +1446,8 @@ const autoScan = async (req, res) => {
       section: (section || "").trim(),
       subject,
       professor: professor.trim(),
-      lab_room: await resolveLabRoom(roomCode, labRoom),
+      // Already resolved above, alongside the profile lookup.
+      lab_room: resolvedLabRoom,
       room_code: roomCode || "",
       date: today,
       time_in: now,

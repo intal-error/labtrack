@@ -1,0 +1,168 @@
+/*
+ * Offline fallback, served by the service worker for navigations it cannot fulfil.
+ *
+ * WHY THIS IS A STANDALONE PAGE AND NOT A ROUTE: when the SW cannot reach the
+ * network it falls back to index.html, which boots the SPA. The SPA then tries to
+ * fetch its own route chunks, fails, and shows an error boundary -- technically
+ * "offline capable" and practically unusable. This document is cached at install
+ * time and returned directly, so it paints with no JavaScript at all.
+ *
+ * It reads only the two theme colours it hardcodes (see the note on the dark
+ * scheme) because the app's tokens live in a stylesheet this page cannot fetch.
+ * Kept in sync by hand with index.html's theme-color meta and global.css tokens;
+ * if those change, update the two --custom-property blocks below.
+ */
+
+:root {
+  --bg: #f5f5f0;
+  --card: #ffffff;
+  --text: #1a1a1a;
+  --text-muted: #5f6b5f;
+  --border: #e3e6e1;
+  --green: #2e7d32;
+  --green-dark: #1b5e20;
+  --danger: #d32f2f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #04140c;
+    --card: #0b1f14;
+    --text: #eaf4ec;
+    --text-muted: #9fb3a3;
+    --border: #1e3a2a;
+    --green: #4caf50;
+    --green-dark: #2e7d32;
+    --danger: #ef5350;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Poppins", "Segoe UI", system-ui, -apple-system, sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  /* Matches the pre-paint bootstrap in index.html: an explicit background stops a
+     white flash before this page's own styles apply. */
+}
+
+.offline-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 340px;
+  width: 100%;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.offline-icon {
+  width: 76px;
+  height: 76px;
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--danger);
+  margin-bottom: 22px;
+  animation: pulseOffline 2.4s ease-in-out infinite;
+}
+
+@keyframes pulseOffline {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--danger) 22%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 10px transparent;
+  }
+}
+
+/* Respect the OS-level animation setting. The pulse is decoration; a user who has
+   asked for reduced motion should not get an endlessly animating circle. */
+@media (prefers-reduced-motion: reduce) {
+  .offline-icon {
+    animation: none;
+  }
+}
+
+.offline-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 8px;
+  color: var(--text);
+}
+
+.offline-subtitle {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0 0 24px;
+  line-height: 1.55;
+}
+
+.offline-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--green);
+  color: var(--bg);
+  border: none;
+  border-radius: 12px;
+  /* 48px min target: comfortable on touch and above the 44px guideline. */
+  min-height: 48px;
+  padding: 12px 28px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.offline-btn:hover {
+  background: var(--green-dark);
+}
+
+.offline-btn:active {
+  transform: scale(0.98);
+}
+
+.offline-btn:focus-visible {
+  outline: 3px solid var(--green);
+  outline-offset: 3px;
+}
+
+.offline-tips {
+  margin-top: 30px;
+  padding-top: 22px;
+  border-top: 1px solid var(--border);
+  width: 100%;
+}
+
+.offline-tips p {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 6px;
+  line-height: 1.5;
+}
+
+.offline-tips strong {
+  color: var(--text);
+}
