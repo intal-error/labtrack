@@ -7,10 +7,16 @@
 //
 // It originally also pinned the admin course scoping on this endpoint, back when
 // the room page scoped by assignment and exportToExcel did not. That mismatch was
-// a real bug -- an empty workbook next to a populated table. Attendance is now
-// building-wide on both sides, so the table/export PARITY invariant is what is
-// worth keeping here, and it is asserted at the bottom of this file. The
-// building-wide contract itself is pinned by tests/attendanceVisibility.verify.js.
+// a real bug -- an empty workbook next to a populated table. Both sides now carry a
+// room-ownership scope, so the table/export PARITY invariant is what is worth
+// keeping here, and it is asserted at the bottom of this file.
+//
+// KNOWN LIMIT of that parity assertion: `call()` below passes no profile, so the
+// scope is inert on both sides and this file CANNOT catch a divergence between the
+// two scoped implementations. tests/attendanceVisibility.verify.js re-asserts the
+// same invariant with a live Course Admin, which is the copy that has teeth.
+// Everything else here -- the filter matrix, the facets, the aggregates -- is
+// unaffected by that gap.
 //
 // Fully offline: the Supabase and Firebase clients are stubbed before the
 // controller loads, exactly as attendanceExport.verify.js does.
@@ -278,12 +284,12 @@ function check(name, actual, expected) {
   check("absurd limit is capped, not honoured", r.body.records.length, 5);
   check("and total still reflects the true count", r.body.total, 5);
 
-  console.log("--- attendance is building-wide, so the room page shows every course ---");
-  // This endpoint used to apply applyAssignedCourse while exportToExcel applied it
-  // separately, and getActiveStudents/getDailyLog/getStats had their own copies.
-  // The copies drifted (case-sensitive, and assignedYear ignored) until admins saw
-  // blank screens. All of that is gone; the contract is now that no assignment
-  // narrows attendance, asserted here against the room page too.
+  console.log("--- a room's page lists every course that used it ---");
+  // Scoping is by room OWNERSHIP, not by the student's course: the room page must
+  // still show a CT student who used a CT-owned room, or the logbook stops being a
+  // record of the room and becomes a per-course record of the people in it. The
+  // scoped counterpart of this assertion -- with a live profile, so it can actually
+  // fail -- lives in tests/attendanceVisibility.verify.js.
   const scoped = { assignedCourse: "BSCS", assignedCourses: ["BSCS"], assignedYear: "" };
   r = await call("room-cet", {}, scoped);
   check("a narrow assignment does not shrink the room page", r.body.total, 5);

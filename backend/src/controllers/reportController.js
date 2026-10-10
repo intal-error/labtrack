@@ -1,5 +1,6 @@
 const { supabase } = require("../config/supabase");
 const { queryTransactions } = require("../utils/transactionFilters");
+const { scoped } = require("../middleware/courseScope");
 const { slug } = require("../utils/exportUtils");
 const { fetchAll } = require("../utils/fetchAll");
 const ExcelJS = require("exceljs");
@@ -94,7 +95,7 @@ function describeFilters(query) {
 const buildTransactionsExport = async (req, res, action) => {
   const isReturned = action === "returned";
   try {
-    const rows = await queryTransactions(action, req.query);
+    const rows = await queryTransactions(action, req.query, req);
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet(isReturned ? "Returned Transactions" : "Borrowed Transactions");
@@ -149,12 +150,22 @@ const returnedReport = async (req, res) => buildTransactionsExport(req, res, "re
 
 const catalogReport = async (req, res) => {
   try {
+    // Scoped. This read the ENTIRE catalog into a spreadsheet, so it was the single
+    // largest cross-course leak in the app: a Course Admin downloaded a file listing
+    // every course's equipment, quantities and asset tags, and nothing on any
+    // screen revealed it had happened.
+    //
     // Paged: an unbounded select("*") is silently cut off at max-rows, which
     // would drop the tail of a large inventory out of the spreadsheet. The
     // exact count lets fetchAll stop after one request for a normal catalog
-    // instead of always probing for a further page.
+    // instead of always probing for a further page. The scope is applied to both
+    // the probe and the pages, or the overflow would re-add other courses.
     const catalog = await fetchAll(() =>
-      supabase.from("catalog").select("*", { count: "exact" }).order("id", { ascending: true })
+      scoped(
+        supabase.from("catalog").select("*", { count: "exact" }).order("id", { ascending: true }),
+        "course",
+        req
+      )
     );
 
     const workbook = new ExcelJS.Workbook();

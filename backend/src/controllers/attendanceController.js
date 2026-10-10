@@ -15,8 +15,21 @@ const {
 const { slug } = require("../utils/exportUtils");
 const { orEq } = require("../utils/postgrest");
 const { todayKey, weekStartKey, formatTimeInTz } = require("../utils/schoolClock");
+const { scoped, assertCourseInScope } = require("../middleware/courseScope");
+const {
+  invalidateRoomCourseCache,
+  scopeByRoom,
+  roomInScope,
+} = require("../utils/roomScope");
 
 const USERS = "users";
+
+/** True when the given course id is a real row in `courses`. */
+const courseExists = async (courseId) => {
+  const { data, error } = await supabase.from("courses").select("id").eq("id", courseId).limit(1);
+  if (error) throw new Error(error.message);
+  return Boolean(data && data.length > 0);
+};
 
 /**
  * Every date boundary below goes through the school clock, not the host clock.
@@ -90,52 +103,146 @@ function formatDuration(minutes) {
  * So: room_code stays the stable join key (frozen), and lab_room is looked up
  * fresh from the room record, which always carries the current name.
  *
- * Fails soft to the client-supplied name when the room is unknown or the lookup
- * errors, so a missing lab_rooms row degrades to the old behaviour instead of
- * blocking a student's time-in.
+ * It does NOT fail soft. An earlier helper here did -- it fell back to the
+ * client-supplied name, then to "Laboratory" -- and that leniency is exactly how a
+ * request with a made-up room_code ended up as a permanent row in the logbook naming a
+ * room that does not exist. Every attendance write now goes through lookupRoom, which
+ * returns null for an unknown code and the handler answers 404. A QR-carried name is
+ * still never trusted (it is frozen and goes stale on rename); the room_code is the only
+ * key that is, and it is resolved server-side.
  */
 const ROOM_CACHE_TTL_MS = 60 * 1000;
 const roomNameCache = new Map();
-
-async function resolveLabRoom(roomCode, fallback) {
-  if (!roomCode) return fallback || "Laboratory";
-
-  // Memoised per room_code for a minute.
-  //
-  // This sits in the middle of the kiosk critical path: a scan used to be
-  // Firestore read -> attendance read -> this SELECT -> insert, four sequential
-  // round trips. room_name only changes when an admin renames a room, so on a busy
-  // kiosk -- the same room, many times a minute -- this turns a query into a map
-  // read.
-  //
-  // Only successful lookups are cached. A miss caches the empty result too, so a
-  // scan for an unregistered room does not re-query on every attempt, but a thrown
-  // error is deliberately NOT cached so a transient database failure does not pin
-  // the fallback name for a minute.
-  const cached = roomNameCache.get(roomCode);
-  if (cached && Date.now() - cached.at < ROOM_CACHE_TTL_MS) {
-    return cached.name || fallback || "Laboratory";
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from("lab_rooms")
-      .select("room_name")
-      .eq("room_code", roomCode)
-      .limit(1);
-    if (error) throw error;
-    const name = (data && data[0] && data[0].room_name) || "";
-    roomNameCache.set(roomCode, { name, at: Date.now() });
-    return name || fallback || "Laboratory";
-  } catch {
-    return fallback || "Laboratory";
-  }
-}
 
 // Called by the room-management controller after a rename or a delete, so a
 // change is visible on the next scan instead of up to a minute later.
 function invalidateRoomNameCache() {
   roomNameCache.clear();
+}
+
+/**
+ * Resolves a room_code to the real lab_rooms row, or null.
+ *
+ * WHY THIS EXISTS ALONGSIDE resolveLabRoom: that function is deliberately lenient --
+ * it falls back to a client-supplied name, then to "Laboratory" -- because it only
+ * ever produced a display label. That leniency is a WRITE-INTEGRITY problem here: a
+ * request with a made-up room_code was accepted and stored, so the logbook ended up
+ * carrying rooms that do not exist and an Admin reviewing their laboratory could not
+ * trust the rows.
+ *
+ * This one refuses. An attendance row may only ever name a room that exists.
+ *
+ * Cross-course attendance is NOT blocked: there is deliberately no comparison of the
+ * student's course against room.course anywhere in this file. Any valid room accepts
+ * any student -- see the roomScope note at the top of utils/roomScope.js, "attendance
+ * is a facility question, not a course one". Who may READ a room's history is decided
+ * separately, by room ownership.
+ */
+async function lookupRoom(roomCode) {
+  const code = String(roomCode || "").trim();
+  if (!code) return null;
+
+  const cached = roomNameCache.get(code);
+  if (cached && Date.now() - cached.at < ROOM_CACHE_TTL_MS) {
+    return cached.room || null;
+  }
+
+  const { data, error } = await supabase
+    .from("lab_rooms")
+    .select("id, room_code, room_name, course")
+    .eq("room_code", code)
+    .limit(1);
+  if (error) throw error;
+
+  const row = (data && data[0]) || null;
+  roomNameCache.set(code, { name: row ? row.room_name : "", room: row, at: Date.now() });
+  return row;
+}
+
+/**
+ * Whose attendance is this request allowed to record?
+ *
+ * THE VULNERABILITY THIS FIXES. timeIn/timeOut/autoScan read `schoolId` from the request
+ * body and never compared it to the caller. Their only gate was a shared secret that was
+ * inlined into the PUBLIC JavaScript bundle, so in production any signed-in user could
+ * record attendance for any other student simply by sending their ID -- and
+ * GET /api/users/resolve made finding that ID easy. No Firestore rule helps: the row is
+ * written to Supabase through the Admin SDK, which bypasses rules entirely.
+ *
+ * THE RULE NOW:
+ *   - a STUDENT records only for themselves. Their ID comes from their server-side
+ *     profile, which was written at registration and is not client-controlled. A
+ *     submitted schoolId that disagrees is rejected outright rather than ignored, so
+ *     the attempt is visible in the response instead of silently succeeding.
+ *   - a KIOSK account records for whoever was scanned. That is its entire purpose: one
+ *     shared station attended by many students.
+ *
+ * Returns { schoolId } or null after having already sent a response.
+ */
+function resolveAttendanceSubject(req, res, submittedSchoolId) {
+  const role = req.user?.role;
+  const profile = req.profile || null;
+  const submitted = String(submittedSchoolId || "").trim();
+
+  if (role === "student") {
+    const own = String(profile?.schoolId || "").trim();
+    if (!own) {
+      res.status(403).json({
+        error: "Your account has no school ID, so it cannot record attendance. Please see the lab staff.",
+      });
+      return null;
+    }
+    if (submitted && submitted !== own) {
+      res.status(403).json({ error: "You can only record your own attendance" });
+      return null;
+    }
+    return { schoolId: own, fromProfile: true };
+  }
+
+  // kiosk (and any future privileged recorder): the scanned ID is the subject.
+  if (!submitted) {
+    res.status(400).json({ error: "Student ID is required" });
+    return null;
+  }
+  return { schoolId: submitted, fromProfile: false };
+}
+
+/**
+ * The same-room sign-out rule, shared by timeOut and autoScan.
+ *
+ * THE RULE (unchanged, deliberately): a session can only be closed by scanning the QR
+ * code of the room where it was opened. The printed QR identifies the laboratory, so
+ * signing out from a different one would let any device in the building close somebody
+ * else's session. The session is NEVER silently closed on a mismatch -- it stays active
+ * so the student can retry at the correct door.
+ *
+ * WHY A SHARED HELPER: this block existed twice (timeOut and autoScan) with byte-identical
+ * logic and messages. Two copies of a security rule drift; extracting it means the next
+ * change to the wording or the comparison happens in exactly one place.
+ *
+ * Returns true when sign-out may proceed, false after having already sent a response.
+ */
+function assertSameRoomForSignOut(res, session, roomCode) {
+  const room = session.lab_room || "that room";
+
+  if (session.room_code && !roomCode) {
+    res.status(400).json({
+      error: `You timed in at ${room}. Scan the QR code on that room's door to sign out.`,
+    });
+    return false;
+  }
+
+  if (roomCode && session.room_code) {
+    const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    if (norm(roomCode) !== norm(session.room_code)) {
+      res.status(400).json({
+        error: `You timed in at ${room}. Scan the QR code on that door to sign out — another room's QR cannot close this session.`,
+      });
+      return false;
+    }
+  }
+
+  return true;
 }
 
 // --- Public Kiosk Endpoints (no auth required) ---
@@ -152,6 +259,10 @@ const lookupStudent = async (req, res) => {
 
     const doc = snap.docs[0];
     const data = doc.data();
+    // email is deliberately absent. A kiosk operator confirms identity from name, course,
+    // year and section; an email address adds nothing there and is the one field here
+    // that is useful only to someone harvesting addresses. Reachable by the kiosk role
+    // only (see the gate in server.js), but least data still wins at the edge.
     res.json({
       userId: doc.id,
       firstName: data.firstName || "",
@@ -160,7 +271,6 @@ const lookupStudent = async (req, res) => {
       course: data.course || "",
       year: data.year || "",
       section: data.section || "",
-      email: data.email || "",
     });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
@@ -169,12 +279,36 @@ const lookupStudent = async (req, res) => {
 
 const timeIn = async (req, res) => {
   try {
-    const { schoolId, subject, professor, labRoom, roomCode } = req.body;
-    if (!schoolId || !subject || !professor || !labRoom) {
+    // `labRoom` is intentionally NOT destructured. The client still sends it, and it is
+    // still ignored -- the stored name always comes from lab_rooms via lookupRoom below.
+    // Leaving it out of this destructure makes that explicit to the next reader and to
+    // the linter, instead of looking like an oversight.
+    const { subject, professor, roomCode } = req.body;
+    if (!subject || !professor) {
       return res.status(400).json({ error: "All fields are required" });
     }
 
-    const userSnap = await db.collection(USERS).where("schoolId", "==", schoolId.trim()).limit(1).get();
+    // Identity comes from the caller's profile when they are a student. See
+    // resolveAttendanceSubject for why the submitted schoolId is no longer trusted.
+    const subjectRecord = resolveAttendanceSubject(req, res, req.body.schoolId);
+    if (!subjectRecord) return;
+
+    // The room must exist. No cross-course check: a student from any course may
+    // scan into any real room, which is what lets a laboratory Admin account for
+    // the people who actually used their room.
+    //
+    // NOTE ON `labRoom`: it is deliberately NOT validated against the room's name.
+    // That value is frozen inside the room's QR payload at creation time, so after an
+    // Admin renames the room it is stale BY DESIGN and the stored lab_room must follow
+    // lab_rooms, not the scanner. Rejecting a mismatch here would break every kiosk in a
+    // renamed room -- see tests/labRoomResolution.verify.js, which exists to pin that
+    // behaviour. The room code is the only trustworthy key, and it is what we resolve on.
+    const room = await lookupRoom(roomCode);
+    if (!room) {
+      return res.status(404).json({ error: "Unknown laboratory room code" });
+    }
+
+    const userSnap = await db.collection(USERS).where("schoolId", "==", subjectRecord.schoolId).limit(1).get();
     if (userSnap.empty) {
       return res.status(404).json({ error: "Student not found" });
     }
@@ -182,7 +316,7 @@ const timeIn = async (req, res) => {
     const userData = userDoc.data();
 
     const today = getTodayString();
-    const sid = schoolId.trim();
+    const sid = subjectRecord.schoolId;
 
     // Ask the database for the two facts we need instead of downloading the
     // student's entire attendance history to derive them.
@@ -251,18 +385,18 @@ const timeIn = async (req, res) => {
     const now = new Date().toISOString();
     const record = {
       id: randomUUID(),
-      student_school_id: schoolId.trim(),
+      student_school_id: sid,
       user_id: userDoc.id,
       first_name: userData.firstName || "",
       last_name: userData.lastName || "",
-      school_id: userData.schoolId || schoolId.trim(),
+      school_id: userData.schoolId || sid,
       course: userData.course || "",
       year: userData.year || "",
       section: userData.section || "",
       subject,
       professor,
-      lab_room: await resolveLabRoom(roomCode, labRoom),
-      room_code: roomCode || "",
+      lab_room: room.room_name || "Laboratory",
+      room_code: room.room_code,
       date: today,
       time_in: now,
       time_out: null,
@@ -291,11 +425,12 @@ const timeIn = async (req, res) => {
 
 const timeOut = async (req, res) => {
   try {
-    const { schoolId, roomCode } = req.body;
-    if (!schoolId) return res.status(400).json({ error: "Student ID is required" });
+    const { roomCode } = req.body;
+    const subjectRecord = resolveAttendanceSubject(req, res, req.body.schoolId);
+    if (!subjectRecord) return;
 
     const today = getTodayString();
-    const sid = schoolId.trim();
+    const sid = subjectRecord.schoolId;
 
     // One row, not the student's whole history -- see the note in timeIn. This
     // endpoint only needs the open session: its id to close, its time_in to compute
@@ -333,18 +468,7 @@ const timeOut = async (req, res) => {
       return res.status(400).json({ error: "No active session found. Please time in first." });
     }
 
-    if (activeDoc.room_code && !roomCode) {
-      return res.status(400).json({ error: "Room code is required for sign-out." });
-    }
-
-    if (roomCode && activeDoc.room_code) {
-      const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-      if (norm(roomCode) !== norm(activeDoc.room_code)) {
-        return res.status(400).json({
-          error: `Cannot sign out from a different room. Please sign out from ${activeDoc.lab_room || "the correct room"}.`,
-        });
-      }
-    }
+    if (!assertSameRoomForSignOut(res, activeDoc, roomCode)) return;
 
     const timeInDate = new Date(activeDoc.time_in);
     if (Number.isNaN(timeInDate.getTime())) {
@@ -393,10 +517,10 @@ const getActiveStudents = async (req, res) => {
     // still physically in the building, and timeOut could not close the session
     // either because it looked for today's row too. A session is open until
     // something closes it, regardless of which calendar day it started on.
-    const { data: records, error } = await supabase
-      .from("lab_attendance")
-      .select("*")
-      .eq("status", "active");
+    const { data: records, error } = await scopeByRoom(
+      supabase.from("lab_attendance").select("*").eq("status", "active"),
+      req
+    );
     if (error) throw error;
 
     let result = records || [];
@@ -434,10 +558,10 @@ const getTodayAttendance = async (req, res) => {
     const today = getTodayString();
     const { course, year, section, subject, professor, labRoom, roomCode, student } = req.query;
 
-    const { data: records, error } = await supabase
-      .from("lab_attendance")
-      .select("*")
-      .eq("date", today);
+    const { data: records, error } = await scopeByRoom(
+      supabase.from("lab_attendance").select("*").eq("date", today),
+      req
+    );
     if (error) throw error;
 
     const result = applyAttendanceFilters(records || [], { course, year, section, subject, professor, labRoom, roomCode, student });
@@ -459,10 +583,10 @@ const getDailyLog = async (req, res) => {
     const { date } = req.params;
     if (!date) return res.status(400).json({ error: "Date is required (YYYY-MM-DD)" });
 
-    const { data: records, error } = await supabase
-      .from("lab_attendance")
-      .select("*")
-      .eq("date", date);
+    const { data: records, error } = await scopeByRoom(
+      supabase.from("lab_attendance").select("*").eq("date", date),
+      req
+    );
     if (error) throw error;
 
     let result = records || [];
@@ -507,7 +631,10 @@ const getAttendanceFacets = async (req, res) => {
 
     const facetResults = await Promise.all(
       FACET_COLUMNS.map(([, column]) =>
-        supabase.from("lab_attendance").select(column).not(column, "is", null)
+        scopeByRoom(
+          supabase.from("lab_attendance").select(column).not(column, "is", null),
+          req
+        )
       )
     );
 
@@ -518,9 +645,15 @@ const getAttendanceFacets = async (req, res) => {
       payload[key] = facet(data || [], column);
     });
 
-    const { data: roomRows, error: roomError } = await supabase
-      .from("lab_attendance")
-      .select("lab_room,room_code");
+    // Scoped too. The facet lists populate the filter dropdowns, and an unscoped
+    // list offered a Course Admin the names of every other course's professors and
+    // subjects -- which is both a leak and, filtered against to nothing, the
+    // "blank screen with a filter nobody can satisfy" failure this codebase has
+    // already been bitten by once.
+    const { data: roomRows, error: roomError } = await scopeByRoom(
+      supabase.from("lab_attendance").select("lab_room,room_code"),
+      req
+    );
     if (roomError) throw roomError;
 
     payload.rooms = [
@@ -544,6 +677,7 @@ const getAttendanceHistory = async (req, res) => {
     let query = supabase.from("lab_attendance").select("*");
     if (from) query = query.gte("date", from);
     if (to) query = query.lte("date", to);
+    query = await scopeByRoom(query, req);
 
     const { data: records, error: fetchError } = await query;
     if (fetchError) throw fetchError;
@@ -624,6 +758,15 @@ const getRoomAttendanceHistory = async (req, res) => {
     // legacy code containing a comma or parenthesis would otherwise produce a
     // PostgREST syntax error and a 500 for that room's whole history page.
     // See the orEq() doc comment in utils/transactionFilters.js.
+    //
+    // Ownership is checked FIRST and separately, because the variant-matching below
+    // would otherwise accept a room_code the caller is allowed to guess but not
+    // allowed to read. An unknown room is a 404, and so is a room belonging to
+    // another course -- same answer either way, so existence stays hidden.
+    if (!(await roomInScope(req, want))) {
+      return res.status(404).json({ error: "Room not found" });
+    }
+
     const { data: scopedRows, error: fetchError } = await supabase
       .from("lab_attendance")
       .select("*")
@@ -701,10 +844,13 @@ const getStudentAttendance = async (req, res) => {
     const { schoolId } = req.params;
     if (!schoolId) return res.status(400).json({ error: "Student ID is required" });
 
-    const { data: records, error } = await supabase
-      .from("lab_attendance")
-      .select("*")
-      .eq("student_school_id", schoolId);
+    // Scoped by room ownership. A Course Admin looking up a student sees that
+    // student's activity in THEIR rooms, which is the logbook's actual question --
+    // not the student's whole term across the building.
+    const { data: records, error } = await scopeByRoom(
+      supabase.from("lab_attendance").select("*").eq("student_school_id", schoolId),
+      req
+    );
     if (error) throw error;
 
     let result = records || [];
@@ -802,34 +948,49 @@ const getStats = async (req, res) => {
     // The three reads are independent and run together, as before.
     const [todayResult, activeResult, activeStaleResult, weekResult] = await Promise.all([
       // status + total_duration only: totalToday, completedToday, totalMinutesToday.
-      supabase.from("lab_attendance").select("status,total_duration").eq("date", today),
+      // Scoped, and not for tidiness: these six numbers are the dashboard KPI tiles,
+      // so unscoped they told every Course Admin how busy the WHOLE building was,
+      // which is the tile directly contradicting the list underneath it.
+      scopeByRoom(
+        supabase.from("lab_attendance").select("status,total_duration").eq("date", today),
+        req
+      ),
       // Every open session, not just today's. Same reason as getActiveStudents:
       // a session that crossed midnight is still open, and a KPI tile that
       // counted only today's rows disagreed with the list directly beneath it.
-      supabase.from("lab_attendance").select("id", { count: "exact", head: true }).eq("status", "active"),
+      scopeByRoom(
+        supabase.from("lab_attendance").select("id", { count: "exact", head: true }).eq("status", "active"),
+        req
+      ),
       // staleInside is its own count rather than a filter over every open row,
       // which is what the second read used to ship.
-      supabase
-        .from("lab_attendance")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "active")
-        // `date IS NULL` has to be OR'd in explicitly.
-        //
-        // .neq("date", today) compiles to `date <> today`, and SQL three-valued logic
-        // makes that NULL for a NULL date -- so those rows are EXCLUDED. The JS this
-        // replaced was `activeRows.filter(r => r.date !== today).length`, where
-        // `null !== today` is true, so a NULL-date session counted as stale.
-        //
-        // That is the difference between an orphaned session showing its "Not signed
-        // out" badge and quietly disappearing while `currentlyInside` still counts
-        // it -- two tiles that stopped summing. `date` is DATE NOT NULL in the current
-        // schema, but 13-lab-attendance.sql is DROP+CREATE, so any deployment predating
-        // that constraint, or any legacy import, can carry NULLs.
-        //
-        // Written this way, staleInside <= currentlyInside is structural rather than
-        // an assumption about the data.
-        .or(`date.neq.${today},date.is.null`),
-      supabase.from("lab_attendance").select("student_school_id").gte("date", weekStartStr).lte("date", today),
+      scopeByRoom(
+        supabase
+          .from("lab_attendance")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "active")
+          // `date IS NULL` has to be OR'd in explicitly.
+          //
+          // .neq("date", today) compiles to `date <> today`, and SQL three-valued logic
+          // makes that NULL for a NULL date -- so those rows are EXCLUDED. The JS this
+          // replaced was `activeRows.filter(r => r.date !== today).length`, where
+          // `null !== today` is true, so a NULL-date session counted as stale.
+          //
+          // That is the difference between an orphaned session showing its "Not signed
+          // out" badge and quietly disappearing while `currentlyInside` still counts
+          // it -- two tiles that stopped summing. `date` is DATE NOT NULL in the current
+          // schema, but 13-lab-attendance.sql is DROP+CREATE, so any deployment predating
+          // that constraint, or any legacy import, can carry NULLs.
+          //
+          // Written this way, staleInside <= currentlyInside is structural rather than
+          // an assumption about the data.
+          .or(`date.neq.${today},date.is.null`),
+        req
+      ),
+      scopeByRoom(
+        supabase.from("lab_attendance").select("student_school_id").gte("date", weekStartStr).lte("date", today),
+        req
+      ),
     ]);
 
     if (todayResult.error) throw todayResult.error;
@@ -874,6 +1035,22 @@ const updateRecord = async (req, res) => {
       .eq("id", id)
       .single();
     if (fetchError || !existing) return res.status(404).json({ error: "Record not found" });
+
+    // Correcting a logbook entry is an edit to one room's record, so the room's
+    // ownership is what authorises it. Without this a Course Admin could rewrite
+    // any entry in the building by id -- including inventing a subject and
+    // professor for a session in another course's room.
+    if (!(await roomInScope(req, existing.room_code))) {
+      return res.status(404).json({ error: "Record not found" });
+    }
+
+    // Nor may an entry be MOVED into another room to dodge that, which would also
+    // silently relocate history between two courses' logbooks. Checked against the
+    // room the caller is asking for, in whichever casing the field uses.
+    const requestedRoom = updates.roomCode ?? updates.room_code;
+    if (requestedRoom !== undefined && !(await roomInScope(req, requestedRoom))) {
+      return res.status(400).json({ error: "You cannot move a record into another room" });
+    }
 
     const allowed = ["subject", "professor", "lab_room", "room_code", "time_in", "time_out", "total_duration"];
     const sanitized = {};
@@ -923,10 +1100,16 @@ const deleteRecord = async (req, res) => {
     const { id } = req.params;
     const { data: existing, error: fetchError } = await supabase
       .from("lab_attendance")
-      .select("id")
+      // room_code was not selected before, so the ownership check had nothing to
+      // read. This was a blind delete of any logbook entry in the building.
+      .select("id, room_code")
       .eq("id", id)
       .single();
     if (fetchError || !existing) return res.status(404).json({ error: "Record not found" });
+
+    if (!(await roomInScope(req, existing.room_code))) {
+      return res.status(404).json({ error: "Record not found" });
+    }
 
     const { error: deleteError } = await supabase.from("lab_attendance").delete().eq("id", id);
     if (deleteError) throw deleteError;
@@ -971,6 +1154,19 @@ const exportToExcel = async (req, res) => {
     let query = supabase.from("lab_attendance").select("*");
     if (fromDate) query = query.gte("date", fromDate);
     if (toDateVal) query = query.lte("date", toDateVal);
+
+    // Scoped. An export is the worst-case leak in the whole feature: it is a file
+    // the admin walks away with, so a scoping bug here outlives the session and is
+    // not visible on any screen afterwards. Applied last, after the date bounds, so
+    // it ANDs with them rather than replacing the query.
+    query = await scopeByRoom(query, req);
+
+    // An explicitly requested room still has to be one the caller may read. Without
+    // this the scope above would silently widen a "room X only" export to "all my
+    // rooms", which is the opposite of what the page asked for.
+    if (roomFilter && !(await roomInScope(req, codeFilters[0]))) {
+      return res.status(404).json({ error: "Room not found" });
+    }
 
     const { data: records, error: fetchError } = await query;
     if (fetchError) throw fetchError;
@@ -1081,7 +1277,14 @@ const exportToExcel = async (req, res) => {
 
 const getRooms = async (req, res) => {
   try {
-    const { data: rooms, error } = await supabase.from("lab_rooms").select("*");
+    // Scoped by the room's OWNING course. A room with no course is Super Admin
+    // only until it is assigned in this tab -- the fail-closed default, not a
+    // special case anyone has to remember.
+    const { data: rooms, error } = await scoped(
+      supabase.from("lab_rooms").select("*"),
+      "course",
+      req
+    );
     if (error) throw error;
 
     const sorted = (rooms || []).sort((a, b) => (a.room_name || "").localeCompare(b.room_name || ""));
@@ -1093,8 +1296,15 @@ const getRooms = async (req, res) => {
 
 const createRoom = async (req, res) => {
   try {
-    const { roomName, location } = req.body;
+    const { roomName, location, course } = req.body;
     if (!roomName) return res.status(400).json({ error: "Room name is required" });
+
+    // A Course Admin creates rooms for their own course only. Super Admin may
+    // create an unassigned room, which is how a brand-new room looks before it is
+    // allocated to a course.
+    if (!assertCourseInScope(req, course)) {
+      return res.status(400).json({ error: "You can only create rooms for your own course" });
+    }
 
     const roomCode = roomName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     const qrData = `LABROOM:${roomName}`;
@@ -1123,6 +1333,7 @@ const createRoom = async (req, res) => {
       room_code: roomCode,
       qr_data: qrData,
       location: (location || "").trim(),
+      course: course || "",
       status: "active",
       created_at: now,
     };
@@ -1133,6 +1344,8 @@ const createRoom = async (req, res) => {
       .select()
       .single();
     if (insertError) throw insertError;
+
+    invalidateRoomCourseCache();
 
     res.json(transformKeys(created));
   } catch (err) {
@@ -1152,10 +1365,36 @@ const updateRoom = async (req, res) => {
       .single();
     if (fetchError || !existing) return res.status(404).json({ error: "Room not found" });
 
-    const allowed = ["roomName", "location", "status"];
+    // Room CRUD was unrestricted before this: any admin could rename, reassign or
+    // delete any room in the building, which also handed them its QR. 404 rather
+    // than 403 so the room's existence is not confirmed.
+    if (!assertCourseInScope(req, existing.course)) {
+      return res.status(404).json({ error: "Room not found" });
+    }
+
+    const allowed = ["roomName", "location", "status", "course"];
     const sanitized = {};
     for (const key of allowed) {
       if (updates[key] !== undefined) sanitized[key] = updates[key];
+    }
+
+    // Reassigning a room does NOT rewrite lab_attendance.room_code, so the whole
+    // historical logbook transfers to the new owning course the instant this
+    // saves. That is silent and irreversible from the UI, so the row count is
+    // returned and the caller is expected to confirm it.
+    let historyTransferred = 0;
+    if (sanitized.course !== undefined && sanitized.course !== existing.course) {
+      if (req.profile?.adminLevel !== "super") {
+        return res.status(403).json({ error: "Only the Super Admin can move a room to another course" });
+      }
+      if (sanitized.course && !(await courseExists(sanitized.course))) {
+        return res.status(400).json({ error: `Unknown course "${sanitized.course}"` });
+      }
+      const { count } = await supabase
+        .from("lab_attendance")
+        .select("id", { count: "exact", head: true })
+        .eq("room_code", existing.room_code || "");
+      historyTransferred = count || 0;
     }
 
     // With room_code frozen (see below), room_name is the only remaining signal
@@ -1201,6 +1440,7 @@ const updateRoom = async (req, res) => {
     }
     if (sanitized.location !== undefined) updatePayload.location = sanitized.location;
     if (sanitized.status !== undefined) updatePayload.status = sanitized.status;
+    if (sanitized.course !== undefined) updatePayload.course = sanitized.course || "";
 
     const { error: updateError } = await supabase
       .from("lab_rooms")
@@ -1213,12 +1453,23 @@ const updateRoom = async (req, res) => {
     // attendance rows until the TTL expired.
     if (sanitized.roomName !== undefined) invalidateRoomNameCache();
 
+    // The room->course lists are cached per course for a minute, and a change here
+    // invalidates BOTH the old course's and the new course's entry. Clearing the
+    // whole batch is deliberate: there is no single key to delete, because the
+    // attendance scope of two different admins just moved at once.
+    invalidateRoomCourseCache();
+
     const { data: updated } = await supabase
       .from("lab_rooms")
       .select("*")
       .eq("id", id)
       .single();
-    res.json(transformKeys(updated));
+
+    res.json({
+      ...transformKeys(updated),
+      // 0 unless the owning course actually changed.
+      historyTransferred,
+    });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }
@@ -1229,10 +1480,16 @@ const deleteRoom = async (req, res) => {
     const { id } = req.params;
     const { data: existing, error: fetchError } = await supabase
       .from("lab_rooms")
-      .select("id")
+      // `course` was not selected before, so the ownership check had nothing to
+      // read. This was a blind delete by id across the whole building.
+      .select("id, room_code, course")
       .eq("id", id)
       .single();
     if (fetchError || !existing) return res.status(404).json({ error: "Room not found" });
+
+    if (!assertCourseInScope(req, existing.course)) {
+      return res.status(404).json({ error: "Room not found" });
+    }
 
     const { error: deleteError } = await supabase.from("lab_rooms").delete().eq("id", id);
     if (deleteError) throw deleteError;
@@ -1240,6 +1497,7 @@ const deleteRoom = async (req, res) => {
     // The kiosk would otherwise keep resolving this room's name for up to a minute
     // after it was deleted.
     invalidateRoomNameCache();
+    invalidateRoomCourseCache();
 
     res.json({ success: true });
   } catch (err) {
@@ -1256,6 +1514,13 @@ const getRoomQR = async (req, res) => {
       .eq("id", id)
       .single();
     if (fetchError || !room) return res.status(404).json({ error: "Room not found" });
+
+    // Printing a QR is the most consequential thing an admin can do with a room:
+    // the sheet it produces is what every student in the building scans to write a
+    // logbook entry. A Course Admin must not be able to print another course's.
+    if (!assertCourseInScope(req, room.course)) {
+      return res.status(404).json({ error: "Room not found" });
+    }
 
     const dataUrl = await QRCode.toDataURL(room.qr_data, {
       width: 300,
@@ -1303,7 +1568,12 @@ const autoScan = async (req, res) => {
   try {
     const { schoolId, roomCode, labRoom, firstName, lastName, course, year, section, subject, professor } = req.body;
 
-    if (!schoolId) {
+    // Identity first: a student may only record their own attendance. See
+    // resolveAttendanceSubject.
+    const subjectRecord = resolveAttendanceSubject(req, res, schoolId);
+    if (!subjectRecord) return;
+
+    if (!subjectRecord.schoolId) {
       return res.json({
         type: "need_form",
         roomCode: roomCode || "",
@@ -1311,8 +1581,13 @@ const autoScan = async (req, res) => {
       });
     }
 
+    // NOTE ON ROOM ORDERING: the room is NOT resolved here, before the sign-out branch.
+    // When a student has an open session and simply forgot to scan the door QR, the
+    // helpful answer is "you timed in at <room>, scan that door" -- not a bare 404 from a
+    // missing code. So the same-room guard runs first, and the room is only required to
+    // EXIST on the path that writes a new record.
     const today = getTodayString();
-    const sid = schoolId.trim();
+    const sid = subjectRecord.schoolId;
 
     // Same three indexed lookups as timeIn/timeOut, not a read of every session this
     // student has ever attended. Two different windows on purpose: the open session
@@ -1353,18 +1628,7 @@ const autoScan = async (req, res) => {
     if (lastTodayRes.error) throw lastTodayRes.error;
 
     if (activeSession) {
-      if (activeSession.room_code && !roomCode) {
-        return res.status(400).json({ error: "Room code is required for sign-out." });
-      }
-
-      if (roomCode && activeSession.room_code) {
-        const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-        if (norm(roomCode) !== norm(activeSession.room_code)) {
-          return res.status(400).json({
-            error: `Cannot sign out from a different room. Please sign out from ${activeSession.lab_room || "the correct room"}.`,
-          });
-        }
-      }
+      if (!assertSameRoomForSignOut(res, activeSession, roomCode)) return;
 
       const timeInDate = new Date(activeSession.time_in);
       if (Number.isNaN(timeInDate.getTime())) {
@@ -1407,48 +1671,68 @@ const autoScan = async (req, res) => {
     }
 
     // TIME IN — require form data
+    //
+    // The room is resolved BEFORE the form check because it is the one field a client can
+    // never legitimately omit: both entry points scan a room QR to open a session.
+    // A QR-carried room NAME is never trusted -- it is frozen at creation and goes stale
+    // when an Admin renames the room -- so lab_room is taken from lab_rooms, never from
+    // the request. See lookupRoom and tests/labRoomResolution.verify.js.
+    const room = await lookupRoom(roomCode);
+    if (!room) {
+      return res.status(404).json({ error: "Unknown laboratory room code" });
+    }
+
     if (!firstName || !lastName || !course || !year || !subject || !professor) {
       return res.status(400).json({ error: "All form fields are required for time-in." });
     }
 
-    // The profile lookup and the room-name resolution do not depend on each other,
-    // so they are issued together. resolveLabRoom is a SELECT against lab_rooms that
-    // was previously awaited inline in the record literal below -- meaning the
-    // Firestore read, the room read and only then the insert all ran in series.
-    const [profileResult, resolvedLabRoom] = await Promise.all([
-      db.collection("users").where("schoolId", "==", sid).limit(1).get().catch(() => null),
-      resolveLabRoom(roomCode, labRoom),
-    ]);
+    // Profile lookup is independent of nothing else now that the room is already resolved
+    // above, so it is awaited on its own. A failed read must NOT abort the write: the
+    // kiosk operator's typed values are the legitimate fallback when there is no profile
+    // (someone borrowing a card, or a student whose profile predates a field).
+    const profileResult = await db
+      .collection("users")
+      .where("schoolId", "==", sid)
+      .limit(1)
+      .get()
+      .catch(() => null);
 
     let verifiedUserId = "";
     let verifiedFirstName = firstName.trim();
     let verifiedLastName = lastName.trim();
     let verifiedCourse = course.trim();
+    let verifiedYear = year.trim();
+    let verifiedSection = (section || "").trim();
     if (profileResult && !profileResult.empty) {
       const userDoc = profileResult.docs[0];
       verifiedUserId = userDoc.id;
       const profile = userDoc.data();
+      // Profile wins wherever it has a value. This is the same rule as the subject ID:
+      // a student must not be able to file a record describing themselves as someone
+      // else, and `year` was the one descriptive field still taken straight from the body.
       verifiedFirstName = profile.firstName || verifiedFirstName;
       verifiedLastName = profile.lastName || verifiedLastName;
       verifiedCourse = profile.course || verifiedCourse;
+      verifiedYear = profile.year || verifiedYear;
+      verifiedSection = profile.section || verifiedSection;
     }
 
     const now = new Date().toISOString();
     const record = {
       id: randomUUID(),
-      student_school_id: schoolId.trim(),
+      student_school_id: sid,
       user_id: verifiedUserId,
       first_name: verifiedFirstName,
       last_name: verifiedLastName,
-      school_id: schoolId.trim(),
+      school_id: sid,
       course: verifiedCourse,
-      year: year.trim(),
-      section: (section || "").trim(),
+      year: verifiedYear,
+      section: verifiedSection,
       subject,
       professor: professor.trim(),
-      // Already resolved above, alongside the profile lookup.
-      lab_room: resolvedLabRoom,
-      room_code: roomCode || "",
+      // From lab_rooms, resolved above. The client-supplied `labRoom` is never stored.
+      lab_room: room.room_name,
+      room_code: room.room_code,
       date: today,
       time_in: now,
       time_out: null,

@@ -119,13 +119,31 @@ const dismiss = async (req, res) => {
     const { id } = req.params;
     const userId = req.user.uid;
 
+    // WHY target_user_id IS NOW SELECTED: it was not, so this handler had no way to
+    // tell WHOSE notification it was about to mutate. Any authenticated user could
+    // dismiss anyone's notification.
+    //
+    // The blast radius is smaller than it first looks, and worth being precise about
+    // rather than overselling: `dismissed_by` is a per-viewer array, and the read
+    // path filters `!(n.dismissed_by || []).includes(userId)` for the CURRENT caller.
+    // So appending your own uid to someone else's row only ever hides it from YOU --
+    // it does not hide it from them. It was an unauthorized write to another user's
+    // record, not a way to suppress someone else's notifications.
+    //
+    // What it does still enable: writing to rows you do not own, and inflating
+    // dismissed_by with your uid against records you were never sent.
     const { data: doc, error: fetchError } = await supabase
       .from("notifications")
-      .select("dismissed_by")
+      .select("target_user_id, dismissed_by")
       .eq("id", id)
       .single();
 
     if (fetchError || !doc) {
+      return res.status(404).json({ error: "Notification not found" });
+    }
+    if (doc.target_user_id !== userId) {
+      // 404 rather than 403: a 403 would confirm the notification exists and is
+      // addressed to somebody, which is itself a small disclosure.
       return res.status(404).json({ error: "Notification not found" });
     }
 

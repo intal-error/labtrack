@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import { MdSchool, MdPublic } from "react-icons/md";
 import { useAuth } from "../context/AuthContext";
 import {
   useMyBorrowed,
@@ -573,6 +574,57 @@ function StudentDashboard() {
 /* ═══════════════════════════════════════════════ */
 /*                   ADMIN DASHBOARD              */
 /* ═══════════════════════════════════════════════ */
+/*
+ * The course banner.
+ *
+ * Every number below it is scoped server-side to the caller's course, and that is
+ * not obvious from the figures. A Course Admin seeing "Total Students: 31" has no
+ * way to tell whether that is their program or the whole school, and the two
+ * readings lead to opposite conclusions about whether anything is wrong. So the
+ * scope is stated, on the one screen where it is hardest to infer.
+ *
+ * It also explains the two places where "scoped" does NOT mean what it looks like:
+ *   - the laboratory logbook is scoped by ROOM OWNERSHIP, so students from other
+ *     courses who used this course's rooms appear in it
+ *   - a Course Admin who owns no rooms yet sees an empty logbook, because rooms
+ *     start unassigned and only the Super Admin can allocate them
+ * The second one is a configuration state, not a bug, and it is the first thing
+ * anyone will report otherwise.
+ */
+function CourseScopeBanner() {
+  const { isSuperAdmin, isCourseAdmin, courseName, courseId } = useAuth();
+
+  if (isSuperAdmin) {
+    return (
+      <div className="dash-scope-banner dash-scope-all">
+        <MdPublic size={16} />
+        <div>
+          <strong>All courses</strong>
+          <p>
+            You can see every course. Use the filters on each page to narrow to one.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isCourseAdmin) return null;
+
+  return (
+    <div className="dash-scope-banner">
+      <MdSchool size={16} />
+      <div>
+        <strong>{courseName || courseId} dashboard</strong>
+        <p>
+          Every figure below covers {courseName || courseId} only. The laboratory
+          logbook covers this course&apos;s rooms, including visits by students from
+          other courses.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function AdminDashboard() {
   const [range, setRange] = useState(DEFAULT_RANGE);
   // Preset ranges are relative to "today", so re-resolve once the calendar day rolls over.
@@ -722,6 +774,7 @@ const { data: catalogPreviewData } = useCatalogPreview();
 
   return (
     <div className="dash-page">
+      <CourseScopeBanner />
       <div className="dash-head">
         <div className="dash-head-text">
           <h2>Dashboard</h2>

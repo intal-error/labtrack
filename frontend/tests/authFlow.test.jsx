@@ -1,409 +1,301 @@
 /**
- * The role-mismatch sign-out, tested as a COMPONENT.
+ * Mounted-component tests for the auth navigation guard.
  *
- * WHY THIS TEST EXISTS, AND WHY IT HAD TO BE A COMPONENT TEST
+ * WHY THIS FILE WAS REWRITTEN, NOT DELETED: it was 409 lines built to catch a bug
+ * that no longer exists. The app had a role picker, and the guard had to distinguish
+ * "a sign-in was submitted and is waiting for its role" from "this visitor already had
+ * a session" -- so the test drove a real GuestRoute x SignInForm verdict machine and a
+ * reactive attempt store, one `act` step at a time, because every regression lived in
+ * that ordering.
  *
- * The guest-route guard regressed three times, and all three versions passed a
- * source-text audit and every hand-written `*.verify.js` suite. They failed for one
- * reason: the bug was about WHEN a component unmounts relative to when an effect runs,
- * and no assertion on the source text can observe that. A guard can read exactly as
- * intended in review and still unmount SignInForm one tick before the verdict it was
- * supposed to wait for.
+ * The picker is gone. The backend returns `landingPath`, so there is nothing for the
+ * client to adjudicate and nothing for the router to wait for. The guard is now four
+ * lines, and what remains worth testing at mount level is exactly what a source scan
+ * cannot tell you: that the form is STILL MOUNTED during the pending window, and that
+ * a resolved profile actually navigates rather than rendering one more time.
  *
- * So this exercises the real components, the real router, and real timing:
- *
- *   Regression 1: redirect on `user` alone          -> form unmounted before any role existed
- *   Regression 2: spinner while the role is pending  -> unmounted one tick later, same bug
- *   Regression 3: redirect on any resolved role      -> unmounted on the very render the
- *                                                      verdict became computable, so the
- *                                                      mismatch effect never ran
- *
- * Only a mounted-component test can distinguish those from a correct implementation,
- * because the failure mode is "this effect never executed".
+ * These are the two assertions kept from the old suite, because they are the two that
+ * were right to keep existing: an unmounted form is the failure mode that has bitten
+ * this guard three times, and it is invisible from the source.
  *
  * Run: npm test -w frontend
  */
-
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, act } from "@testing-library/react";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { render, screen, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route, Navigate } from "react-router-dom";
-import React, { useEffect } from "react";
 
-import {
-  markSignInAttempt,
-  clearSignInAttempt,
-  subscribeSignInFlow,
-  getSignInAttempt,
-} from "../src/utils/signInFlow";
-
-// ── Controlled stand-ins ────────────────────────────────────────────────────
-// The auth context is mocked so the test drives `role` directly. Mocking the CONTEXT
-// (not firebase) is deliberate: the bug was never in Firebase or in AuthContext, it
-// was in the interaction between the resolved role and a mounted route guard, so the
-// mock reproduces exactly the state that exposed it.
+// ── Mocks ───────────────────────────────────────────────────────────────────
 
 /**
- * A REAL external store, not a plain object.
+ * A reactive stand-in for AuthContext.
  *
- * The first version of this file used `let mockAuth = {...}` and reassigned it inside
- * `act()`. Every assertion after the first state change failed, and the reason is
- * worth recording: reassigning a module-level variable does not notify React. The
- * components read it via a mocked `useAuth()` that is just a function call, so
- * nothing subscribed and no re-render happened -- the DOM kept showing the verdict
- * from the previous state. `act()` flushes effects, it does not invent a subscription.
+ * `vi.hoisted` is required: `vi.mock` factories are hoisted above the module body,
+ * so a store declared as a plain `const` would still be in its temporal dead zone
+ * when the factory runs.
  *
- * useSyncExternalStore gives the mock the same observable semantics the real context
- * has, so a test can drive auth state and have components actually re-render, which
- * is a precondition for asserting anything about unmounting.
+ * The store is REACTIVE on purpose, and that is the whole point. A plain mutable
+ * object works right up until it does not: mutating it notifies nobody, the guard
+ * never re-renders, the redirect never happens, and every assertion below passes
+ * vacuously against a component that is still showing the login form. That is not
+ * hypothetical -- it is exactly the defect the previous suite existed to catch, where
+ * a non-reactive attempt flag left the router un-notified.
  */
-let mockAuth = { user: null, role: undefined, loading: false, profileError: null };
-const authListeners = new Set();
+const authStore = vi.hoisted(() => {
+  const listeners = new Set();
+  const fresh = () => ({
+    user: null,
+    role: undefined,
+    loading: false,
+    landingPath: null,
+    profileError: null,
+  });
+  return {
+    state: fresh(),
+    // `listeners` is read from the closure, never from `this` -- it is not a property
+    // of the returned object, and reaching for this.listeners fails at runtime in a
+    // way that looks like a broken store rather than a typo.
+    // MUST assign a new object rather than Object.assign onto the old one.
+    // useSyncExternalStore compares snapshots by reference, so an in-place mutation
+    // leaves the snapshot identical, React skips the re-render, and every assertion
+    // below passes vacuously against a component still showing the login form. This
+    // is the same class of defect the deleted signInFlow store had, and the reason
+    // the store here is written the way it is.
+    set(next) {
+      this.state = { ...this.state, ...next };
+      listeners.forEach((listener) => listener());
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    get() {
+      return this.state;
+    },
+    reset() {
+      // Assign rather than mutate: a component may already hold the old object as
+      // its useSyncExternalStore snapshot, and mutating it in place would leave that
+      // snapshot equal to the new value, so React would skip the re-render.
+      // Subscribers are NOT cleared -- testing-library unmounts between tests, and
+      // dropping them here would silently unsubscribe anything still mounted.
+      this.state = fresh();
+      listeners.forEach((listener) => listener());
+    },
+  };
+});
 
-function subscribeAuth(listener) {
-  authListeners.add(listener);
-  return () => authListeners.delete(listener);
-}
+vi.mock("../src/context/AuthContext", async () => {
+  const { useSyncExternalStore } = await import("react");
+  return {
+    useAuth: () =>
+      useSyncExternalStore(
+        (listener) => authStore.subscribe(listener),
+        () => authStore.get(),
+        () => authStore.get()
+      ),
+  };
+});
 
-const getAuthSnapshot = () => mockAuth;
-
-/** Test-facing setter: changes state and notifies, like a real dispatch. */
-function setMockAuth(next) {
-  mockAuth = next;
-  authListeners.forEach((l) => l());
-}
-
-/**
- * logout() is DEFERRED on purpose.
- *
- * The real logout() is a Firebase network call, so there is a real interval -- tens of
- * milliseconds to seconds -- between deciding to sign out and `user` actually clearing.
- * An instant mock collapses that interval, and with it the only window in which a bug
- * is observable: if SignInForm released the router's stand-down BEFORE calling logout,
- * the router would redirect to the dashboard during the gap and the student would be
- * shown the screen the mismatch exists to deny.
- *
- * A synchronous mock hid that completely -- the injected bug passed all 9 tests.
- */
-let logoutDeferred = {};
-function freshLogoutDeferred() {
-  let resolve;
-  const promise = new Promise((r) => { resolve = r; });
-  logoutDeferred = { promise, resolve };
-}
-
-const mockLogout = vi.fn(() => logoutDeferred.promise);
-
-vi.mock("../src/context/AuthContext", () => ({
-  useAuth: () => React.useSyncExternalStore(subscribeAuth, getAuthSnapshot),
+vi.mock("../src/services/firebase", () => ({ auth: {} }));
+vi.mock("firebase/auth", () => ({
+  signInWithEmailAndPassword: vi.fn(async () => ({ uid: "u1" })),
+  sendPasswordResetEmail: vi.fn(async () => {}),
 }));
 
-// The components need the same accessor the guard under test uses. Assigned here
-// rather than imported so every consumer reads the store through one path.
-const useAuth = () => React.useSyncExternalStore(subscribeAuth, getAuthSnapshot);
+// The form under test is the REAL one. A stand-in is what made the old suite able to
+// go green against a guard that was still wrong.
+import SignInForm from "../src/pages/components/SignInForm";
+import { useAuth } from "../src/context/AuthContext";
 
-// SignInForm in production is 300+ lines of markup with password reset, remember-me
-// and theme controls. What is under test is its verdict MACHINE, so this stand-in
-// implements the same contract: compute a verdict from (signedIn, loading, role),
-// consume it once, then release the router -- which is what lets the router navigate.
-//
-// The verdict machine was itself wrong in production until this test caught it: "ok"
-// was excluded from consumption, so activeVerdict could never be "ok" and the happy
-// path was unreachable. The transcript below consumes ALL terminal verdicts.
-function SignInFormStandIn({ selectedRole = "admin" }) {
-  // Through useAuth, NOT off the module variable. The real SignInForm reads role and
-  // loading from the context, and that subscription is what makes it re-render when a
-  // test advances auth state. Reading `mockAuth` directly looks equivalent but is not:
-  // GuestRoute re-rendering passes back the SAME `children` element, so React bails out
-  // of re-rendering this child and the verdict never recomputes. That produced a test
-  // that asserted stale output and appeared to fail against correct code.
-  const { role, loading } = useAuth();
-  const [signedIn, setSignedIn] = React.useState(false);
-  const [consumed, setConsumed] = React.useState(null);
-
-  const verdict =
-    !signedIn || loading || role === undefined
-      ? "idle"
-      : !role
-        ? "no-profile"
-        : role !== selectedRole
-          ? "wrong-role"
-          : "ok";
-
-  if (verdict !== "idle" && verdict !== consumed) {
-    setConsumed(verdict);
-  }
-  const activeVerdict = consumed === verdict ? verdict : "idle";
-
-  useEffect(() => {
-    if (activeVerdict === "idle") return;
-
-    if (activeVerdict === "wrong-role") {
-      // The flag is deliberately NOT cleared here: clearing it would let GuestRoute
-      // redirect to the dashboard in the gap before logout() resolves -- the exact
-      // screen the mismatch exists to deny.
-      mockLogout();
-      return;
-    }
-
-    // ok and no-profile both end with the router in charge. Releasing the flag is what
-    // lets it redirect: to the dashboard on ok, and to ProfileGate on no-profile.
-    clearSignInAttempt();
-  }, [activeVerdict]);
-
-  return (
-    <div>
-      <span data-testid="verdict">{activeVerdict}</span>
-      <button type="button" onClick={() => { setConsumed(null); setSignedIn(true); markSignInAttempt(); }}>
-        Sign in
-      </button>
-    </div>
-  );
-}
-
-// GuestRoute, transcribed from src/App.jsx. Deliberately NOT imported: the production
-// version imports the whole app graph (ThemeProvider, SplashScreen, Toaster, every
-// lazy route), which cannot be rendered in a unit test. The transcription is checked
-// against the real source by tests/authFlow.verify.js, so the two cannot drift
-// silently -- if someone changes the real guard, that suite fails.
-// Reads auth through the mocked useAuth rather than off the module variable directly.
-// That is not stylistic: useAuth subscribes to the store, so it is what makes this
-// component re-render when a test changes auth state. A component reading `mockAuth`
-// straight would only re-render when something else happened to re-render the tree,
-// and every assertion about what the guard did on a given render would be testing
-// stale output.
+// GuestRoute, copied verbatim from App.jsx. It reads useAuth() exactly as production
+// does rather than the store directly, so the test exercises the real import path --
+// two copies of the guard behave the same today and diverge silently the first time
+// only one of them is edited.
 function GuestRoute({ children }) {
-  const { user, loading, role } = useAuth();
-  // Subscribed, exactly as production does. Reading the flag off a plain variable is
-  // NOT equivalent: SignInForm clears it from an effect, and without a subscription the
-  // router is never told, so it never re-renders and the redirect never happens.
-  const signInAttempt = React.useSyncExternalStore(subscribeFlow, getAttempt);
-  // The attempt flag is checked FIRST, before `loading`. AuthContext sets loading=true
-  // for the PROFILE fetch too, so gating on loading unmounts the form mid-sign-in and
-  // the mismatch verdict can never be computed. This ordering is the fix.
-  if (signInAttempt) return children;
-  if (loading) return <div data-testid="screen">spinner</div>;
+  const { user, loading, role, landingPath } = useAuth();
+
+  if (loading) return <div>loading</div>;
   if (!user) return children;
   if (role === undefined) return children;
-  return <Navigate to="/dashboard" replace />;
+  return <Navigate to={landingPath || "/dashboard"} replace />;
 }
 
-function ProfileGateStandIn() {
-  return <div data-testid="profile-gate">profile unavailable</div>;
-}
-
-function DashboardStandIn() {
-  const { role } = useAuth();
-  if (!role) return <ProfileGateStandIn />;
-  return <div data-testid="dashboard">dashboard for {role}</div>;
-}
-
-// The v7 future flags are opted into explicitly. Without them react-router logs two
-// warnings per run ("will begin wrapping state updates in..." and "Relative route
-// resolution within Splat routes is changing in v7"), which drown out real signal in
-// the test output -- and this app has no splat routes, so the second is pure noise.
-function App() {
+function Harness() {
   return (
     <MemoryRouter
       initialEntries={["/login"]}
       future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
     >
       <Routes>
-        <Route path="/login" element={<GuestRoute><SignInFormStandIn /></GuestRoute>} />
-        <Route path="/dashboard" element={<DashboardStandIn />} />
+        <Route path="/login" element={<GuestRoute><SignInForm /></GuestRoute>} />
+        <Route path="/dashboard" element={<div>ADMIN DASHBOARD</div>} />
+        <Route path="/my-activity" element={<div>STUDENT DASHBOARD</div>} />
       </Routes>
     </MemoryRouter>
   );
 }
 
-// A tiny reactive store standing in for src/utils/signInFlow.js, mirroring its real
-// implementation: a mutable flag plus a listener set, so a write notifies subscribers.
-// A plain boolean is NOT a faithful stand-in -- the production bug this suite exists to
-// catch is precisely that a non-reactive flag leaves the router un-notified.
-let attemptInFlight = false;
-const flowListeners = new Set();
-function flowEmit() {
-  flowListeners.forEach((l) => l());
+/**
+ * Fill the form and submit it.
+ *
+ * Both fields are `required`, so an empty submit is blocked by native validation
+ * before `handleSubmit` ever runs and no auth state is ever set -- which looks
+ * exactly like a broken redirect. Matching the labels EXACTLY matters too:
+ * /password/i also hits the "Forgot password?" link.
+ */
+async function signIn(user) {
+  await user.type(screen.getByLabelText("Email"), "someone@slsu.edu.ph");
+  await user.type(screen.getByLabelText("Password"), "Passw0rd!");
+  await user.click(screen.getByRole("button", { name: /^sign in$/i }));
 }
-
-vi.mock("../src/utils/signInFlow", () => ({
-  markSignInAttempt: () => { attemptInFlight = true; flowEmit(); },
-  clearSignInAttempt: () => { attemptInFlight = false; flowEmit(); },
-  subscribeSignInFlow: (l) => { flowListeners.add(l); return () => flowListeners.delete(l); },
-  getSignInAttempt: () => attemptInFlight,
-}));
-
-// GuestRoute reads the store through the SAME accessors production imports, rather
-// than through a second copy defined here. Two copies of a subscription behave the
-// same today, but a future change to the real module would silently stop being tested
-// -- and the guard is precisely the thing most worth testing faithfully.
-const subscribeFlow = subscribeSignInFlow;
-const getAttempt = getSignInAttempt;
 
 beforeEach(() => {
-  freshLogoutDeferred();
-  setMockAuth({ user: null, role: undefined, loading: false, profileError: null });
-  mockLogout.mockClear();
-  clearSignInAttempt();
+  authStore.reset();
 });
 
-/** Completes the pending sign-out, as Firebase eventually would. */
-async function completeLogout() {
-  await act(async () => {
-    logoutDeferred.resolve();
-    setMockAuth({ user: null, role: null, loading: false, profileError: null });
-  });
-}
+describe("one login form", () => {
+  it("asks for credentials and offers no role picker", () => {
+    render(<Harness />);
 
-/** Drives the real sequence a student tapping the ADMIN tile goes through, using the
- *  default selectedRole of "admin" in the stand-in.
- *
- *  The intermediate `act` steps are the point of the test. Every regression lived in
- *  this ordering -- a render where the guard took over one step too early -- so a test
- *  that sets the final state in a single assignment cannot see any of them.
- *
- *  Note `loading: true` on step 2. That mirrors AuthContext, which sets loading for the
- *  PROFILE fetch and not just for Firebase startup, and it is the exact condition that
- *  the live bug turned on.
- */
-async function submitAsRolePending(user) {
-  // No initial setMockAuth here. beforeEach already puts the store in exactly this
-  // state, and re-setting it AFTER render() is an update outside act() -- which is
-  // what produced the eight "not wrapped in act" warnings this suite used to emit.
-  // Every update from here on is inside act.
-  await user.click(screen.getByRole("button", { name: /sign in/i }));
+    expect(screen.getByLabelText("Email")).toBeInTheDocument();
+    expect(screen.getByLabelText("Password")).toBeInTheDocument();
 
-  // Firebase accepted the credentials; the profile request is in flight, and
-  // AuthContext has loading=true because of it.
-  await act(async () => {
-    setMockAuth({ user: { uid: "u1" }, role: undefined, loading: true, profileError: null });
-  });
-}
-
-describe("role-mismatch sign-out (the regression that survived three audits)", () => {
-  it("regression 1 + 2: keeps the form mounted while the role is still pending", async () => {
-    const user = userEvent.setup();
-    setMockAuth({ user: null, role: undefined, loading: false, profileError: null });
-    render(<App />);
-    await user.click(screen.getByRole("button", { name: /sign in/i }));
-
-    await act(async () => {
-      setMockAuth({ user: { uid: "u1" }, role: undefined, loading: true, profileError: null });
-    });
-
-    // A spinner here is regression 2: it unmounts the form before any verdict exists.
-    expect(screen.queryByTestId("screen")).not.toBeInTheDocument();
-    expect(screen.getByTestId("verdict")).toBeInTheDocument();
-    expect(screen.queryByTestId("dashboard")).not.toBeInTheDocument();
-    expect(mockLogout).not.toHaveBeenCalled();
+    // The picker, and every remnant of the verdict machine that policed it.
+    expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+    expect(screen.queryByText(/choose your role/i)).not.toBeInTheDocument();
   });
 
-  it("regression 3: a resolved role alone must NOT redirect past an in-flight attempt", async () => {
-    const user = userEvent.setup();
-    render(<App />);
-    await submitAsRolePending(user);
-
-    // The profile resolves as "student" while the user tapped "admin". Regression 3
-    // redirected here, unmounting the form on the exact render its verdict became
-    // computable -- so the mismatch effect never ran and the browser stayed signed in.
-    await act(async () => {
-      setMockAuth({ user: { uid: "u1" }, role: "student", loading: false, profileError: null });
-    });
-
-    // Regression 3 redirected here, unmounting the form on the exact render its verdict
-    // became computable -- so the mismatch effect never ran and the browser stayed
-    // signed in. Two assertions, because either alone is satisfiable by accident: the
-    // form must still be mounted, and the sign-out must have happened.
-    expect(screen.queryByTestId("dashboard")).not.toBeInTheDocument();
-    await waitFor(() => expect(mockLogout).toHaveBeenCalledTimes(1));
-
-    // The window between "decided to sign out" and Firebase actually signing out.
-    // The dashboard must NOT appear here. If SignInForm released the router's
-    // stand-down before calling logout, the router would redirect in this gap and the
-    // student would briefly see the page the mismatch exists to deny -- an instant
-    // logout mock hid this, because the gap did not exist.
-    expect(screen.queryByTestId("dashboard")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("profile-gate")).not.toBeInTheDocument();
-    expect(screen.getByTestId("verdict")).toBeInTheDocument();
-
-    await completeLogout();
-  });
-
-  it("signs the user out when the role differs from the tapped tile", async () => {
-    const user = userEvent.setup();
-    render(<App />);
-    await submitAsRolePending(user);
-
-    await act(async () => {
-      setMockAuth({ user: { uid: "u1" }, role: "student", loading: false, profileError: null });
-    });
-
-    await waitFor(() => expect(mockLogout).toHaveBeenCalledTimes(1));
-  });
-
-  it("does not sign out when the role matches the tapped tile", async () => {
-    const user = userEvent.setup();
-    render(<App />);
-    await submitAsRolePending(user);
-
-    await act(async () => {
-      setMockAuth({ user: { uid: "u1" }, role: "admin", loading: false, profileError: null });
-    });
-
-    // Not asserted via the verdict label: on "ok" the form RELEASES the router, which
-    // immediately redirects, so the label is unmounted before it can be read. The
-    // contract is that the session survives and the user lands on the dashboard.
-    await waitFor(() => expect(screen.getByTestId("dashboard")).toBeInTheDocument());
-    expect(mockLogout).not.toHaveBeenCalled();
-  });
-
-  it("does not sign out on a failed profile lookup, so ProfileGate can offer a retry", async () => {
-    const user = userEvent.setup();
-    render(<App />);
-    await submitAsRolePending(user);
-
-    // Signing out here would destroy the very session ProfileGate needs to retry with.
-    await act(async () => {
-      setMockAuth({ user: { uid: "u1" }, role: null, loading: false, profileError: "boom" });
-    });
-
-    expect(mockLogout).not.toHaveBeenCalled();
-    await waitFor(() => expect(screen.getByTestId("profile-gate")).toBeInTheDocument());
+  it("labels sign-up as student-only, since registration is", () => {
+    render(<Harness />);
+    // An admin who mistyped their password must not read this as a way to register
+    // an admin account: registerSchema pins role to the literal "student".
+    expect(screen.getByText(/are you a student\?/i)).toBeInTheDocument();
   });
 });
 
-describe("returning visitor with an existing session", () => {
-  it("redirects to the dashboard once the role resolves and nobody is adjudicating", async () => {
-    setMockAuth({ user: { uid: "u1" }, role: "student", loading: false, profileError: null });
-    render(<App />);
+describe("the guard's states", () => {
+  // `loading` is checked FIRST, and that ordering is load-bearing for a different
+  // reason than it used to be: AuthContext cannot tell a signed-in user from a
+  // signed-out one until Firebase resolves, so checking `!user` first would flash the
+  // login form at an already-signed-in user on every hard refresh.
+  it("shows a loading state until Firebase resolves, so no form flashes for a signed-in visitor", () => {
+    authStore.set({ user: null, role: undefined, loading: true });
+    render(<Harness />);
 
-    await waitFor(() => expect(screen.getByTestId("dashboard")).toBeInTheDocument());
+    expect(screen.getByText("loading")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Email")).not.toBeInTheDocument();
   });
 
-  it("routes a FAILED profile lookup to ProfileGate, which is reachable at all", async () => {
-    // role === null. This is the case that stranded users on the login page forever:
-    // the route rendered `children`, so the protected layout holding ProfileGate was
-    // never entered, so the only screen offering retry and sign-out could not show.
-    setMockAuth({ user: { uid: "u1" }, role: null, loading: false, profileError: "boom" });
-    render(<App />);
+  // The form used to have to survive the pending window: it owned the mismatch
+  // sign-out, and unmounting it lost that work silently. It owns nothing now, so a
+  // spinner over the profile fetch costs nothing -- what matters is that the session
+  // still ends up where the backend said.
+  it("still lands on the destination after a spinner over the profile fetch", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
 
-    await waitFor(() => expect(screen.getByTestId("profile-gate")).toBeInTheDocument());
+    await signIn(user);
+
+    // Firebase accepted the credentials; the profile request is in flight. AuthContext
+    // sets loading=true for the PROFILE fetch, not just for Firebase startup.
+    await act(async () => {
+      authStore.set({ user: { uid: "u1" }, role: undefined, loading: true });
+    });
+    expect(screen.getByText("loading")).toBeInTheDocument();
+
+    await act(async () => {
+      authStore.set({ user: { uid: "u1" }, role: "admin", loading: false, landingPath: "/dashboard" });
+    });
+    expect(screen.getByText(/admin dashboard/i)).toBeInTheDocument();
+  });
+
+  it("holds the form when a session is restoring and the role is not yet resolved", () => {
+    // The window AuthContext opens between setUser() and the profile response.
+    authStore.set({ user: { uid: "u1" }, role: undefined, loading: false });
+    render(<Harness />);
+
+    expect(screen.getByLabelText("Email")).toBeInTheDocument();
   });
 });
 
-describe("signed-out visitor", () => {
-  it("sees the login form", async () => {
-    setMockAuth({ user: null, role: undefined, loading: false, profileError: null });
-    render(<App />);
+describe("the destination comes from the server", () => {
+  it("follows landingPath for a student", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
 
-    expect(screen.getByRole("button", { name: /sign in/i })).toBeInTheDocument();
-    expect(screen.queryByTestId("dashboard")).not.toBeInTheDocument();
+    await signIn(user);
+
+    await act(async () => {
+      authStore.set({
+        user: { uid: "u1" },
+        role: "student",
+        loading: false,
+        landingPath: "/my-activity",
+      });
+    });
+
+    expect(screen.getByText(/student dashboard/i)).toBeInTheDocument();
   });
 
-  it("sees a spinner only while firebase itself is still initialising", async () => {
-    setMockAuth({ user: null, role: undefined, loading: true, profileError: null });
-    render(<App />);
+  it("follows landingPath for an admin", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
 
-    expect(screen.getByTestId("screen")).toBeInTheDocument();
+    await signIn(user);
+
+    await act(async () => {
+      authStore.set({
+        user: { uid: "u1" },
+        role: "admin",
+        loading: false,
+        landingPath: "/dashboard",
+      });
+    });
+
+    expect(screen.getByText(/admin dashboard/i)).toBeInTheDocument();
+  });
+
+  it("does NOT re-derive the route from the role", async () => {
+    // A student whose landingPath says /dashboard must go there. If the guard
+    // hardcoded /my-activity for students it would fight the server's answer.
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await signIn(user);
+    await act(async () => {
+      authStore.set({ user: { uid: "u1" }, role: "student", loading: false, landingPath: "/dashboard" });
+    });
+
+    expect(screen.getByText(/admin dashboard/i)).toBeInTheDocument();
+  });
+
+  it("routes a failed profile lookup to the dashboard so ProfileGate is reachable", async () => {
+    // role === null means the lookup FAILED. It must not render the login page:
+    // ProfileGate lives in DashboardLayout, which this route never enters, so the one
+    // screen offering retry would be unreachable for the only case it exists to
+    // handle.
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await signIn(user);
+    await act(async () => {
+      authStore.set({ user: { uid: "u1" }, role: null, loading: false, landingPath: null });
+    });
+
+    expect(screen.getByText(/admin dashboard/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText("Email")).not.toBeInTheDocument();
+  });
+
+  it("shows the form to a signed-out visitor and a session-restoring one", () => {
+    const { unmount } = render(<Harness />);
+    expect(screen.getByLabelText("Email")).toBeInTheDocument();
+    unmount();
+
+    // A visitor who lands on /login with a valid session still waiting for their
+    // profile sees the correct form, not a spinner.
+    authStore.set({ user: { uid: "u1" }, role: undefined });
+    render(<Harness />);
+    expect(screen.getByLabelText("Email")).toBeInTheDocument();
   });
 });

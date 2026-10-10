@@ -4,9 +4,15 @@ const { parsePagination, paginatedResponse } = require("../middleware/pagination
 const { randomUUID } = require("crypto");
 const { transformKeys } = require("../utils/transformKeys");
 const { fetchAll, isTruncated } = require("../utils/fetchAll");
+const { scoped, assertCourseInScope } = require("../middleware/courseScope");
 
 /**
  * Reads the whole catalog.
+ *
+ * `req` is REQUIRED, not optional. The course scope applied here is the only
+ * thing keeping a Course Admin inside their own inventory, and an optional
+ * parameter fails OPEN: a caller who omitted it would serve every course's
+ * equipment to every admin.
  *
  * PostgREST caps one response at `max-rows` (1000) and signals nothing when it
  * does — it just returns its first 1000 rows. A plain `select("*")` therefore
@@ -17,20 +23,29 @@ const { fetchAll, isTruncated } = require("../utils/fetchAll");
  * stay exactly as they were. Only when the count header says the response was
  * cut short is the catalog re-read paged, with `id` as the ordering column so
  * the pages cannot overlap or skip rows.
+ *
+ * The scope is applied to BOTH reads: forgetting it on the re-read would return
+ * 1000 rows of one course followed by every other course's overflow.
  */
-async function readWholeCatalog() {
-  const { data, error, count } = await supabase.from("catalog").select("*", { count: "exact" });
+async function readWholeCatalog(req) {
+  const { data, error, count } = await scoped(
+    supabase.from("catalog").select("*", { count: "exact" }),
+    "course",
+    req
+  );
   if (error) throw error;
 
   const rows = data || [];
   if (!isTruncated(count, rows.length)) return rows;
 
-  return fetchAll(() => supabase.from("catalog").select("*").order("id", { ascending: true }));
+  return fetchAll(() =>
+    scoped(supabase.from("catalog").select("*").order("id", { ascending: true }), "course", req)
+  );
 }
 
 const getAll = async (req, res) => {
   try {
-    const items = await readWholeCatalog();
+    const items = await readWholeCatalog(req);
 
     let result = items;
 
@@ -88,24 +103,30 @@ const getAll = async (req, res) => {
 };
 
 /** Same truncation guard as readWholeCatalog, for the columns stats needs. */
-async function readCatalogStatsRows() {
+async function readCatalogStatsRows(req) {
   const COLUMNS = "course, status, category";
-  const { data, error, count } = await supabase
-    .from("catalog")
-    .select(COLUMNS, { count: "exact" });
+  const { data, error, count } = await scoped(
+    supabase.from("catalog").select(COLUMNS, { count: "exact" }),
+    "course",
+    req
+  );
   if (error) throw error;
 
   const rows = data || [];
   if (!isTruncated(count, rows.length)) return rows;
 
   return fetchAll(() =>
-    supabase.from("catalog").select(COLUMNS).order("id", { ascending: true })
+    scoped(
+      supabase.from("catalog").select(COLUMNS).order("id", { ascending: true }),
+      "course",
+      req
+    )
   );
 }
 
 const getStats = async (req, res) => {
   try {
-    const rows = await readCatalogStatsRows();
+    const rows = await readCatalogStatsRows(req);
 
     const byCourseMap = new Map();
     const categories = new Set();
@@ -151,15 +172,24 @@ const getStats = async (req, res) => {
  * It is also mounted behind the same cacheMiddleware as /catalog, so it inherits the
  * 30 s window and the mutation invalidation added in routes/catalog.js.
  *
+ * Scoped like every other catalog read. This one mattered more than the list: it is
+ * what populates the <select> on the borrow form, the incident form and the
+ * maintenance form, so an unscoped version handed every course's equipment to a
+ * Course Admin as a picker -- and picking one led straight to a 404 on submit.
+ *
  * Deliberately not paginated: a picker needs every option, and the payload is small
  * enough that paging would only add a round trip.
  */
 const getOptions = async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from("catalog")
-      .select("id,item_name,course,category,status,quantity,available_quantity,image_url")
-      .order("item_name", { ascending: true });
+    const { data, error } = await scoped(
+      supabase
+        .from("catalog")
+        .select("id,item_name,course,category,status,quantity,available_quantity,image_url")
+        .order("item_name", { ascending: true }),
+      "course",
+      req
+    );
     if (error) throw new Error(error.message);
 
     res.json(transformKeys(data || []));
@@ -172,6 +202,15 @@ const getById = async (req, res) => {
   try {
     const { data, error } = await supabase.from("catalog").select("*").eq("id", req.params.id).single();
     if (error || !data) return res.status(404).json({ error: "Item not found" });
+
+    // Was a live cross-course read. The drawer, the maintenance form and the
+    // incident form all fetch by id, so filtering the LIST while leaving this
+    // unscoped would have hidden a row on screen and still served it on request.
+    // 404 rather than 403, so the item's existence is not confirmed.
+    if (!assertCourseInScope(req, data.course)) {
+      return res.status(404).json({ error: "Item not found" });
+    }
+
     res.json(transformKeys(data));
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
@@ -183,6 +222,16 @@ const create = async (req, res) => {
     const data = req.body;
     const quantity = Number(data.quantity) || 0;
     const adminId = req.user?.uid || "";
+
+    // The course on a new item is the caller's choice to make ONLY if they are
+    // entitled to that course. Without this a Course Admin could mint inventory
+    // for another course -- adding stock the real owner cannot see, and which the
+    // real owner's scoped list would then exclude entirely. 400 rather than 403:
+    // it is a rejected form value, not a resource they were denied.
+    if (!assertCourseInScope(req, data.course)) {
+      return res.status(400).json({ error: "You can only add items to your own course" });
+    }
+
     let adminName = "";
     if (adminId) {
       try {
@@ -221,25 +270,35 @@ const create = async (req, res) => {
     if (insertError) throw insertError;
 
     try {
-      const usersSnap = await db.collection("users")
-        .where("role", "==", "student")
-        .get();
-      const notifications = usersSnap.docs.map((doc) => ({
-        id: randomUUID(),
-        target_user_id: doc.id,
-        type: "info",
-        title: "New Catalog Item Available",
-        message: `A new item "${data.itemName}" has been added to the catalog and is now available for borrowing.`,
-        read: false,
-        dismissed_by: [],
-        link: "/catalog",
-        created_at: new Date().toISOString(),
-      }));
+      // Scoped to the item's own course. This fanned out to EVERY student in the
+      // school, so a CT Course Admin adding a multimeter told every AT student
+      // there was new equipment for them. Chunked because Firestore caps `in` at
+      // 30 values, and skipped entirely for an item with no course -- there is no
+      // one to notify.
+      const itemCourse = (data.course || "").trim();
+      if (itemCourse) {
+        const usersSnap = await db.collection("users")
+          .where("role", "==", "student")
+          .where("course", "in", [itemCourse])
+          .get();
 
-      const BATCH_SIZE = 500;
-      for (let i = 0; i < notifications.length; i += BATCH_SIZE) {
-        const chunk = notifications.slice(i, i + BATCH_SIZE);
-        await supabase.from("notifications").insert(chunk);
+        const notifications = usersSnap.docs.map((doc) => ({
+          id: randomUUID(),
+          target_user_id: doc.id,
+          type: "info",
+          title: "New Catalog Item Available",
+          message: `A new item "${data.itemName}" has been added to the catalog and is now available for borrowing.`,
+          read: false,
+          dismissed_by: [],
+          link: "/catalog",
+          created_at: new Date().toISOString(),
+        }));
+
+        const BATCH_SIZE = 500;
+        for (let i = 0; i < notifications.length; i += BATCH_SIZE) {
+          const chunk = notifications.slice(i, i + BATCH_SIZE);
+          await supabase.from("notifications").insert(chunk);
+        }
       }
     } catch {
       // Non-critical: item was created successfully, skip notification
@@ -262,6 +321,21 @@ const update = async (req, res) => {
       .eq("id", id)
       .single();
     if (fetchError || !existing) return res.status(404).json({ error: "Item not found" });
+
+    // Editing is a write, not just a read, so the row itself has to be checked --
+    // a Course Admin could otherwise restock, rename or retire another course's
+    // equipment. 404 rather than 403, so existence is not confirmed.
+    if (!assertCourseInScope(req, existing.course)) {
+      return res.status(404).json({ error: "Item not found" });
+    }
+
+    // And the course cannot be MOVED out from under the owner, which is the same
+    // failure as creating an item in a foreign course: the row would vanish from
+    // the old owner's inventory while still existing. 400, not 404: the row is
+    // theirs to edit, the value is what is being refused.
+    if (data.course !== undefined && !assertCourseInScope(req, data.course)) {
+      return res.status(400).json({ error: "You cannot move an item to another course" });
+    }
 
     const quantity = Number(data.quantity ?? existing.quantity) || 0;
     const previousBorrowed = Math.max(0, Number(existing.quantity || 0) - Number(existing.available_quantity || 0));
@@ -321,6 +395,10 @@ const remove = async (req, res) => {
       .single();
     if (fetchError || !item) return res.status(404).json({ error: "Item not found" });
 
+    if (!assertCourseInScope(req, item.course)) {
+      return res.status(404).json({ error: "Item not found" });
+    }
+
     const borrowed = Math.max(0, Number(item.quantity || 0) - Number(item.available_quantity || 0));
     if (borrowed > 0) {
       return res.status(400).json({ error: `Cannot delete item with ${borrowed} active borrow(s). Return all items first.` });
@@ -359,6 +437,13 @@ const lookupByBarcode = async (req, res) => {
         .single();
 
       if (!error && data) {
+        // The scanner resolves a barcode to an item and then offers it for
+        // checkout, so this is a cross-course read on the most physical path in
+        // the app. Scoping the LIST while leaving this open would let any admin
+        // scan any item in the building.
+        if (!assertCourseInScope(req, data.course)) {
+          return res.status(404).json({ error: "Item not found" });
+        }
         return res.json(transformKeys({ id: data.id, ...data }));
       }
     }

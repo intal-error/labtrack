@@ -1,0 +1,218 @@
+/* Students roster page.
+
+   WHY EVERY CLASS HERE IS `students-` PREFIXED AND DEFINED IN THIS FILE: there is no
+   generic page/table primitive to inherit from. The first version of this page used
+   `.page-root`, `.page-head`, `.table-wrap` and `.data-table`, which look like shared
+   layout classes but are defined NOWHERE -- so the page rendered with no padding, no
+   heading styling and an unbordered table. Nothing catches that: eslint does not
+   resolve class names, and vitest does not render CSS. Each existing admin page
+   (fines-, au-, admin-, catalog-) defines its own the same way, and this follows that
+   convention.
+
+   Tokens are the ones global.css actually defines. There is deliberately no
+   --surface / --brand / --brand-soft: those were invented once and silently fell back
+   to baked-in hex, pinning the light palette and stopping the theme responding.
+
+   Green tints are rgba(46,125,50,…) at the alphas the rest of the app uses. NOTE:
+   --green-light is #43A047, a STRONGER green -- it is not a pale background. */
+
+.students-page {
+  padding: 16px 20px 28px;
+}
+
+.students-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.students-title {
+  margin: 0 0 3px;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.students-sub {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+
+.students-head-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.students-toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.students-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 220px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--text-muted);
+}
+
+.students-search input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  color: var(--text);
+  min-width: 0;
+}
+
+.students-course-filter {
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+  font: inherit;
+  color: var(--text);
+  min-width: 160px;
+}
+
+/* Name + avatar. min-width:0 on the text span so a long name truncates instead of
+   stretching the table; without it the flex row refuses to shrink and the ID
+   column gets pushed off screen on a narrow viewport. */
+.students-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.students-name > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Initials stand-in for a missing profile photo. Tinted rather than a solid green,
+   because a solid chip next to a photo avatar reads as two different states. */
+.students-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: rgba(46, 125, 50, 0.08);
+  color: var(--green);
+}
+
+body.dark .students-avatar {
+  /* Without this the chip stayed pale green with dark text once the theme flipped,
+     which is the one combination guaranteed to be unreadable. */
+  background: rgba(46, 125, 50, 0.15);
+}
+
+.students-mono {
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+}
+
+/* Table follows the .fines-table structure in tabs.css: a bordered card with a
+   dark-green header row. Without these rules the whole roster rendered as an
+   unbordered grid with unstyled headings. */
+.students-table-wrapper {
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  overflow-x: auto;
+}
+
+.students-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.students-table thead th {
+  background: var(--dark-green);
+  color: #fff;
+  text-transform: uppercase;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  padding: 11px 12px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.students-table thead th:first-child { border-top-left-radius: 12px; }
+.students-table thead th:last-child { border-top-right-radius: 12px; }
+
+.students-table tbody td {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--text);
+  vertical-align: middle;
+}
+
+.students-table tbody tr:hover { background: var(--bg-hover); }
+
+/* --dark-green is #A5D6A7 -- a PALE green -- under :root.dark, so the inherited
+   `color:#fff` above would be white-on-pale and fail contrast. tabs.css pins the
+   dark header to a literal for the same reason; this mirrors it. */
+body.dark .students-table thead th { background: #1a3a2a; }
+body.dark .students-table tbody td { border-color: rgba(255, 255, 255, 0.1); color: #fff; }
+body.dark .students-table tbody tr:hover { background: #1a1a1a; }
+body.dark .students-table-wrapper { border-color: rgba(255, 255, 255, 0.1); background: #131313; }
+
+.students-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 48px 20px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.students-empty h3 {
+  margin: 0;
+  color: var(--text);
+}
+
+.students-empty p {
+  margin: 0;
+}
+
+.students-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.students-page-info {
+  font-size: 0.9em;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}

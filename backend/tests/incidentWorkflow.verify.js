@@ -33,8 +33,19 @@ const USERS = {
   hBit: { id: "hBit", firstName: "Cara", lastName: "Lim", role: "admin", status: "active", assignedCourses: ["BIT"] },
   // Course handler for BSCS only
   hBscs: { id: "hBscs", firstName: "Dan", lastName: "Ocho", role: "admin", status: "active", assignedCourses: ["BSCS"] },
-  // No assignedCourses => super-admin
-  root: { id: "root", firstName: "Eve", lastName: "Santos", role: "admin", status: "active", assignedCourses: [] },
+  // An EXPLICITLY appointed Super Admin.
+  //
+  // This fixture used to be `assignedCourses: []` with the comment "no
+  // assignedCourses => super-admin", relying on the removed inference in
+  // courseScope.isSuperAdmin(). That inference is gone: adminLevel is now the sole
+  // authority, so a real super admin must SAY it is one. Left as-is this fixture
+  // would now be a course-less admin with no access at all -- which is the intended
+  // fail-closed behaviour, not a bug, so the fixture is corrected rather than the
+  // code being bent back.
+  root: { id: "root", firstName: "Eve", lastName: "Santos", role: "admin", status: "active", adminLevel: "super", courseId: null, assignedCourses: [] },
+  // A course-less admin with NO adminLevel: the shape that used to be inferred as
+  // super. Kept as a fixture so the fail-closed behaviour stays under test.
+  legacyRoot: { id: "legacyRoot", firstName: "Gil", lastName: "Reyes", role: "admin", status: "active", assignedCourses: [] },
 };
 
 function makeIncident(o) {

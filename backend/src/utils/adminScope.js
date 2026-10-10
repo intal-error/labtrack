@@ -1,5 +1,11 @@
 const { db } = require("../config/firebase");
 const { supabase } = require("../config/supabase");
+const {
+  isSuperAdmin,
+  getAdminCourses,
+  isAdminForCourse,
+  assertCourseInScope,
+} = require("../middleware/courseScope");
 
 /**
  * Course scoping for admins, and automatic handler assignment.
@@ -12,32 +18,20 @@ const { supabase } = require("../config/supabase");
  * permission rule is how the two features quietly drift apart and one of them
  * starts leaking rows.
  *
+ * The rule itself now lives in middleware/courseScope.js, because it applies to
+ * ten surfaces rather than two -- catalog, borrowing, maintenance, rooms and the
+ * whole dashboard had no course scoping at all. getAdminCourses, isAdminForCourse
+ * and isSuperAdmin are RE-EXPORTED from there rather than defined here, so the
+ * codebase has exactly one answer to "may this admin touch this course". Every
+ * existing `require("../utils/adminScope").isSuperAdmin` call site keeps working.
+ *
  * The contract, which backend/tests/adminScoping.verify.js pins:
- *   - an admin with assignedCourses is a course handler and sees/acts only on
- *     those courses
- *   - an admin with NO assignedCourses is a super-admin and sees everything
+ *   - a Course Admin (adminLevel "course") sees and acts only on its course
+ *   - a Super Admin (adminLevel "super") sees everything
+ *   - an admin with no adminLevel keeps its pre-existing inferred tier
  *   - a row with no course cannot be course-matched, so it stays hidden from
- *     course handlers (fail closed, never fail open)
+ *     Course Admins (fail closed, never fail open)
  */
-
-function getAdminCourses(admin) {
-  if (Array.isArray(admin?.assignedCourses) && admin.assignedCourses.length > 0) {
-    return admin.assignedCourses;
-  }
-  if (admin?.assignedCourse) {
-    return [admin.assignedCourse];
-  }
-  return [];
-}
-
-function isAdminForCourse(admin, course) {
-  if (!course) return false;
-  return getAdminCourses(admin).includes(course);
-}
-
-function isSuperAdmin(admin) {
-  return admin?.role === "admin" && getAdminCourses(admin).length === 0;
-}
 
 // The admin roster changes only when an admin is added, renamed or deactivated --
 // all admin-only actions, all rare. It was being re-read from Firestore two to
@@ -128,8 +122,10 @@ async function autoAssignAdmin(course, { table, workloadColumn, workloadStatuses
 /** 404/403 guard shared by every incident mutation. */
 function canHandleIncident(admin, incident) {
   if (!admin || admin.role !== "admin") return false;
-  if (isSuperAdmin(admin)) return true;
-  return isAdminForCourse(admin, incident?.reporter_course);
+  // Delegates rather than re-implementing, so the rule applied to a single
+  // incident write cannot drift from the one applied to the list endpoint.
+  // Wrapped in a req-shaped object because courseScope is Express-first.
+  return assertCourseInScope({ profile: admin }, incident?.reporter_course);
 }
 
 /** Notification fan-out that never fails the surrounding write. */

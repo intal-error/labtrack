@@ -37,15 +37,29 @@ const ROUTE_NAMES = {
   "/resources": "Lab Manual",
   "/fines": "Fines",
   "/persona": "Persona",
+  "/students": "Students",
   "/attendance": "Attendance Logs",
 };
 
-function resolvePageTitle(pathname) {
-  if (ROUTE_NAMES[pathname]) return ROUTE_NAMES[pathname];
-  if (pathname.startsWith("/attendance/room/")) return "Room Attendance";
-  return "Dashboard";
+/*
+ * `now` wins over the static map because the header shows which COURSE the admin is
+ * scoped to, and that is the one piece of context that decides whether the numbers on
+ * the dashboard are the whole school or just one program. Getting it wrong in either
+ * direction is bad: hiding it leaves a Course Admin wondering why their class has
+ * thirty students, and showing it to nobody makes every dashboard look school-wide.
+ */
+function resolvePageTitle(pathname, now) {
+  const base = ROUTE_NAMES[pathname]
+    || (pathname.startsWith("/attendance/room/") ? "Room Attendance" : "Dashboard");
+  return now ? `${now} · ${base}` : base;
 }
 
+/*
+ * Nav entries are filtered by `roles` only. Course visibility is NOT a second
+ * dimension here: every admin page is course-scoped on the server, so one nav item
+ * serves all nine courses. Adding a per-course nav would duplicate the whole tree
+ * nine times for no behavioural difference.
+ */
 const NAV_ITEMS = [
   {
     label: "OVERVIEW",
@@ -79,6 +93,7 @@ const NAV_ITEMS = [
     label: "MANAGEMENT",
     roles: ["admin"],
     items: [
+      { path: "/students", label: "Students", icon: MdPerson, roles: ["admin"] },
       { path: "/resources", label: "Lab Manual", icon: MdMenuBook, roles: ["admin"] },
       { path: "/fines", label: "Fines", icon: PesoIcon, roles: ["admin"] },
       { path: "/persona", label: "Persona", icon: MdPerson, roles: ["admin"] },
@@ -111,7 +126,7 @@ export default function DashboardLayout() {
   const notifRef = useRef(null);
   const userRef = useRef(null);
   const contentRef = useRef(null);
-  const { user, role, userProfile, logout, loading, profileError, refreshProfile } = useAuth();
+  const { user, role, userProfile, logout, loading, profileError, refreshProfile, isSuperAdmin, isCourseAdmin, courseName, courseId } = useAuth();
   const { dark, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -120,7 +135,13 @@ export default function DashboardLayout() {
   const notifications = pickNotifications(notifData?.data);
   const unreadCount = useUnreadCount();
 
-  const pageTitle = resolvePageTitle(location.pathname);
+  // The course badge. A Course Admin sees their program in every page title; a Super
+  // Admin sees "All Courses", which is the honest description of what they can reach.
+  // Legacy admins (no adminLevel) are treated as super, matching middleware/courseScope
+  // -- if the two disagreed, the badge would claim a narrower scope than the data has.
+  const courseBadge = isCourseAdmin ? (courseName || courseId) : isSuperAdmin ? "All Courses" : null;
+
+  const pageTitle = resolvePageTitle(location.pathname, courseBadge);
 
   const firstName = (userProfile?.name || userProfile?.firstName || "User").split(" ")[0];
   const initials = userProfile?.name

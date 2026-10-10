@@ -13,6 +13,10 @@ const {
   displayName,
   notify,
 } = require("../utils/adminScope");
+// assertCourseInScope joins scoped here: it gates the body-supplied catalogId
+// lookup in create(), which a query-level `scoped()` cannot do because the id
+// arrives from the client.
+const { scoped, assertCourseInScope } = require("../middleware/courseScope");
 
 const TABLE = "incidents";
 const EVENTS_TABLE = "incident_events";
@@ -127,21 +131,24 @@ async function getAll(req, res) {
       return res.status(403).json({ error: "Only course handlers can view all incident reports" });
     }
 
-    // authorize("admin") already read this document to check the role and left it
-    // on req.profile, so re-reading it here was a second Firestore round trip on
-    // every list render. Falling back to {} keeps the pre-middleware behaviour
-    // (fail closed) if this handler is ever called without the middleware.
-    const reviewer = req.profile || {};
+    // The reviewer document is deliberately NOT read here any more. It used to be
+// pulled off req.profile purely to feed the local isSuperAdmin() branch below;
+// courseScope reads req.profile itself, so keeping a local alias bought nothing
+// and implied the two were independent.
 
-    let query = supabase.from(TABLE).select("*");
+let query = supabase.from(TABLE).select("*");
 
-    if (!isSuperAdmin(reviewer)) {
-      // Fail closed: an unscoped course handler gets nothing rather than
-      // everything. Handlers are scoped, not merely deprioritised.
-      const courses = getAdminCourses(reviewer);
-      if (courses.length === 0) return res.json([]);
-      query = query.in("reporter_course", courses);
-    }
+    // Now the shared scope rather than a private copy of the rule. The local
+    // version was correct, but it was a SECOND implementation of a security
+    // rule -- which is exactly how the list and the single-row mutations end up
+    // disagreeing. An admin whose `?course=` filter matched nothing saw a short
+    // list and still could not open a record from it, and the two answers had to
+    // be reconciled by hand.
+    //
+    // Fail closed is preserved by courseScope: a Course Admin with no course is
+    // given a sentinel equality filter, which yields an empty list rather than
+    // every incident in the building.
+    query = scoped(query, "reporter_course", req);
 
     if (req.query.status && req.query.status !== "all") {
       query = query.eq("status", req.query.status);
@@ -272,12 +279,27 @@ async function create(req, res) {
 
     // Item name and its owning course likewise come from the catalog, so a
     // report cannot claim a different item than the one selected.
+    //
+    // `catalogId` arrives in the request body, so it is caller-controlled. This
+    // lookup used to be unscoped: a Course Admin could submit the id of another
+    // course's equipment and the response -- plus the created report's item_name and
+    // item_course -- would name it. That leaked one row's identifying detail across a
+    // course boundary.
+    //
+    // Scoped with the SAME predicate every other catalog read uses, so this path can
+    // no longer disagree with catalogController.js. `assertCourseInScope` returns
+    // false for an empty course, which fails closed: an unassigned item is visible
+    // to the Super Admin only.
     const { data: item, error: itemError } = await supabase
       .from("catalog")
       .select("id, item_name, course, category")
       .eq("id", catalogId)
       .single();
     if (itemError || !item) return res.status(404).json({ error: "Catalog item not found" });
+    if (!assertCourseInScope(req, item.course)) {
+      // 404, not 403: a 403 would confirm the item exists in some other course.
+      return res.status(404).json({ error: "Catalog item not found" });
+    }
 
     // Assignment follows the student's own course, which is what the workflow
     // promises. item.course is stored alongside so the handler can see when a

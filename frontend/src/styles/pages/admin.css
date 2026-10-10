@@ -197,3 +197,41 @@ body.dark .admin-kebab-dropdown button:hover{background:#1a1a1a;color:#fff}
 body.dark .admin-kebab-dropdown button.danger{color:#ef9a9a}
 body.dark .admin-kebab-dropdown button.danger:hover{background:#3a1b1b}
 body.dark .admin-add-btn{background:var(--green);color:#000}
+
+/* Shown to a Course Admin on the account list. GET /api/admin returns only their
+   own record for them, so without this the page reads as a one-row "Account List"
+   rather than as a boundary they have run into. */
+.admin-scope-notice {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 0 16px 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--green);
+  background: rgba(46, 125, 50, 0.06);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 0.86rem;
+}
+
+.admin-scope-notice svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--green);
+}
+
+.admin-scope-notice strong {
+  display: block;
+  margin-bottom: 3px;
+}
+
+.admin-scope-notice p {
+  margin: 0;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+body.dark .admin-scope-notice {
+  background: rgba(46, 125, 50, 0.12);
+  border-color: var(--green);
+}

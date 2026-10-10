@@ -1,6 +1,25 @@
 -- LabTrack Supabase Schema
 -- Run this in Supabase SQL Editor to create all tables
 
+-- Course scopes
+--
+-- A "course" is a PROGRAM that owns its students, catalog, rooms and admin. It
+-- maps 1:1 onto the program code already stored in catalog.course,
+-- transactions.course / equipment_course, incidents.reporter_course,
+-- lab_attendance.course and on the Firestore user profile, so scoping a query is
+-- a single equality match and nothing needs backfilling.
+--
+-- `id` is the FROZEN program code and the join key; it is never regenerated on
+-- rename, matching the lab_rooms.room_code convention. See 20-courses.sql,
+-- which is the authoritative version and also carries the seed.
+CREATE TABLE IF NOT EXISTS courses (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Equipment inventory
 CREATE TABLE IF NOT EXISTS catalog (
   id TEXT PRIMARY KEY,
@@ -181,6 +200,7 @@ CREATE TABLE IF NOT EXISTS maintenance (
   inspected_date TEXT,
   assigned_personnel TEXT,
   created_by TEXT,
+  course TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -265,6 +285,10 @@ CREATE TABLE IF NOT EXISTS backups (
 );
 
 -- Lab room definitions
+-- `course` is the room's OWNING course: who administers the room and who sees
+-- its logbook. It is NOT a rule about who may scan there -- attendance is
+-- room-based and any student may log any room. NULL means Super Admin only,
+-- until the room is assigned. See 21-course-scope.sql.
 CREATE TABLE IF NOT EXISTS lab_rooms (
   id TEXT PRIMARY KEY,
   room_name TEXT NOT NULL,
@@ -272,6 +296,7 @@ CREATE TABLE IF NOT EXISTS lab_rooms (
   qr_data TEXT,
   location TEXT,
   status TEXT DEFAULT 'active',
+  course TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -340,6 +365,11 @@ CREATE INDEX IF NOT EXISTS idx_incident_events_incident ON incident_events(incid
 
 CREATE INDEX IF NOT EXISTS idx_maintenance_status ON maintenance(status);
 CREATE INDEX IF NOT EXISTS idx_maintenance_created ON maintenance(created_at DESC);
+-- Course-ownership scope for maintenance and for room administration.
+-- lab_attendance needs no new index: its scope resolves to .in("room_code",...)
+-- and idx_lab_attendance_room above already covers that column.
+CREATE INDEX IF NOT EXISTS idx_maintenance_course ON maintenance(course);
+CREATE INDEX IF NOT EXISTS idx_lab_rooms_course ON lab_rooms(course);
 
 CREATE INDEX IF NOT EXISTS idx_catalog_status ON catalog(status);
 CREATE INDEX IF NOT EXISTS idx_catalog_course ON catalog(course);

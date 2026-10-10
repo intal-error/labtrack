@@ -249,24 +249,31 @@ require.cache[supabasePath] = {
 
 const tf = require("../src/utils/transactionFilters");
 
+// queryTransactions now REQUIRES the request: the course scope it applies is the
+// only thing keeping an admin inside their own course, so an optional parameter
+// would fail open for any caller who forgot. These cases are all about filter
+// quoting and NULL ordering, so they run as the top tier to leave that behaviour
+// unchanged.
+const SUPER_REQ = { profile: { role: "admin", adminLevel: "super", courseId: null } };
+
 (async () => {
   console.log("--- queryTransactions returns rows, it does not throw, for hostile courses ---");
-  const comma = await tf.queryTransactions("borrowed", { course: "BSIT, CS" });
+  const comma = await tf.queryTransactions("borrowed", { course: "BSIT, CS" }, SUPER_REQ);
   check("comma course: one row", comma.length, 1);
   check("comma course: the right row", comma[0].id, "t2");
   check("filter was quoted", lastOrExpr.includes('"'), true);
 
-  const paren = await tf.queryTransactions("borrowed", { course: "CS (Elective)" });
+  const paren = await tf.queryTransactions("borrowed", { course: "CS (Elective)" }, SUPER_REQ);
   check("paren course: one row", paren.length, 1);
   check("paren course: the right row", paren[0].id, "t3");
 
   console.log("--- NULL timestamps sort LAST in date-desc, as the old JS comparator did ---");
   nullsFirstRequested.length = 0;
-  const desc = await tf.queryTransactions("borrowed", { sort: "date-desc", course: "BIT" });
+  const desc = await tf.queryTransactions("borrowed", { sort: "date-desc", course: "BIT" }, SUPER_REQ);
   check("date-desc requests nullsFirst:false", nullsFirstRequested[0], false);
   check("date-desc order", desc.map((r) => r.id), ["t1", "noTs"]);
 
-  const asc = await tf.queryTransactions("borrowed", { sort: "date-asc", course: "BIT" });
+  const asc = await tf.queryTransactions("borrowed", { sort: "date-asc", course: "BIT" }, SUPER_REQ);
   check("date-asc requests nullsFirst:true", nullsFirstRequested[1], true);
   check("date-asc order", asc.map((r) => r.id), ["noTs", "t1"]);
 

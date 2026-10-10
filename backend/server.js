@@ -5,6 +5,7 @@ const helmet = require("helmet");
 const compression = require("compression");
 const cron = require("node-cron");
 const { verifyToken, authorize, errorHandler } = require("./src/middleware/auth");
+const { attachCourseScope, requireSuperAdmin } = require("./src/middleware/courseScope");
 const {
   generalLimiter,
   attendanceLimiter,
@@ -12,7 +13,6 @@ const {
   backupLimiter,
   methodAwareLimiter,
 } = require("./src/middleware/rateLimits");
-const { kioskAuth } = require("./src/middleware/kioskAuth");
 const authRoutes = require("./src/routes/auth");
 const catalogRoutes = require("./src/routes/catalog");
 const transactionRoutes = require("./src/routes/transactions");
@@ -30,6 +30,7 @@ const finesRoutes = require("./src/routes/fines");
 const backupRoutes = require("./src/routes/backup");
 const borrowRequestRoutes = require("./src/routes/borrowRequests");
 const attendanceRoutes = require("./src/routes/attendance");
+const courseRoutes = require("./src/routes/courses");
 
 const { checkOverdueTransactions } = require("./src/utils/overdueChecker");
 const { cache, cacheKey } = require("./src/utils/cache");
@@ -127,13 +128,67 @@ function cacheMiddleware(ttl = 30) {
 // two endpoints were effectively unlimited while the comment claimed otherwise.
 app.use("/api/auth", authRoutes);
 
-// Public attendance kiosk routes (kiosk-authenticated)
+// Attendance routes, including the kiosk.
+//
+// KIOSK AUTHENTICATION IS NOW A REAL FIREBASE ACCOUNT (role "kiosk"), not a shared
+// secret. The old scheme authenticated the kiosk with `X-Kiosk-Token: KIOSK_SECRET`
+// and `frontend/.env` shipped that secret as VITE_KIOSK_SECRET -- which put it in the
+// public JavaScript bundle, where anyone could read it in devtools. A secret delivered
+// to a browser is not a secret; it was the whole boundary for forged attendance.
+//
+// The four kiosk paths now go through verifyToken + authorize("kiosk"):
+//
+//   - verifyToken proves the caller is a real signed-in account, so the session is
+//     per-device, revocable and has an expiry -- the shared secret had none of those.
+//   - authorize("kiosk") is an EXACT match (middleware/auth.js:111), so this is
+//     least privilege by construction: a kiosk token passes none of the
+//     authorize("admin") routes, because "kiosk" !== "admin". It reaches the four
+//     kiosk endpoints and nothing else that requires an admin role.
+//
+// The four kiosk handlers (timeIn, timeOut, autoScan, lookupStudent) read no
+// req.profile, so requiring a role costs them nothing.
+//
+// REMOVING THE BOOT ASSERTION IS THE POINT, not a regression: KIOSK_SECRET is no
+// longer read by anything. Leaving a production hard-fail on an unused variable
+// would make the service unbootable for no reason.
 app.use("/api/attendance", attendanceLimiter, (req, res, next) => {
-  const publicPaths = ["/time-in", "/time-out", "/auto-scan"];
+  const scanPaths = ["/time-in", "/time-out", "/auto-scan"];
+  const isScan = scanPaths.includes(req.path);
   const isLookup = req.path.startsWith("/lookup-student/");
-  if (publicPaths.includes(req.path) || isLookup) {
-    return kioskAuth(req, res, next);
+
+  if (isScan) {
+    // BOTH ROLES ARE REQUIRED, NOT JUST THE KIOSK.
+    //
+    // authorize() is variadic, so this is an "any of" gate. Listing only "kiosk" here
+    // looked correct and was wrong: the student scanner page (pages/components/
+    // AttendanceScanner.jsx) posts to /time-in and /time-out too, using the student's
+    // own bearer token. Gating on "kiosk" alone returned 403 to every student scanning
+    // in, so the kiosk account being a real account did not stop the two from needing
+    // the same endpoints.
+    //
+    // Note what is NOT here: "admin". A Course Admin or the Super Admin cannot write
+    // attendance records through this door. Attendance is entered by the person who
+    // walked in, or recorded at the kiosk on their behalf; corrections are a separate
+    // Admin-side surface (updateRecord/deleteRecord). Reading history is decided by room
+    // ownership, not by this gate.
+    return verifyToken(req, res, (err) =>
+      err ? next(err) : authorize("kiosk", "student")(req, res, next),
+    );
   }
+
+  if (isLookup) {
+    // KIOSK ONLY -- deliberately NOT "kiosk, student".
+    //
+    // This endpoint answers with a student's profile for any schoolId given, so adding
+    // "student" to it would rebuild the roster oracle that resolveCode used to be, only
+    // on a different path. It is not needed there: pages/components/AttendanceScanner.jsx
+    // reads a schoolId straight out of the QR it just scanned and calls time-in/time-out
+    // directly, so a student never has to look anyone up -- including themselves.
+    return verifyToken(req, res, (err) =>
+      err ? next(err) : authorize("kiosk")(req, res, next),
+    );
+  }
+
   return verifyToken(req, res, next);
 }, attendanceRoutes);
 app.get("/api/health", async (req, res) => {
@@ -187,9 +242,25 @@ app.use("/api/fines", verifyToken, methodAwareLimiter, cacheMiddleware(15), fine
 app.use("/api/backup", verifyToken, authorize("admin"), backupLimiter, backupRoutes);
 app.use("/api/borrow-requests", verifyToken, methodAwareLimiter, cacheMiddleware(15), borrowRequestRoutes);
 
+// Course scopes. Open to any admin for reading -- the room, maintenance and admin
+// pickers all need the list, and a Course Admin that could not see it would type a
+// course code the backend then rejects as unknown. Writes are Super Admin only,
+// enforced per-route, because `courses.id` is the join key for every scoped table.
+app.use("/api/courses", verifyToken, authorize("admin"), attachCourseScope, methodAwareLimiter, courseRoutes);
+
 // Admin-only routes
-app.use("/api/admin", verifyToken, authorize("admin"), methodAwareLimiter, adminRoutes);
-app.use("/api/settings", verifyToken, authorize("admin"), methodAwareLimiter, cacheMiddleware(60), settingsRoutes);
+//
+// attachCourseScope runs AFTER authorize("admin"), which is what makes it free:
+// authorize has already resolved req.profile from Firestore, so attachCourseScope
+// only reads that document and adds no extra read to the request path. Mounting
+// it before the role check would see an unresolved profile and treat every caller
+// as unscoped.
+app.use("/api/admin", verifyToken, authorize("admin"), attachCourseScope, methodAwareLimiter, adminRoutes);
+
+// System-wide settings are the Super Admin's alone: a per-course `fine_per_day`
+// or `maintenance_mode` has no coherent course-scoped meaning, and
+// allow_student_registration is a global switch.
+app.use("/api/settings", verifyToken, authorize("admin"), requireSuperAdmin, methodAwareLimiter, cacheMiddleware(60), settingsRoutes);
 
 // 404 handler for undefined routes
 app.use((req, res) => res.status(404).json({ error: "Not found" }));
@@ -214,6 +285,16 @@ const missingImageEnv = reportMissingEnv(
   IMAGE_ENV,
   console.warn
 );
+
+// Exported so tests can mount the REAL app (with its real middleware chain) via
+// supertest, instead of calling controllers directly with a hand-built req.profile.
+// Pairing that with `require.main === module` below means `node server.js` still
+// starts a listening server and `npm start` is unaffected.
+module.exports = { app, reportMissingEnv };
+
+// Only listen when run directly. A test that requires this file gets the app object
+// and no socket, so several suites can run without fighting over port 5000.
+if (require.main !== module) return;
 
 const server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

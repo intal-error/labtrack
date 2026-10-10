@@ -4,6 +4,7 @@ const { parseLocalDay } = require("./exportUtils");
 // cannot produce a malformed .or() filter (which PostgREST answers as a syntax
 // error, i.e. a 500 on the whole Transactions endpoint). See utils/postgrest.js.
 const { orEqAny } = require("./postgrest");
+const { scopedAny } = require("../middleware/courseScope");
 
 function numberOr(value, fallback = 0) {
   const parsed = Number(value);
@@ -124,8 +125,26 @@ function sortTransactions(items, sortBy) {
 /**
  * Loads transactions for `action` with every filter applied, newest first.
  * Shared by the table endpoints and the report exports.
+ *
+ * `req` IS REQUIRED, not optional, because this function is the only place the
+ * course scope reaches a transactions query and an optional parameter would fail
+ * OPEN: a caller who forgot to pass it would silently serve every course's loans
+ * to every admin. Throwing makes the mistake a stack trace instead of a leak.
+ * Pass the request itself -- courseScope reads req.profile.
+ *
+ * The scope is a single `.or()` across BOTH course columns, because a Course
+ * Admin must see two different things: loans made BY their students (course) and
+ * loans OF their own equipment (equipment_course). Scoping only one of them
+ * would either hide equipment being handed out of their own inventory, or expose
+ * another course's students.
  */
-async function queryTransactions(action, query = {}) {
+async function queryTransactions(action, query = {}, req) {
+  if (!req || !req.profile) {
+    throw new Error(
+      "queryTransactions requires the authenticated request as its third argument (course scoping)"
+    );
+  }
+
   // Push the indexed, exact-match predicates into SQL.
   //
   // The old shape was `.select("*").eq("action", action)` and nothing else, so
@@ -138,6 +157,11 @@ async function queryTransactions(action, query = {}) {
     .from("transactions")
     .select("*", { count: "exact" })
     .eq("action", action);
+
+  // Applied BEFORE the caller's own ?course= filter, so the two are ANDed: an
+  // admin asking for a course they do not own gets an empty list rather than
+  // their own rows back.
+  q = scopedAny(q, ["course", "equipment_course"], req);
 
   // course matches EITHER column, so it is an OR across two columns rather than a
   // single .eq(). The row volume still drops from the whole bucket to one course.

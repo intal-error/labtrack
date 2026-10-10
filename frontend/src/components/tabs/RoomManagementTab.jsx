@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../services/api";
+import { useAuth } from "../../context/AuthContext";
+import { useCourseOptions } from "../../hooks/useQueries";
 import toast from "react-hot-toast";
 import {
   MdAdd,
@@ -12,6 +14,8 @@ import {
   MdDownload,
   MdOutlineQrCode,
   MdOutlineBusiness,
+  MdWarningAmber,
+  MdSchool,
 } from "react-icons/md";
 
 // This component renders .room-card, .room-add-card, .rooms-empty,
@@ -24,12 +28,15 @@ import "../../styles/pages/attendance.css";
 
 export default function RoomManagementTab() {
   const queryClient = useQueryClient();
+  const { isSuperAdmin, courseId: myCourseId } = useAuth();
+  const { options: courseOptions } = useCourseOptions();
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editRoom, setEditRoom] = useState(null);
   const [roomName, setRoomName] = useState("");
   const [location, setLocation] = useState("");
+  const [course, setCourse] = useState("");
   const [qrModal, setQrModal] = useState(null);
   const [qrImage, setQrImage] = useState("");
 
@@ -68,6 +75,12 @@ export default function RoomManagementTab() {
     setEditRoom(null);
     setRoomName("");
     setLocation("");
+    // Default a new room to the caller's OWN course, taken from their profile
+    // rather than from the first entry in the list. A Course Admin is the only
+    // value the backend will accept for them anyway, and defaulting to
+    // options[0] would hand a CT admin whichever course sorts first (Automotive,
+    // alphabetically) and fail the save with a 400.
+    setCourse(isSuperAdmin ? "" : myCourseId || "");
     setShowModal(true);
   }
 
@@ -75,22 +88,71 @@ export default function RoomManagementTab() {
     setEditRoom(room);
     setRoomName(room.roomName || "");
     setLocation(room.location || "");
+    setCourse(room.course || "");
     setShowModal(true);
   }
 
-  async function handleSave() {
+  // True when saving would move this room to a different owning course.
+function courseLabel(id) {
+  if (!id) return "Unassigned";
+  const match = courseOptions.find((c) => c.value === id);
+  return match ? match.label : id;
+}
+
+function isReassigning() {
+  return Boolean(editRoom) && course !== (editRoom.course || "");
+}
+
+async function handleSave() {
     if (!roomName.trim()) return toast.error("Room name is required");
+    if (!course) return toast.error("Select the course that owns this room");
+
+    /*
+     * Confirm a reassignment BEFORE the request, not after.
+     *
+     * Moving a room between courses does not rewrite lab_attendance.room_code, so its
+     * entire historical logbook transfers to the new owner the instant this saves.
+     * That is silent, instant and has no inverse in this UI. The backend returns the
+     * number of affected rows (historyTransferred) precisely so it could be confirmed
+     * with a real figure rather than a vague warning -- but a confirm() dialog has to
+     * be raised before the call, since the count only exists afterwards.
+     */
+    if (isReassigning()) {
+      const from = courseLabel(editRoom.course) || "Unassigned";
+      const to = courseLabel(course);
+      const ok = window.confirm(
+        `Move "${roomName.trim()}" from ${from} to ${to}?\n\n` +
+          `Every past logbook entry for this room will belong to ${to} from now on. ` +
+          `Entries are not copied or removed, and this cannot be undone from here.`
+      );
+      if (!ok) return;
+    }
+
     try {
+      let transferred = null;
       if (editRoom) {
-        await api.updateRoom(editRoom.id, { roomName: roomName.trim(), location: location.trim() });
-        toast.success("Room updated");
+        const updated = await api.updateRoom(editRoom.id, {
+          roomName: roomName.trim(),
+          location: location.trim(),
+          course,
+        });
+        transferred = updated?.historyTransferred;
       } else {
-        await api.createRoom({ roomName: roomName.trim(), location: location.trim() });
-        toast.success("Room created");
+        await api.createRoom({ roomName: roomName.trim(), location: location.trim(), course });
       }
       setShowModal(false);
       loadRooms();
       syncRoomCache();
+
+      if (transferred > 0) {
+        toast.success(
+          `Room moved. ${transferred} logbook ${transferred === 1 ? "entry" : "entries"} now belong to ${courseLabel(course)}.`
+        );
+      } else if (transferred === 0) {
+        toast.success("Room updated");
+      } else {
+        toast.success(isReassigning() ? "Room updated" : "Room created");
+      }
     } catch (err) {
       toast.error(err.message || "Failed to save room");
     }
@@ -162,6 +224,16 @@ export default function RoomManagementTab() {
                       <MdLocationOn size={12} /> {room.location}
                     </p>
                   )}
+                  {/*
+                    The owning course is shown on the card, not only in the edit form,
+                    because an unassigned room is invisible to every Course Admin -- so
+                    from their side of the system the room simply does not exist. Seeing
+                    it here labelled "Unassigned" is what explains that.
+                  */}
+                  <p className="room-card-course">
+                    <MdSchool size={12} />
+                    {courseLabel(room.course)}
+                  </p>
                 </div>
                 <span className={`status-badge ${room.status === "active" ? "active" : "inactive"}`}>
                   {room.status}
@@ -223,6 +295,59 @@ export default function RoomManagementTab() {
                 onChange={(e) => setLocation(e.target.value)}
               />
             </div>
+            <div className="form-group">
+              <label>Owning Course *</label>
+              <select
+                value={course}
+                onChange={(e) => setCourse(e.target.value)}
+                /*
+                 * Locked for a Course Admin. The API refuses to move a room to
+                 * another course (updateRoom returns 403 unless the caller is an
+                 * explicit Super Admin), so an enabled select here would let them
+                 * pick a value and then eat an error toast -- offering an action
+                 * and refusing it is worse than showing it is not available.
+                 *
+                 * Their own course is still the only valid value, and it is still
+                 * editable for a Super Admin, so nothing is lost.
+                 */
+                disabled={!isSuperAdmin}
+              >
+                <option value="">Select a course...</option>
+                {courseOptions.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+              <p className="room-course-hint">
+                {isSuperAdmin ? (
+                  <>
+                    The course that administers this room and sees its laboratory
+                    logbook. Any student may still scan this room&apos;s QR code and
+                    record an entry, whichever course they belong to.
+                  </>
+                ) : (
+                  <>
+                    This room belongs to your course. Only the Super Admin can move a
+                    room to a different course, because that also transfers its
+                    logbook.
+                  </>
+                )}
+              </p>
+            </div>
+            {isReassigning() && (
+              <div className="room-reassign-warning" role="alert">
+                <MdWarningAmber size={18} />
+                <div>
+                  <strong>This will move the room&apos;s logbook</strong>
+                  <p>
+                    Changing the owning course transfers every past logbook entry to the
+                    new course. Entries are not copied or deleted, and this cannot be
+                    undone from here.
+                  </p>
+                </div>
+              </div>
+            )}
             <div className="attendance-modal-actions">
               <button className="btn-cancel" onClick={() => setShowModal(false)}>Cancel</button>
               <button className="btn-save" onClick={handleSave}>

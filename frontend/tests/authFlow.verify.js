@@ -1,29 +1,23 @@
-// Pins the auth navigation state machine: GuestRoute x SignInForm's verdict.
+// Pins the auth navigation contract: one login form, and a destination the BACKEND
+// chooses.
 //
-// WHY THIS FILE EXISTS: this guard regressed twice, and both times the failure was
-// SILENT -- the app "worked", nobody was shown the wrong role, no error was logged,
-// and the defect was only visible as a message that never appeared.
+// WHY THIS FILE WAS REWRITTEN, NOT DELETED: it used to assert the opposite of what
+// the code now does. It pinned the role-tile verdict machine -- SignInForm comparing
+// a tapped tile against the real role and signing out on a mismatch, plus a reactive
+// "an attempt is in flight" store shared with the router -- because that machine had
+// regressed twice, both times silently.
 //
-//   Regression 1: GuestRoute redirected on `user` alone. setUser and the profile
-//   fetch land on the same tick, so the redirect fired while `role` was still
-//   unresolved and SignInForm was unmounted before it could compare the tapped role
-//   against the real one.
+// Those regressions were real. They are also now impossible, because the thing the
+// machine policed no longer exists: a role picker cannot disagree with the server
+// when there is no picker, because GET /api/auth/profile returns the role, the course
+// and `landingPath`, and every route is guarded by a server-side check that ignores
+// anything the client claims.
 //
-//   Regression 2 (the subtler one, and the reason this file exists): the fix waited
-//   for the role by rendering a SPINNER while `user && role === undefined`. That
-//   still unmounts the form -- the role always resolves in that window -- so the
-//   verdict was still never computed and every sign-in still fell through to the
-//   redirect. The mismatch branch was unreachable code carrying a comment that
-//   claimed it prevented a bypass.
-//
-//   A third defect lived in the same guard: for `user && role === null` (profile
-//   lookup FAILED) it rendered the login page. ProfileGate lives in DashboardLayout,
-//   which this route never enters, so the one screen offering retry and sign-out
-//   could not be displayed for the only case it exists to handle.
-//
-// The invariant, stated once: the login form must stay MOUNTED for the entire window
-// in which a submitted sign-in is waiting for its role, and the route may only take
-// over once that role has resolved.
+// So the invariant is now much smaller, and this file pins it:
+//   - the login form must stay MOUNTED until the profile resolves
+//   - the destination must come from the server, not be re-derived from the role
+//   - the form must not navigate; two navigators race
+//   - the failed-lookup case must reach ProfileGate, not strand the user on /login
 //
 // Run: node tests/authFlow.verify.js   (or: npm run verify -w frontend)
 
@@ -41,40 +35,30 @@ function check(name, condition, detail = "") {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok || !detail ? "" : `\n        ${detail}`}`);
 }
 
-// ── The decision table, re-implemented from App.jsx ─────────────────────────
-// Mirrors App.jsx: the flag is the one bit GuestRoute cannot otherwise infer.
-const GUEST_ROUTE = { loading: "spinner", signedOut: "form", pending: "form", adjudicating: "form", resolved: "dashboard" };
+// ── GuestRoute's decision table, re-implemented from App.jsx ────────────────
+// No attempt flag any more: with no role for the client to compare against, there is
+// nothing for the router to wait FOR.
+const GUEST_ROUTE = { loading: "spinner", signedOut: "form", pending: "form", resolved: "landingPath", failed: "landingPath" };
 
-function guestRoute({ loading, user, role, attemptActive = false }) {
+function guestRoute({ loading, user, role }) {
   if (loading) return GUEST_ROUTE.loading;
   if (!user) return GUEST_ROUTE.signedOut;
   if (role === undefined) return GUEST_ROUTE.pending;
-  if (attemptActive) return GUEST_ROUTE.adjudicating;
   return GUEST_ROUTE.resolved;
 }
 
-console.log("--- GuestRoute keeps the form mounted while a sign-in awaits its role ---");
+console.log("--- GuestRoute holds the form until the server has answered ---");
 {
   const cases = [
     { name: "initial, firebase not yet resolved", state: { loading: true, user: null, role: undefined }, want: "spinner" },
     { name: "signed out", state: { loading: false, user: null, role: null }, want: "form" },
     { name: "signed out, role not yet touched", state: { loading: false, user: null, role: undefined }, want: "form" },
-    { name: "signed in, role PENDING", state: { loading: false, user: { uid: "u1" }, role: undefined }, want: "form" },
-    {
-      name: "signed in, role resolved, a submit is being adjudicated",
-      state: { loading: false, user: { uid: "u1" }, role: "student", attemptActive: true },
-      want: "form",
-    },
-    {
-      name: "signed in, role resolved, nobody adjudicating (returning visitor)",
-      state: { loading: false, user: { uid: "u1" }, role: "student" },
-      want: "dashboard",
-    },
-    {
-      name: "signed in, profile FAILED (null)",
-      state: { loading: false, user: { uid: "u1" }, role: null },
-      want: "dashboard",
-    },
+    { name: "signed in, profile PENDING", state: { loading: false, user: { uid: "u1" }, role: undefined }, want: "form" },
+    { name: "signed in, profile resolved", state: { loading: false, user: { uid: "u1" }, role: "student" }, want: "landingPath" },
+    // A FAILED lookup. This must NOT be the login page: ProfileGate lives in
+    // DashboardLayout, which this route never enters, so redirecting to /login makes
+    // the one screen offering retry unreachable for the only case it exists to handle.
+    { name: "signed in, profile FAILED (null)", state: { loading: false, user: { uid: "u1" }, role: null }, want: "landingPath" },
   ];
   for (const c of cases) {
     const got = guestRoute(c.state);
@@ -82,99 +66,13 @@ console.log("--- GuestRoute keeps the form mounted while a sign-in awaits its ro
   }
 
   check(
-    "the pending case is the one that regressed",
+    "the pending case is the one that used to regress",
     guestRoute({ loading: false, user: { uid: "u1" }, role: undefined }) === "form",
-    "rendering anything but `children` here unmounts SignInForm before its verdict can run",
-  );
-  check(
-    "a resolved role is NOT enough on its own to take over",
-    guestRoute({ loading: false, user: { uid: "u1" }, role: "student", attemptActive: true }) === "form",
-    "redirecting on the resolved role unmounts the form on the exact render its verdict becomes computable",
+    "rendering anything but `children` here unmounts the form the visitor is looking at",
   );
 }
 
-// ── SignInForm's verdict, and the state machine it drives ────────────────────
-// Mirrors SignInForm.jsx: `no-profile` deliberately does NOT sign out (the session is
-// what the retry needs), and `ok` navigates rather than relying on the route.
-function verdict({ signedIn, authLoading, role, selectedRole }) {
-  if (!signedIn || authLoading || role === undefined) return "idle";
-  if (!role) return "no-profile";
-  if (role !== selectedRole) return "wrong-role";
-  return "ok";
-}
-
-console.log("--- the verdict is actually reachable for a submitted sign-in ---");
-{
-  // The full sequence a student tapping "Admin" goes through.
-  const studentTappedAdmin = { selectedRole: "admin" };
-  const seq = [
-    { signedIn: false, authLoading: false, role: undefined },
-    { signedIn: true, authLoading: true, role: undefined }, // credentials accepted
-    { signedIn: true, authLoading: true, role: undefined }, // profile in flight
-    { signedIn: true, authLoading: false, role: "student" }, // profile resolved
-  ];
-  const verdicts = seq.map((s) => verdict({ ...s, ...studentTappedAdmin }));
-  check("idle before submitting", verdicts[0] === "idle");
-  check("idle while the profile is in flight", verdicts[1] === "idle" && verdicts[2] === "idle");
-  check(
-    "wrong-role is REACHED (this is what regression 2 killed)",
-    verdicts[3] === "wrong-role",
-    `got ${verdicts[3]} -- the form was unmounted during the pending window`,
-  );
-  check(
-    "a matching role reaches ok",
-    verdict({ signedIn: true, authLoading: false, role: "admin", selectedRole: "admin" }) === "ok",
-  );
-  check(
-    "a failed lookup reaches no-profile",
-    verdict({ signedIn: true, authLoading: false, role: null, selectedRole: "admin" }) === "no-profile",
-  );
-  check(
-    "an unsubmitted session-restored visitor never reaches a terminal verdict",
-    verdict({ signedIn: false, authLoading: false, role: "student", selectedRole: "admin" }) === "idle",
-    "otherwise a returning user would be bounced by a verdict they never asked for",
-  );
-}
-
-// ── The two guards must agree: who navigates, and when ──────────────────────
-// A terminal verdict and the route redirecting on the same render would mean two
-// navigations racing (SignInForm's navigate("/dashboard") plus the route's
-// Navigate), which is how a user ends up bounced back to /login.
-console.log("--- the form and the route do not both navigate ---");
-{
-  const role = "student";
-
-  // wrong-role: the form signs out, so the route must NOT also navigate. This is the
-  // combination that regressed three times.
-  const wrongRole = verdict({ signedIn: true, authLoading: false, role, selectedRole: "admin" });
-  const duringAdjudication = guestRoute({ loading: false, user: { uid: "u1" }, role, attemptActive: true });
-  check("wrong-role is detected", wrongRole === "wrong-role", `got ${wrongRole}`);
-  check(
-    "  and the route defers to the form",
-    duringAdjudication === "form",
-    "if the route redirects here, SignInForm unmounts before its effect can sign out",
-  );
-  check(
-    "after the form signs out, the route hands over",
-    guestRoute({ loading: false, user: null, role: null }) === "form",
-    "user cleared means the login form is correct again",
-  );
-
-  // no-profile: the form deliberately does NOT sign out, so the route takes over and
-  // ProfileGate (which offers retry) becomes reachable.
-  check(
-    "no-profile is detected",
-    verdict({ signedIn: true, authLoading: false, role: null, selectedRole: "admin" }) === "no-profile",
-  );
-  check(
-    "  and the route takes over to ProfileGate",
-    guestRoute({ loading: false, user: { uid: "u1" }, role: null }) === "dashboard",
-    "",
-  );
-}
-
-// ── Source-level guards, so the table above cannot drift from the real guard ──
-console.log("--- App.jsx matches the table ---");
+console.log("--- the destination comes from the server, never re-derived ---");
 {
   const app = read("src/App.jsx");
   const guest = app.slice(app.indexOf("function GuestRoute"), app.indexOf("class ErrorBoundary"));
@@ -187,102 +85,91 @@ console.log("--- App.jsx matches the table ---");
   );
   check("a signed-out visitor gets the form", /if \(!user\) return children;/.test(guest));
 
-  // The two assertions that carry the real weight. Both were wrong in every previous
-  // revision of this guard, and neither was detectable by reading the source: the
-  // component test in authFlow.test.jsx is what found them.
-  const flagIdx = guest.indexOf("if (signInAttempt) return children;");
-  const loadingIdx = guest.indexOf("if (loading) return <div className=");
+  // The single most important line: it follows the server's landingPath.
   check(
-    "the attempt flag is checked BEFORE loading",
-    flagIdx !== -1 && loadingIdx !== -1 && flagIdx < loadingIdx,
-    `flag@${flagIdx} loading@${loadingIdx} -- checking loading first unmounts the form mid-sign-in, because AuthContext sets loading=true for the PROFILE fetch as well as for Firebase startup`,
+    "a resolved profile navigates to the server's landingPath",
+    /return <Navigate to=\{landingPath \|\| "\/dashboard"\} replace \/>;/.test(guest),
+    "a hardcoded /dashboard ignores the student's landingPath",
   );
   check(
-    "the flag is read through useSyncExternalStore, not a plain call",
-    guest.includes("useSyncExternalStore(subscribeSignInFlow, getSignInAttempt"),
-    "SignInForm releases the flag from an effect; a non-reactive read leaves the router un-notified, so it never re-renders and ProfileGate stays unreachable",
-  );
-  check(
-    "every resolved role hands over to the protected layout",
-    /return <Navigate to="\/dashboard" replace \/>;/.test(guest),
+    "it reads landingPath from useAuth",
+    /const \{ user, loading, role, landingPath \} = useAuth\(\);/.test(guest),
     "",
   );
-  check(
-    "no spinner is rendered for a pending role",
-    !/role === undefined[\s\S]{0,120}loading-screen/.test(guest),
-    "a spinner here unmounts SignInForm and resurrects regression 2",
-  );
-  check("it imports the reactive accessors", app.includes('from "./utils/signInFlow"'));
-}
 
-console.log("--- the flag is armed and always released ---");
-{
-  const form = read("src/pages/components/SignInForm.jsx");
-  // The bound has to clear the explanatory comment between the two statements, which
-// is ~250 characters -- a tighter limit silently fails against correct code.
-check("armed when credentials are accepted", /setSignedIn\(true\);[\s\S]{0,800}markSignInAttempt\(\)/.test(form));
+  // Everything the role tile needed is gone, and its absence is the point.
+  check("the attempt flag is gone", !guest.includes("signInAttempt"), "");
+  check("so is the reactive subscription", !guest.includes("useSyncExternalStore"), "");
+  check("and the signInFlow import", !app.includes("./utils/signInFlow"), "");
   check(
-    "released on unmount (single place, covers all three exits)",
-    /useEffect\(\(\) => \(\) => clearSignInAttempt\(\), \[\]\)/.test(form),
-    "a stale flag would park a signed-in user on the login page",
+    "the store itself is deleted, not just unused",
+    !fs.existsSync(path.join(here, "..", "src", "utils", "signInFlow.js")),
+    "a dead module with a useSyncExternalStore contract is an invitation to reintroduce the deadlock",
   );
+
+  check("no spinner is rendered for a pending role", !/role === undefined[\s\S]{0,120}loading-screen/.test(guest), "");
+
   check(
-    "the mismatch message is committed during render, not in the effect",
-    /if \(activeVerdict === "wrong-role" && mismatchNotice === null\) \{[\s\S]{0,200}setMismatchNotice\(/.test(form) &&
-      /shownError = verdictError \|\| mismatchNotice \|\| error/.test(form),
-    "state written inside the effect is reverted by the logout() that follows it, losing the message",
-  );
-  check(
-    "the effect itself sets no state",
-    !/activeVerdict === "ok"[\s\S]{0,600}set[A-Z]/.test(form.replace(/setMismatchNotice\([^)]*\);/, "")),
+    "the index route follows the same rule",
+    /function LandingRedirect\(\)[\s\S]{0,200}landingPath \|\| "\/dashboard"/.test(app),
     "",
   );
+  check("the index route uses LandingRedirect", app.includes("<LandingRedirect />"));
 }
 
-console.log("--- SignInForm keeps the no-profile session alive ---");
+console.log("--- the login form asks for credentials and nothing else ---");
 {
   const form = read("src/pages/components/SignInForm.jsx");
 
-  // "ok" must be consumable. Excluding it made activeVerdict permanently "idle" for a
-  // successful sign-in, which made the happy path unreachable -- and once GuestRoute
-  // learned to stand down while an attempt was in flight, that deadlocked correct
-  // logins on the login page forever.
-  check(
-    "\"ok\" is consumable like the other terminal verdicts",
-    /if \(verdict !== "idle" && verdict !== consumedVerdict\) \{/.test(form),
-    'the guard reads `verdict !== "ok" &&`, which leaves the happy path unreachable',
-  );
+  check("there is no role picker", !/selectedRole|setSelectedRole|ROLES\.map/.test(form), "");
+  check("no radiogroup to select one", !form.includes('role="radiogroup"'), "");
+  check("no verdict state machine", !/consumedVerdict|activeVerdict|mismatchNotice/.test(form), "");
+  check("it does not sign the browser out", !/logout\(|signOut\(/.test(form), "there is no mismatch left to adjudicate");
+  check("it does not navigate", !/navigate\(|useNavigate/.test(form), "two navigators race: the form and GuestRoute");
+  // Matched on the import PATH, not the bare name: this file's own header explains
+  // what the deleted store was for, so a substring test would fail on the comment.
+  check("it does not import the deleted store", !/from "\.\.\/\.\.\/utils\/signInFlow"/.test(form), "");
+  check("it does not read the resolved role", !/useAuth\(\)/.test(form), "the form has nothing to compare the account against");
 
-  // Bounds are deliberately generous. The prose inside this effect explains WHY the
-  // flag is not cleared on wrong-role, and a tight bound silently stopped matching --
-  // which reads as "the behaviour is gone" when it is only "the comment grew".
-  const effect = form.slice(form.indexOf("useEffect(() => {"), form.indexOf("}, [activeVerdict"));
+  // The form must still be recognisably a form.
+  check("it still submits credentials", /signInWithEmailAndPassword\(auth, email\.trim\(\), password\)/.test(form));
+  check("it still surfaces an error", form.includes('className="auth-error"'));
+  check("it still offers password reset", form.includes("sendPasswordResetEmail"));
+  check("it still offers student sign-up", form.includes("Are you a student?"));
+  check(
+    "the sign-up wording says student, because registration is student-only",
+    !form.includes("Don&apos;t have an account?"),
+    "an admin who mistyped their password must not read this as a way to create an admin account",
+  );
+}
 
+console.log("--- the profile carries the tier and the route ---");
+{
+  const ctx = read("src/context/AuthContext.jsx");
+
+  check("it publishes landingPath", /landingPath: userProfile\?\.landingPath \|\| null/.test(ctx), "");
+  check("it publishes courseId", /courseId: userProfile\?\.courseId \|\| null/.test(ctx));
+  check("it publishes courseName", /courseName: userProfile\?\.courseName \|\| ""/.test(ctx));
+  check("it publishes isSuperAdmin", /isSuperAdmin: Boolean\(userProfile\?\.isSuperAdmin\)/.test(ctx));
+  check("it publishes isCourseAdmin", /isCourseAdmin: Boolean\(userProfile\?\.adminLevel === "course"\)/.test(ctx));
+
+  // A backend that has not shipped the field yet must still yield a usable route,
+  // rather than navigating to undefined.
+  // CHANGED. The regex pinned the exact source text of the fallback, so adding the kiosk
+  // branch broke it while the BEHAVIOUR was still correct. Rewritten to assert the three
+  // landings each appear in the fallback chain, which is the property that actually
+  // matters: an older backend that omits landingPath must still route a kiosk to the
+  // kiosk page and not to /dashboard, where it would render a broken student dashboard.
   check(
-    "wrong-role signs out",
-    /activeVerdict === "wrong-role"[\s\S]{0,900}logout\(\)/.test(effect),
-    "",
+    "landingPath is defaulted so an older backend cannot navigate to undefined",
+    /landingPath:[\s\S]{0,220}data\.landingPath\s*\|\|/.test(ctx) &&
+      /data\.role === "kiosk"/.test(ctx) &&
+      /"\/attend\/kiosk"/.test(ctx) &&
+      /data\.role === "student"/.test(ctx) &&
+      /"\/my-activity"/.test(ctx),
+    "the landingPath fallback must cover kiosk, student and default routes",
   );
-  check(
-    "the wrong-role branch returns BEFORE the flag is released",
-    /logout\(\)[\s\S]{0,600}return;[\s\S]{0,300}clearSignInAttempt\(\)/.test(effect),
-    "releasing the flag first lets GuestRoute redirect to the dashboard in the gap before logout resolves -- the screen the mismatch exists to deny",
-  );
-  check(
-    "no-profile does NOT sign out",
-    (effect.match(/logout\(\)/g) || []).length === 1,
-    "signing out would destroy the session ProfileGate needs in order to retry",
-  );
-  check(
-    "ok and no-profile both release the router",
-    /clearSignInAttempt\(\);/.test(effect),
-    "without releasing the flag, GuestRoute keeps rendering the form and ProfileGate stays unreachable",
-  );
-  check(
-    "navigation is the ROUTER's job -- the form must not also navigate",
-    !/navigate\("\/dashboard"\)/.test(form),
-    "two navigators race: the form navigates AND GuestRoute redirects once the flag clears",
-  );
+  check("the derived tier is not stored separately", /userProfile\?\.adminLevel/.test(ctx), "a second source of truth can only disagree with the first");
 }
 
 console.log("--- ProfileGate is reachable and owns retry + sign-out ---");

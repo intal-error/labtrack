@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
-import { MdAdd, MdList, MdPerson, MdLock, MdPhone, MdWork, MdEmail, MdArrowBack, MdShield, MdEdit, MdDelete, MdVisibility, MdEditNote, MdAssignment, MdSwapHoriz, MdSchool, MdMoreVert, MdClose } from "react-icons/md";
+import { useCourseOptions } from "../hooks/useQueries";
+import { MdAdd, MdList, MdPerson, MdLock, MdPhone, MdWork, MdEmail, MdArrowBack, MdShield, MdEdit, MdDelete, MdSchool, MdMoreVert, MdClose } from "react-icons/md";
 import ViewToggle from "../components/ui/ViewToggle";
-import { COURSES } from "../constants/courses";
 
 import EmptyState from "../components/ui/EmptyState";
 import ErrorState from "../components/ui/ErrorState";
@@ -11,17 +11,17 @@ import toast from "react-hot-toast";
 import "../styles/pages/admin.css";
 import "../styles/pages/shared-form-panel.css";
 
-const PERMISSIONS = [
-  { key: "view_catalog", label: "View Catalog", icon: MdVisibility },
-  { key: "manage_catalog", label: "Manage Catalog", icon: MdEditNote },
-  { key: "view_transactions", label: "View Transactions", icon: MdVisibility },
-  { key: "view_requests", label: "View Requests", icon: MdVisibility },
-  { key: "process_requests", label: "Process Requests", icon: MdAssignment },
-  { key: "admin_management", label: "Admin Management", icon: MdShield },
-  { key: "reassign_requests", label: "Reassign Requests", icon: MdSwapHoriz },
-];
-
-const EMPTY_FORM = { firstName: "", lastName: "", password: "", contact: "", position: "", email: "", assignCourse: false, assignedCourses: [], assignedYear: "", permissions: ["view_catalog", "manage_catalog", "view_transactions", "view_requests", "process_requests"] };
+/*
+ * courseId replaces assignedCourse / assignedCourses / assignedYear.
+ *
+ * assignedCourses was an ARRAY, and an array is what allowed one admin to span two
+ * courses -- the exact shape courseScope.js exists to prevent. assignedYear was
+ * consulted by the attendance scoping that was removed, so it is dead. `permissions`
+ * is retained only so existing rows keep round-tripping: no code reads it, so it
+ * is stored metadata rather than an access control, and the adminController guards
+ * are what actually decide who may do what.
+ */
+const EMPTY_FORM = { firstName: "", lastName: "", password: "", contact: "", position: "", email: "", courseId: "", permissions: ["view_catalog", "manage_catalog", "view_transactions", "view_requests", "process_requests"] };
 
 export default function AdminPage() {
   const [view, setView] = useState("main");
@@ -29,7 +29,8 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [viewMode, setViewMode] = useState("list");
-  const { userProfile } = useAuth();
+  const { userProfile, isSuperAdmin } = useAuth();
+  const { options: courseOptions } = useCourseOptions();
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -78,9 +79,12 @@ export default function AdminPage() {
       contact: admin.contact || "",
       position: admin.position || "",
       email: admin.email || "",
-      assignCourse: !!(admin.assignedCourses || admin.assignedCourse),
-      assignedCourses: admin.assignedCourses || (admin.assignedCourse ? [admin.assignedCourse] : []),
-      assignedYear: admin.assignedYear || "",
+      // courseId first, falling back to the legacy shapes so an account created
+      // before this feature still shows the course it has rather than a blank select.
+      courseId:
+        admin.courseId ||
+        admin.assignedCourse ||
+        (Array.isArray(admin.assignedCourses) ? admin.assignedCourses[0] || "" : ""),
       permissions: admin.permissions || ["view_catalog", "manage_catalog", "view_transactions", "view_requests", "process_requests"],
     });
     setShowForm(true);
@@ -89,16 +93,29 @@ export default function AdminPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!editing && !form.courseId) {
+      return toast.error("Select a course for this Course Admin");
+    }
     setLoading(true);
     try {
       if (editing) {
-        const payload = { firstName: form.firstName, lastName: form.lastName, position: form.position, contact: form.contact, assignedCourses: form.assignCourse ? form.assignedCourses : [], assignedYear: form.assignCourse ? form.assignedYear : "", permissions: form.permissions };
+        // courseId is deliberately NOT sent. The backend refuses to move an account
+        // between courses through this endpoint, because reassigning one is how a
+        // Course Admin would end up responsible for a course nobody appointed them
+        // to. Reassignment is a Super Admin action on the roster, done explicitly.
+        const payload = {
+          firstName: form.firstName,
+          lastName: form.lastName,
+          position: form.position,
+          contact: form.contact,
+          permissions: form.permissions,
+        };
         if (form.password) payload.password = form.password;
         await api.updateAdmin(editing.id, payload);
         toast.success("Admin updated!");
       } else {
-        await api.createAdmin(form);
-        toast.success("Admin created!");
+        await api.createAdmin({ ...form, adminLevel: "course" });
+        toast.success("Course Admin created!");
       }
       setShowForm(false);
       setEditing(null);
@@ -124,14 +141,6 @@ export default function AdminPage() {
     } catch (err) { toast.error(err.message); }
   };
 
-  const togglePermission = (perm) => {
-    setForm((f) => ({
-      ...f,
-      permissions: f.permissions.includes(perm)
-        ? f.permissions.filter((p) => p !== perm)
-        : [...f.permissions, perm],
-    }));
-  };
 
   const getAdminInitials = (a) => `${(a.firstName || a.firstname || "")[0] || ""}${(a.lastName || a.lastname || "")[0] || ""}`.toUpperCase() || "?";
 
@@ -164,11 +173,33 @@ export default function AdminPage() {
             <button className="admin-back-btn" onClick={() => setView("main")}>
               <MdArrowBack size={20} />
             </button>
-            <h2>Account List</h2>
+            <h2>{isSuperAdmin ? "Account List" : "Your Account"}</h2>
             <span className="admin-count-badge">{admins.length}</span>
-            <button className="admin-add-btn" onClick={openCreate}><MdAdd size={16} /> Add</button>
+            {isSuperAdmin && (
+              <button className="admin-add-btn" onClick={openCreate}><MdAdd size={16} /> Add</button>
+            )}
             <ViewToggle value={viewMode} onChange={setViewMode} localStorageKey="labtrack-admin-view" />
           </div>
+
+          {/*
+            A Course Admin is not shown a one-row "roster" and left to work out what it
+            means. GET /api/admin returns ONLY their own record for them, so the count
+            badge would read 1 on a page titled "Account List" -- which reads as a bug
+            rather than as a boundary. Saying so explicitly is the difference between a
+            permission and a defect.
+          */}
+          {!isSuperAdmin && (
+            <div className="admin-scope-notice">
+              <MdSchool size={16} />
+              <div>
+                <strong>Course Admin</strong>
+                <p>
+                  You can view and edit your own account. Creating, reassigning and
+                  deactivating Course Admin accounts is the Super Admin&apos;s job.
+                </p>
+              </div>
+            </div>
+          )}
 
           {error ? (
             <ErrorState message={error} onRetry={loadAdmins} />
@@ -359,63 +390,60 @@ export default function AdminPage() {
                 <span className="lab-form-section-title">Course Assignment</span>
               </div>
               <div className="course-assign-section">
-                <button type="button" className={`course-toggle-header ${form.assignCourse ? "active" : ""}`} onClick={() => setForm({ ...form, assignCourse: !form.assignCourse, assignedCourses: form.assignCourse ? [] : form.assignedCourses, assignedYear: form.assignCourse ? "" : form.assignedYear })}>
-                  <MdSchool size={18} />
-                  <span>Assign to Courses for Approvals</span>
-                  <span className={`course-toggle-switch ${form.assignCourse ? "on" : ""}`} />
-                </button>
-                {form.assignCourse && (
-                  <div className="course-toggle-fields">
-                    <div className="admin-course-chips">
-                      {COURSES.map((c) => (
-                        <button
-                          key={c}
-                          type="button"
-                          className={`perm-chip ${form.assignedCourses.includes(c) ? "active" : ""}`}
-                          onClick={() => {
-                            const courses = form.assignedCourses.includes(c)
-                              ? form.assignedCourses.filter((x) => x !== c)
-                              : [...form.assignedCourses, c];
-                            setForm({ ...form, assignedCourses: courses });
-                          }}
-                        >
-                          {c}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="admin-form-row" style={{ marginTop: 8 }}>
-                      <div className="admin-input-wrap">
-                        <select value={form.assignedYear} onChange={(e) => setForm({ ...form, assignedYear: e.target.value })}>
-                          <option value="">Select Year (optional)</option>
-                          {["1st Year", "2nd Year", "3rd Year", "4th Year"].map((y) => <option key={y} value={y}>{y}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                    <p className="course-assign-hint">Admin will approve borrow requests for the selected courses.</p>
-                  </div>
-                )}
+                {/*
+                  ONE course per admin, as a select rather than the old multi-select chips.
+
+                  The chips allowed an admin to hold several courses at once, and that shape is
+                  what made cross-course access possible in the first place: scoping is a single
+                  equality match on courses.id, and an account holding three of them has no single
+                  scope to match. The backend refuses anything but one (validate.js
+                  adminCreateSchema).
+
+                  The list comes from GET /api/courses, not the hardcoded COURSES constant. That
+                  constant is still correct -- those ARE the program codes -- but it is a second
+                  copy, and it disagrees silently the moment the Super Admin adds a course: the
+                  form would offer a code the backend rejects as unknown.
+                */}
+                <div className="form-group">
+                  <label>Course *</label>
+                  <select
+                    value={form.courseId}
+                    onChange={(e) => setForm({ ...form, courseId: e.target.value })}
+                  >
+                    <option value="">Select a course...</option>
+                    {courseOptions.map((c) => (
+                      <option key={c.value} value={c.value}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="course-assign-hint">
+                    This admin will see and manage only this course&apos;s students, equipment,
+                    rooms, borrowing, incidents and maintenance records.
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div className="lab-form-section">
-              <div className="lab-form-section-header">
-                <div className="lab-form-section-icon location"><MdShield size={14} /></div>
-                <span className="lab-form-section-title">Permissions</span>
-              </div>
-              <div className="perm-grid">
-                {PERMISSIONS.map(({ key, label, icon: Icon }) => (
-                  <button
-                    type="button"
-                    key={key}
-                    className={`perm-chip ${form.permissions.includes(key) ? "active" : ""}`}
-                    onClick={() => togglePermission(key)}
-                  >
-                    <Icon size={14} />
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
+            {/*
+              The Permissions chips are GONE, deliberately.
+
+              They were never an access control: `permissions` was written to the
+              profile by adminController and read by NOTHING -- not one middleware,
+              controller or route consulted it. What actually decides what an admin may
+              do is the course scope (middleware/courseScope.js) plus adminLevel
+              (Super Admin vs Course Admin).
+
+              Leaving the chips would have been the worst option of the three. A
+              Super Admin could tick "View Catalog" off, watch the form save, and see
+              no effect -- and the natural conclusion would be that access control is
+              broken, not that the control is imaginary. It would also have made the
+              course field read as one of several independent permissions, which is
+              the opposite of how it works: the course IS the permission.
+
+              The field itself is still sent on save, and is still stored, so existing
+              rows round-trip unchanged. It is simply no longer editable or implied.
+            */}
 
             <div className="lab-form-actions">
               <button type="button" className="lab-form-cancel-btn" onClick={() => { setShowForm(false); setEditing(null); }}>Cancel</button>

@@ -1,7 +1,9 @@
 const { db, auth } = require("../config/firebase");
+const { supabase } = require("../config/supabase");
+const { isSuperAdmin } = require("../middleware/courseScope");
 
 /**
- * Resolves the caller's own Firestore document.
+ * Resolves the caller's own Firestore document, and decides where they go.
  *
  * WHY NOT firebase/firestore ON THE CLIENT: AuthContext.jsx used to do this
  * exact two-collection lookup with getDoc(), and because the client imported
@@ -18,21 +20,70 @@ const { db, auth } = require("../config/firebase");
  *
  * Falls back to the `admins` collection exactly as resolveProfile does, because
  * this used to 404 for every admin, whose documents live there.
+ *
+ * WHY IT NOW ALSO CARRIES THE ROUTING DECISION: there is no role picker on the
+ * login page any more, so the backend is the only thing that can say which
+ * dashboard a signed-in user belongs on. It also returns the caller's course, so
+ * the client can label itself ("CT Dashboard") without a second request.
+ *
+ * `landingPath` is deliberately the ONLY navigation hint. The client follows it
+ * rather than re-deriving a route from the role string, which is how the client
+ * and the server end up disagreeing about where someone should be.
  */
 const getProfile = async (req, res) => {
   try {
     const uid = req.user.uid;
     const userDoc = await db.collection("users").doc(uid).get();
+
+    let profile;
     if (userDoc.exists) {
-      return res.json({ id: userDoc.id, ...userDoc.data() });
+      profile = { id: userDoc.id, ...userDoc.data() };
+    } else {
+      const adminDoc = await db.collection("admins").doc(uid).get();
+      if (!adminDoc.exists) {
+        return res.status(404).json({ error: "User profile not found" });
+      }
+      // role first, for the same reason resolveProfile does: a stored role must not
+      // override the forced "admin".
+      profile = { id: adminDoc.id, role: "admin", ...adminDoc.data() };
     }
 
-    const adminDoc = await db.collection("admins").doc(uid).get();
-    if (adminDoc.exists) {
-      return res.json({ id: adminDoc.id, role: "admin", ...adminDoc.data() });
+    const role = (profile.role || "").toLowerCase();
+
+    // courseName costs one indexed primary-key lookup and only for an admin, so it
+    // is resolved here rather than shipped as a code the client would have to map.
+    // A course id that matches no row yields an empty name rather than failing the
+    // whole profile: the caller is still authenticated, and a missing label must not
+    // strand them on the login page.
+    let courseName = "";
+    if (profile.courseId) {
+      const { data } = await supabase
+        .from("courses")
+        .select("name")
+        .eq("id", profile.courseId)
+        .limit(1);
+      courseName = (data && data[0] && data[0].name) || "";
     }
 
-    return res.status(404).json({ error: "User profile not found" });
+    res.json({
+      ...profile,
+      // Normalised for the client. adminLevel is absent on a pre-migration admin,
+      // which courseScope treats as unrestricted -- see middleware/courseScope.js.
+      adminLevel: profile.adminLevel || "",
+      courseId: profile.courseId || null,
+      courseName,
+      isSuperAdmin: isSuperAdmin(profile),
+      // THREE roles, THREE landings. The kiosk branch is NOT optional: without it a
+      // kiosk account falls to `/dashboard`, which renders StudentDashboard for a
+      // profile with no schoolId, and the operator is stranded in a broken page with
+      // no route back to /attend/kiosk. App.jsx's LandingRedirect deliberately
+      // refuses to re-derive this from the role (two navigators racing is how you get
+      // bounced back to /login), so the backend is the only place it can be decided.
+      landingPath:
+        role === "kiosk" ? "/attend/kiosk"
+        : role === "student" ? "/my-activity"
+        : "/dashboard",
+    });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }

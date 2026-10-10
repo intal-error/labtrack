@@ -2384,3 +2384,66 @@ body.dark .mobile-record-card {
   .mobile-only { display: none !important; }
   .mobile-cards { display: none !important; }
 }
+
+/* ── Room course ownership ──────────────────────────────────────────────────
+   Appended at the end on purpose: these rules sit alongside classes defined
+   earlier in this file (.room-card, .form-group), and CSS source order decides
+   which declaration wins on equal specificity. */
+
+.room-card-course {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 3px 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.room-course-hint {
+  margin: 6px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+/* Reassignment warning. Amber, not red: nothing is lost or broken by moving a
+   room -- the risk is that the admin does not realise the logbook moves with it.
+
+   --amber (not a hand-picked hex): #F9A825, the value originally used here, is
+   --yellow-hover, which is the wrong hue entirely. The background is an alpha of
+   the same hue so the dark override is one alpha change rather than a second
+   hand-picked colour -- and without one, the pale background plus dark brown text
+   was effectively unreadable once the theme flipped. */
+.room-reassign-warning {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: 14px;
+  padding: 11px 13px;
+  border: 1px solid var(--amber);
+  background: rgba(245, 124, 0, 0.08);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.room-reassign-warning svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--amber);
+}
+
+.room-reassign-warning strong {
+  display: block;
+  margin-bottom: 3px;
+}
+
+.room-reassign-warning p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+body.dark .room-reassign-warning {
+  background: rgba(245, 124, 0, 0.16);
+  border-color: var(--amber);
+}

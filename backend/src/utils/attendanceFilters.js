@@ -12,10 +12,16 @@ function dayKey(date) {
  * Case-insensitive comparison so "BIT" matches "bit".
  *
  * Used only for EXPLICIT query filters the user picked in the UI. It is not a
- * permission check: attendance is building-wide, so no admin assignment narrows
- * these rows. (It used to be -- see the note on getAdminCourses in
- * utils/adminScope.js for the scoping that does still exist, on incidents and
- * borrow requests.)
+ * permission check, and must not become one: attendance scoping is applied in SQL
+ * by scopeByRoom() (utils/roomScope.js) against room ownership, while the filters
+ * below run in JS against rows that have ALREADY been scoped.
+ *
+ * That separation is the reason the course filter here stays case-insensitive.
+ * Scoping is a strict equality match on `courses.id`, which is why a
+ * case-mismatched value narrows to nothing -- but the user's own dropdown filter
+ * should never be the thing that hides their data, which is exactly the bug the
+ * old per-admin scoping produced (an assignment stored as "bit" against rows
+ * stored as "BIT" returned nothing while one screen worked and another did not).
  */
 const eqInsensitive = (a, b) => String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
 

@@ -4,6 +4,7 @@ const { parsePagination, paginatedResponse } = require("../middleware/pagination
 const { randomUUID } = require("crypto");
 const { transformKeys } = require("../utils/transformKeys");
 const { getRemainingQuantity, isOpenBorrow, queryTransactions, sortTransactions } = require("../utils/transactionFilters");
+const { scopedAny, assertCourseInScope } = require("../middleware/courseScope");
 
 // Firestore's hard limit on `in` queries.
 const FIRESTORE_IN_CHUNK = 30;
@@ -144,7 +145,7 @@ async function enrichWithProfileURL(items) {
 
 const getBorrowed = async (req, res) => {
   try {
-    let items = await queryTransactions("borrowed", req.query);
+    let items = await queryTransactions("borrowed", req.query, req);
 
     const { page, limit, paginate } = parsePagination(req);
     const total = items.length;
@@ -164,7 +165,7 @@ const getBorrowed = async (req, res) => {
 
 const getReturned = async (req, res) => {
   try {
-    let items = await queryTransactions("returned", req.query);
+    let items = await queryTransactions("returned", req.query, req);
 
     const { page, limit, paginate } = parsePagination(req);
     const total = items.length;
@@ -326,10 +327,22 @@ const getMyStats = async (req, res) => {
 
 const getStats = async (req, res) => {
   try {
+    // Scoped, and matching the OR-across-both-course-columns rule the table and
+    // export endpoints use. This returned school-wide totals to any admin, so a
+    // Course Admin's KPI tiles were counting every other course's loans.
+    const COURSE_COLUMNS = ["course", "equipment_course"];
     const [{ data: borrowedRows, error: borrowedError }, { data: returnedRows, error: returnedError }] =
       await Promise.all([
-        supabase.from("transactions").select("*").eq("action", "borrowed"),
-        supabase.from("transactions").select("*").eq("action", "returned"),
+        scopedAny(
+          supabase.from("transactions").select("*").eq("action", "borrowed"),
+          COURSE_COLUMNS,
+          req
+        ),
+        scopedAny(
+          supabase.from("transactions").select("*").eq("action", "returned"),
+          COURSE_COLUMNS,
+          req
+        ),
       ]);
     if (borrowedError) throw new Error(borrowedError.message);
     if (returnedError) throw new Error(returnedError.message);
@@ -374,6 +387,15 @@ const recordBorrow = async (req, res) => {
     const { data: catalogItem, error: catalogError } = await supabase
       .from("catalog").select("*").eq("id", itemId).single();
     if (catalogError || !catalogItem) throw new Error("Catalog item not found");
+
+    // The catalog item is looked up by id alone, so without this a Course Admin
+    // could hand out ANOTHER course's equipment just by passing its id -- neither
+    // the loan nor the stock decrement it performs would be refused. 404 rather
+    // than 403, so the item's existence is not confirmed to someone outside the
+    // course that owns it.
+    if (!assertCourseInScope(req, catalogItem.course)) {
+      return res.status(404).json({ error: "Catalog item not found" });
+    }
 
     const available = getAvailableQuantity(catalogItem);
     if (available < quantity) throw new Error(`Only ${available} available`);
@@ -447,14 +469,45 @@ const recordReturn = async (req, res) => {
   try {
     const { borrowId, itemId, quantity, returnPhotoURL, conditionOnReturn } = req.body;
 
-    const { data: catalogItem, error: catalogError } = await supabase
-      .from("catalog").select("*").eq("id", itemId).single();
-    if (catalogError || !catalogItem) throw new Error("Catalog item not found");
-
     const { data: borrow, error: borrowError } = await supabase
       .from("transactions").select("*").eq("id", borrowId).single();
     if (borrowError || !borrow) throw new Error("Borrow record not found");
     if (!isOpenBorrow(borrow)) throw new Error("Already returned");
+
+    // Closing a loan is a write to both the borrow row and the catalog stock, so
+    // the same cross-course hole as recordBorrow applies: a Course Admin could
+    // settle another course's loan and increment their inventory by doing it.
+    // The borrow carries `course` (whose student) and `equipment_course` (whose
+    // kit); either makes it the admin's responsibility.
+    if (!assertCourseInScope(req, borrow.course) && !assertCourseInScope(req, borrow.equipment_course)) {
+      return res.status(404).json({ error: "Borrow record not found" });
+    }
+
+    /*
+     * The borrow row decides WHICH catalog item this return touches.
+     *
+     * `itemId` from the body was previously used to fetch and update the catalog
+     * row. Since the loan itself is already course-checked above, a Course Admin
+     * could settle their own in-scope loan while passing another course's itemId,
+     * incrementing that course's stock. recordBorrow already refuses a foreign
+     * catalog item (:396); this is the same hole on the way back.
+     *
+     * A mismatch is refused rather than corrected: it means the stored loan and the
+     * request already disagree, and silently picking either would hide that.
+     */
+    if (!borrow.catalog_id) {
+      return res.status(409).json({
+        error: "This loan has no recorded catalog item, so it cannot be returned automatically. Please record it manually.",
+      });
+    }
+    if (itemId && String(itemId) !== String(borrow.catalog_id)) {
+      return res.status(400).json({ error: "The item does not match the item this loan was recorded for" });
+    }
+    const authoritativeItemId = borrow.catalog_id;
+
+    const { data: catalogItem, error: catalogError } = await supabase
+      .from("catalog").select("*").eq("id", authoritativeItemId).single();
+    if (catalogError || !catalogItem) throw new Error("Catalog item not found");
 
     const remaining = getRemainingQuantity(borrow);
     if (quantity > remaining) throw new Error(`Only ${remaining} remain`);
@@ -472,7 +525,7 @@ const recordReturn = async (req, res) => {
         available: nextAvailable > 0,
         status: nextAvailable < totalQty ? "Borrowed" : "Available",
         updated_at: new Date().toISOString(),
-      }).eq("id", itemId);
+      }).eq("id", authoritativeItemId);
     if (updateCatalogError) throw new Error(updateCatalogError.message);
 
     const { error: updateBorrowError } = await supabase
@@ -491,7 +544,7 @@ const recordReturn = async (req, res) => {
       action: "returned",
       status: "returned",
       original_transaction_id: borrowId,
-      catalog_id: itemId,
+      catalog_id: authoritativeItemId,
       item_name: borrow.item_name,
       quantity: Number(quantity),
       school_id: borrow.school_id,
@@ -531,15 +584,48 @@ const recordMyReturn = async (req, res) => {
     const uid = req.user.uid;
     const { borrowId, itemId, quantity, returnPhotoURL, conditionOnReturn } = req.body;
 
-    const { data: catalogItem, error: catalogError } = await supabase
-      .from("catalog").select("*").eq("id", itemId).single();
-    if (catalogError || !catalogItem) throw new Error("Catalog item not found");
-
     const { data: borrow, error: borrowError } = await supabase
       .from("transactions").select("*").eq("id", borrowId).single();
     if (borrowError || !borrow) throw new Error("Borrow record not found");
     if (!isOpenBorrow(borrow)) throw new Error("Already returned");
     if (borrow.user_id !== uid) throw new Error("You can only return items you borrowed");
+
+    /*
+     * WHY THIS CHECK, AND WHY IT IS FAIL-CLOSED.
+     *
+     * `itemId` arrives in the request body, so it is attacker-controlled. It used to
+     * be used directly to fetch the catalog row (:565-567) and to increment
+     * available_quantity (:585-591), while `borrowId` was checked for ownership a few
+     * lines later. That combination meant a student could return their OWN legitimate
+     * loan -- which the ownership check does allow -- while passing some OTHER
+     * course's itemId, inflating that course's stock and marking it returned against
+     * the wrong row. No admin privilege was needed, only a student's own session.
+     *
+     * The borrow row records which catalog item it was written for, so the only
+     * correct itemId is the one the server already stored. Rather than compare the
+     * two and then trust the body, the body value is dropped and the stored one used
+     * for every subsequent read and write. A mismatch is refused outright rather
+     * than repaired, because a mismatch means the two records already disagree and
+     * silently preferring either one hides that.
+     *
+     * Fail-closed on a missing catalog_id: older rows may predate the column, and
+     * guessing which item was meant is exactly the class of bug being fixed.
+     */
+    if (!borrow.catalog_id) {
+      return res.status(409).json({
+        error: "This loan has no recorded catalog item, so it cannot be returned automatically. Please see the lab staff.",
+      });
+    }
+    if (itemId && String(itemId) !== String(borrow.catalog_id)) {
+      return res.status(400).json({
+        error: "The item does not match the item this loan was recorded for",
+      });
+    }
+    const authoritativeItemId = borrow.catalog_id;
+
+    const { data: catalogItem, error: catalogError } = await supabase
+      .from("catalog").select("*").eq("id", authoritativeItemId).single();
+    if (catalogError || !catalogItem) throw new Error("Catalog item not found");
 
     const remaining = getRemainingQuantity(borrow);
     if (quantity > remaining) throw new Error(`Only ${remaining} remain`);
@@ -557,7 +643,7 @@ const recordMyReturn = async (req, res) => {
         available: nextAvailable > 0,
         status: nextAvailable < totalQty ? "Borrowed" : "Available",
         updated_at: new Date().toISOString(),
-      }).eq("id", itemId);
+      }).eq("id", authoritativeItemId);
     if (updateCatalogError) throw new Error(updateCatalogError.message);
 
     const { error: updateBorrowError } = await supabase
@@ -576,7 +662,7 @@ const recordMyReturn = async (req, res) => {
       action: "returned",
       status: "returned",
       original_transaction_id: borrowId,
-      catalog_id: itemId,
+      catalog_id: authoritativeItemId,
       item_name: borrow.item_name,
       quantity: Number(quantity),
       school_id: borrow.school_id,

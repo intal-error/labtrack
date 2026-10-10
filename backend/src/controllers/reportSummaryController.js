@@ -4,6 +4,41 @@ const { db } = require("../config/firebase");
 // so every unbounded read must be paged out or the counts come back short. The
 // pager lives in utils/fetchAll because the catalog reads need it too.
 const { fetchAll } = require("../utils/fetchAll");
+const { scoped, scopedAny, scopeCodes } = require("../middleware/courseScope");
+const { resolveRoomCodeScope, applyRoomScope } = require("../utils/roomScope");
+
+// Firestore's hard limit on `in`. Only a legacy admin with more than 30 assigned
+// courses can reach it.
+const FIRESTORE_IN_CHUNK = 30;
+
+/**
+ * Student headcount for one or more courses, as a Firestore aggregation shaped to
+ * match `.count().get()` so the caller destructures it identically.
+ *
+ * `where("role","==","student").where("course","in",[...])` is two equality
+ * predicates, which Firestore serves from its single-field indexes via a merge
+ * join -- no composite index has to exist for this to work, unlike an ordered or
+ * multi-field-range query.
+ *
+ * An empty course list is an empty roster, not "everyone": it returns 0 rather
+ * than dropping the `course` filter and counting the whole school.
+ */
+async function countStudentsInCourses(courses) {
+  if (!courses || courses.length === 0) {
+    return { data: () => ({ count: 0 }) };
+  }
+
+  const base = db.collection("users").where("role", "==", "student");
+
+  // The chunks are disjoint (a student has exactly one `course` string), so the
+  // counts sum exactly rather than needing a de-duplication pass.
+  let total = 0;
+  for (let i = 0; i < courses.length; i += FIRESTORE_IN_CHUNK) {
+    const snap = await base.where("course", "in", courses.slice(i, i + FIRESTORE_IN_CHUNK)).count().get();
+    total += snap.data().count || 0;
+  }
+  return { data: () => ({ count: total }) };
+}
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -214,13 +249,21 @@ const getSummary = async (req, res) => {
       if (attendanceFloor > toStr) attendanceFloor = toStr;
     }
 
-    const attendanceRangeQuery = () =>
-      supabase
-        .from("lab_attendance")
-        .select("date", { count: "exact" })
-        .gte("date", attendanceFloor)
-        .lte("date", toStr)
-        .order("id", { ascending: true });
+    // Room ownership is resolved ONCE, above, and applied synchronously here.
+// utils/fetchAll calls `.range()` directly on whatever its thunk returns, so the
+// thunk must be synchronous -- which rules out resolving room codes inside it.
+const attendanceRoomScope = await resolveRoomCodeScope(req);
+
+const attendanceRangeQuery = () =>
+      applyRoomScope(
+        supabase
+          .from("lab_attendance")
+          .select("date", { count: "exact" })
+          .gte("date", attendanceFloor)
+          .lte("date", toStr)
+          .order("id", { ascending: true }),
+        attendanceRoomScope
+      );
 
     // Column lists, not select("*").
     //
@@ -248,35 +291,70 @@ const getSummary = async (req, res) => {
       roomsAgg,
       activeRoomsAgg,
     ] = await Promise.all([
-      db.collection("users").count().get(),
-      db.collection("users").where("role", "==", "student").count().get(),
+      // Student and total-user counts come from Firestore, where the profiles
+      // actually live. A Course Admin's "Total Student Users" tile is their own
+      // course's headcount -- this was school-wide, so every Course Admin opened the
+      // dashboard to a building-sized number above a list of a dozen students.
+      // .where("course","in",...) needs no composite index (both are equality), and
+      // a single course is the normal case; the `in` form covers a legacy admin
+      // holding several.
+      scopeCodes(req) === null
+        ? db.collection("users").count().get()
+        : countStudentsInCourses(scopeCodes(req)),
+      scopeCodes(req) === null
+        ? db.collection("users").where("role", "==", "student").count().get()
+        : countStudentsInCourses(scopeCodes(req)),
       fetchAll(() =>
-        supabase
-          .from("transactions")
-          .select(BORROW_COLS, { count: "exact" })
-          .eq("action", "borrowed")
-          .order("id", { ascending: true })
+        scopedAny(
+          supabase
+            .from("transactions")
+            .select(BORROW_COLS, { count: "exact" })
+            .eq("action", "borrowed")
+            .order("id", { ascending: true }),
+          ["course", "equipment_course"],
+          req
+        )
       ),
       fetchAll(() =>
-        supabase
-          .from("transactions")
-          .select(RETURN_COLS, { count: "exact" })
-          .eq("action", "returned")
-          .order("id", { ascending: true })
+        scopedAny(
+          supabase
+            .from("transactions")
+            .select(RETURN_COLS, { count: "exact" })
+            .eq("action", "returned")
+            .order("id", { ascending: true }),
+          ["course", "equipment_course"],
+          req
+        )
       ),
       // `head: true` asks PostgREST for the count header only, so these cost
       // nothing regardless of how many reports exist.
-      supabase.from("incidents").select("id", { count: "exact", head: true }),
-      supabase
-        .from("incidents")
-        .select("id", { count: "exact", head: true })
-        .in("status", OPEN_INCIDENT_STATUSES),
+      scoped(
+        supabase.from("incidents").select("id", { count: "exact", head: true }),
+        "reporter_course",
+        req
+      ),
+      scoped(
+        supabase
+          .from("incidents")
+          .select("id", { count: "exact", head: true })
+          .in("status", OPEN_INCIDENT_STATUSES),
+        "reporter_course",
+        req
+      ),
       fetchAll(attendanceRangeQuery),
-      supabase.from("lab_rooms").select("id", { count: "exact", head: true }),
-      supabase
-        .from("lab_rooms")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "active"),
+      // Rooms are counted by OWNING course, so a Course Admin's "Total Rooms" tile
+      // matches the rooms they can actually open. Unassigned rooms stay out of
+      // every Course Admin's count, which is consistent with them being invisible
+      // to them at all.
+      scoped(supabase.from("lab_rooms").select("id", { count: "exact", head: true }), "course", req),
+      scoped(
+        supabase
+          .from("lab_rooms")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "active"),
+        "course",
+        req
+      ),
     ]);
 
     // PostgREST reports failures in the resolved value rather than rejecting, so

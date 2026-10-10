@@ -1,9 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
-import { Component, Suspense, lazy, useState, useSyncExternalStore } from "react";
+import { Component, Suspense, lazy, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "./context/AuthContext";
-import { subscribeSignInFlow, getSignInAttempt } from "./utils/signInFlow";
 import { ThemeProvider } from "./context/ThemeContext";
 import SplashScreen from "./components/ui/SplashScreen";
 import InstallPrompt from "./components/ui/InstallPrompt";
@@ -32,10 +31,12 @@ const FinesTab = lazy(() => import("./components/tabs/FinesTab"));
 const BorrowRequestsTab = lazy(() => import("./components/tabs/BorrowRequestsTab"));
 const IncidentReportsTab = lazy(() => import("./components/tabs/IncidentReportsTab"));
 const AttendanceKioskPage = lazy(() => import("./pages/AttendanceKioskPage"));
+const KioskAuthGate = lazy(() => import("./pages/KioskAuthGate"));
 
 const AttendanceLogsPage = lazy(() => import("./pages/AttendanceLogsPage"));
 const RoomAttendancePage = lazy(() => import("./pages/RoomAttendancePage"));
 const InventoryPage = lazy(() => import("./pages/InventoryPage"));
+const StudentsPage = lazy(() => import("./pages/StudentsPage"));
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -62,8 +63,21 @@ function RoleRoute({ children, allowed, fallback = "/dashboard" }) {
   return children;
 }
 
-function IndexRedirect() {
-  return <Navigate to="/dashboard" replace />;
+/**
+ * Sends a signed-in user to the route the BACKEND chose.
+ *
+ * There is no role picker on the login page, so nothing on the client is in a
+ * position to decide this: GET /api/auth/profile resolves the role, the course and
+ * `landingPath` in one response, and that answer is authoritative. Re-deriving the
+ * route here from the role string is exactly how the client and server end up
+ * disagreeing about where someone belongs.
+ *
+ * Falls back to /dashboard while the profile is unresolved, which is still correct
+ * for both admin tiers.
+ */
+function LandingRedirect() {
+  const { landingPath } = useAuth();
+  return <Navigate to={landingPath || "/dashboard"} replace />;
 }
 
 function LegacyTransactionRedirect({ tab }) {
@@ -85,95 +99,69 @@ function LegacyIncidentRedirect() {
 }
 
 /**
- * Keeps a signed-in visitor on the login page until their ROLE is known.
+/**
+ * Keeps a signed-out visitor on the login page, and sends a signed-in one wherever
+ * the backend says.
  *
- * This used to redirect on `user` alone:
+ * This used to be the most heavily commented component in the app. The role tile
+ * meant GuestRoute had to distinguish "a sign-in was submitted and is waiting for
+ * its role" from "this visitor already had a session", and every way of guessing
+ * broke something: redirecting on `user` fired before the role existed; waiting with
+ * a spinner unmounted the form one tick later; gating on `loading` was wrong because
+ * AuthContext sets loading=true for the PROFILE fetch too; and publishing a reactive
+ * flag to settle it deadlocked the happy path, parking a correct login on the login
+ * page forever. The full post-mortem lived in the now-deleted src/utils/signInFlow.js.
  *
- *   if (user) return <Navigate to="/dashboard" replace />;
+ * All of it existed to police a picker that no longer exists. With no role for the
+ * client to compare against there is nothing to adjudicate, so the form no longer
+ * owns any work that an unmount could interrupt -- and that is what made the
+ * `signInAttempt` flag unnecessary rather than merely redundant. Deleting it means a
+ * brief spinner now covers the profile fetch, which is the right trade for a form
+ * with nothing left to do.
  *
- * AuthContext calls setUser(firebaseUser) and only then awaits api.getProfile() for
- * the role, both on the same tick. So `user` went truthy while `role` was still
- * null, this route redirected, and SignInForm was unmounted before it could compare
- * the account's real role against the tile that was tapped. A student who picked
- * "Admin" was signed straight in as a student -- the role picker was decorative, and
- * the "This account is registered as student" message was unreachable.
+ * WHY `loading` IS STILL CHECKED FIRST: AuthContext cannot tell a signed-in user from
+ * a signed-out one until Firebase resolves. Checking `!user` first would therefore
+ * flash the login form at a user who is already signed in, on every hard refresh.
  *
- * So the redirect now waits for the role to resolve -- but "waits" has to mean
- * KEEPING THE FORM MOUNTED, not replacing it with a spinner.
+ * `role === undefined` holds the form rather than a spinner for the remaining window
+ * -- AuthContext calls setUser() and only then awaits the profile -- so a
+ * session-restoring visitor sees the correct form instead of a flash of something
+ * else.
  *
- * AuthContext calls setUser(firebaseUser) and only then awaits api.getProfile(). So
- * there is always a window in which `user` is truthy and `role` is still undefined.
- * Returning a spinner for that window unmounts SignInForm, and the verdict logic it
- * owns -- idle -> ok | wrong-role | no-profile -- can then never be computed at all.
- * The earlier version of this guard did exactly that: it swapped the form for a
- * spinner while the role was pending, so on resolution `role !== undefined` was
- * always true and every sign-in fell through to the redirect below. The mismatch
- * message was unreachable code wearing a comment that claimed it prevented a real
- * bypass. Keeping `children` mounted for the pending window is what makes that
- * component's contract true.
- *
- * (Not a privilege escalation: RoleRoute and every server-side `authorize` still
- * enforce the token's real role, so a student tapping "Admin" lands on the student
- * dashboard they were always entitled to. The cost of the bug was only that the
- * explanatory message never appeared and the browser stayed signed in.)
- *
- * The failed-lookup case (role === null) redirects, and that is a correction: this
- * route previously rendered `children` for it, on the reasoning that the user would
- * "reach ProfileGate via the protected layout". They never did -- this route does
- * not navigate, so the protected layout is never entered, so ProfileGate, which
- * lives in DashboardLayout, was unreachable for the exact case it exists to handle.
- * A user whose profile lookup failed was stranded on the login page while already
- * signed in: tapping "Sign in" re-authenticated the same account, and the one screen
- * offering retry and sign-out could not be displayed at all.
- *
- * /dashboard is therefore not "the dashboard" in the failed-lookup case --
- * ProtectedRoute admits any signed-in user, and DashboardLayout returns ProfileGate
- * before rendering any role-specific content, so nothing role-gated is exposed.
- *
- * Accepted trade-off: a visitor who already has a valid session and lands on /login
- * sees the login form until the profile resolves (~1 network round-trip), then gets
- * redirected. Removing that flash needs the form to publish an "attempt in progress"
- * flag that this route could read, which couples the router to the sign-in flow; a
- * brief correct form is the cheaper defect.
+ * A FAILED lookup (role === null) goes to /dashboard, NOT back to /login:
+ * ProfileGate lives in DashboardLayout, which this route never enters, so redirecting
+ * to the login page would make the one screen offering retry unreachable for exactly
+ * the case it exists to handle.
  */
+/**
+ * Catch-all destination.
+ *
+ * CHANGED for the kiosk. This used to send every unknown path to /dashboard
+ * unconditionally. A kiosk account hitting a stray URL would land on DashboardPage,
+ * which renders the STUDENT dashboard for a profile with no schoolId -- a broken page,
+ * with no in-app route back to /attend/kiosk, because no nav item points there. A kiosk
+ * is now a real signed-in session, so it can reach paths it did not before and needs a
+ * way back. Every other role is unchanged.
+ */
+function UnknownPathRedirect() {
+  const { role } = useAuth();
+  return <Navigate to={role === "kiosk" ? "/attend/kiosk" : "/dashboard"} replace />;
+}
+
 function GuestRoute({ children }) {
-  const { user, loading, role } = useAuth();
-
-  // Reactive read. A plain `isSignInAttemptActive()` call during render would work
-  // until SignInForm released the flag from an effect: the value would change without
-  // notifying React, this component would not re-render, and the redirect would never
-  // happen -- leaving a user with a failed profile stuck on the login page with no
-  // access to the ProfileGate that offers the retry.
-  const signInAttempt = useSyncExternalStore(subscribeSignInFlow, getSignInAttempt, getSignInAttempt);
-
-  // A submitted sign-in owns this render, FULL STOP -- before the loading check.
-  //
-  // `loading` is not the same as "Firebase is still starting up". AuthContext sets it
-  // to true for the PROFILE fetch as well, so on every sign-in there is a window where
-  // loading is true AND user is set AND the role tile the user tapped is held in
-  // SignInForm's local state. Checking `loading` first rendered a spinner there, which
-  // unmounted SignInForm and discarded the submitted role, so its verdict could never
-  // be computed and the mismatch effect never ran.
-  //
-  // That is the regression this whole guard exists to prevent, and it survived four
-  // previous fixes because all of them reasoned about `role === undefined` or `loading`
-  // while the component being unmounted was gated on the other. A mounted-component test
-  // is what finally surfaced it; the source read as correct in every revision.
-  if (signInAttempt) return children;
+  const { user, loading, role, landingPath } = useAuth();
 
   if (loading) return <div className="loading-screen"><div className="spinner-lg" /></div>;
 
   // Signed out: the login form, which is also the only place a session can start.
   if (!user) return children;
 
-  // Signed in with a restored session and no attempt pending: wait for the profile
-  // rather than bouncing, which would race it and eject a deep-linked user.
+  // Signed in, profile not resolved yet: keep the form mounted (see above).
   if (role === undefined) return children;
 
-  // Role resolved with nobody adjudicating it: either the profile lookup failed, or
-  // this visitor arrived with a session and never touched the form. Both belong to
-  // the protected layout, where ProfileGate handles the failure case.
-  return <Navigate to="/dashboard" replace />;
+  // Resolved. A failed lookup leaves role === null and landingPath null, and goes to
+  // /dashboard so ProfileGate can offer the retry.
+  return <Navigate to={landingPath || "/dashboard"} replace />;
 }
 
 class ErrorBoundary extends Component {
@@ -226,9 +214,25 @@ function App() {
           <Routes>
             <Route path="/login" element={<Suspense fallback={fullScreenFallback}><GuestRoute><LoginPage /></GuestRoute></Suspense>} />
             <Route path="/register" element={<Suspense fallback={fullScreenFallback}><GuestRoute><LoginPage /></GuestRoute></Suspense>} />
-            <Route path="/attend/kiosk" element={<Suspense fallback={fullScreenFallback}><AttendanceKioskPage /></Suspense>} />
+            <Route
+          path="/attend/kiosk"
+          element={
+            <Suspense fallback={fullScreenFallback}>
+              {/* GATED. The kiosk used to be a public route: no auth wrapper, so anyone
+                  who could load the URL could record attendance for any student. It now
+                  requires a real `kiosk` account. The gate wraps rather than being checked
+                  inside the page, so the page never mounts -- and its camera never starts --
+                  while signed out. */}
+              <KioskAuthGate>
+                {({ blocked, setBusy }) => (
+                  <AttendanceKioskPage kioskBlocked={blocked} onScanBusy={setBusy} />
+                )}
+              </KioskAuthGate>
+            </Suspense>
+          }
+        />
             <Route path="/" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
-              <Route index element={<IndexRedirect />} />
+              <Route index element={<LandingRedirect />} />
               <Route path="dashboard" element={<DashboardPage />} />
               <Route path="home" element={<Navigate to="/dashboard" replace />} />
               <Route path="overview" element={<Navigate to="/dashboard" replace />} />
@@ -245,6 +249,10 @@ function App() {
               <Route path="catalog" element={<RoleRoute allowed={["admin"]} fallback="/inventory"><CatalogPage /></RoleRoute>} />
               <Route path="inventory" element={<RoleRoute allowed={["student"]} fallback="/catalog"><InventoryPage /></RoleRoute>} />
               <Route path="persona" element={<RoleRoute allowed={["admin"]}><PersonaPage /></RoleRoute>} />
+              {/* Admin-only, and additionally course-scoped on the server: the roster
+                  is derived from the caller's own course, so the same route serves
+                  every Course Admin without a per-course variant. */}
+              <Route path="students" element={<RoleRoute allowed={["admin"]}><StudentsPage /></RoleRoute>} />
               <Route path="admin" element={<Navigate to="/settings" replace />} />
               <Route path="maintenance" element={<RoleRoute allowed={["admin"]}><MaintenanceTab /></RoleRoute>} />
               <Route path="incident-reports" element={<RoleRoute allowed={["admin"]} fallback="/my-activity?tab=incidents"><IncidentReportsTab /></RoleRoute>} />
@@ -263,8 +271,8 @@ function App() {
 
               <Route path="about" element={<Navigate to="/settings" replace />} />
             </Route>
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
-          </Routes>
+<Route path="*" element={<UnknownPathRedirect />} />
+            </Routes>
         </ThemeProvider>
       </AuthProvider>
       </QueryClientProvider>

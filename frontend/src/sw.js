@@ -263,8 +263,8 @@ registerRoute(
  * same-origin script can enumerate them -- trading a data leak for a token leak.
  * 64 bits of SHA-256 is ample to separate two users' buckets and reveals nothing.
  *
- * Kiosk requests authenticate with a shared X-Kiosk-Token instead, and are bucketed on
- * that, so attendance data cannot be served across kiosk sessions either.
+ * The kiosk signs in as a real account and sends a bearer token, so it is bucketed by
+ * the same per-identity key -- attendance data cannot cross a session boundary.
  *
  * Non-GET /api requests are not intercepted, and deliberately so: replaying a queued
  * write is a data-integrity feature, not a caching detail. A replayed attendance
@@ -288,16 +288,21 @@ async function identityTag(identity) {
  * gets the shared bucket -- preserving whatever sharing public endpoints had before.
  */
 async function requestIdentityTag(request) {
+  // The X-Kiosk-Token branch is GONE. Kiosk requests used to authenticate with a
+  // shared secret, so attendance data was bucketed on that secret to stop one session
+  // being served another session's cache. The kiosk now signs in as a real Firebase
+  // account, so its requests carry the same Authorization: Bearer token as everyone
+  // else and the existing per-identity bucketing covers it -- one mechanism instead of
+  // two, and one fewer secret in the bundle.
   const bearer = request.headers.get("Authorization");
-  const kiosk = request.headers.get("X-Kiosk-Token");
-  if (!bearer && !kiosk) return null;
+  if (!bearer) return null;
 
   // crypto.subtle needs a secure context, and a service worker cannot exist in one,
   // so this is unreachable in practice -- but failing LOUDLY beats silently falling
   // back to an un-partitioned key, which is the exact leak this exists to prevent.
   if (!crypto.subtle) throw new Error("secure context required to partition the api cache");
 
-  return identityTag(bearer ? `auth:${bearer}` : `kiosk:${kiosk}`);
+  return identityTag(`auth:${bearer}`);
 }
 
 /**

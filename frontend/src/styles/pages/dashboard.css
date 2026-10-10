@@ -862,3 +862,64 @@ body.dark .dash-badge.neutral {
     gap: 12px;
   }
 }
+
+/* ── Course scope banner ──────────────────────────────────────────────────────
+   Appended last so it wins on source order against the .dash-head rules above.
+   Placed above the head rather than inside it: the scope is context for every
+   figure on the page, not a property of the date range.
+
+   Tinted with rgba(46,125,50,…) at the alphas the rest of the app uses, rather
+   than a baked-in hex: that is what lets the dark override be a single alpha
+   change instead of a second hand-picked colour. */
+
+.dash-scope-banner {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--green);
+  background: rgba(46, 125, 50, 0.06);
+  color: var(--text);
+  font-size: 0.86rem;
+}
+
+.dash-scope-banner svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--green);
+}
+
+.dash-scope-banner strong {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.dash-scope-banner p {
+  margin: 0;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+/* The Super Admin's banner is informational, not a boundary, so it is neutral.
+   The same green as the Course Admin's would read as a restriction, which is the
+   opposite of what it is. */
+.dash-scope-all {
+  border-color: var(--border);
+  background: var(--bg-card);
+}
+
+.dash-scope-all svg {
+  color: var(--text-muted);
+}
+
+body.dark .dash-scope-banner {
+  background: rgba(46, 125, 50, 0.12);
+  border-color: var(--green);
+}
+
+body.dark .dash-scope-all {
+  background: var(--bg-card);
+  border-color: var(--border);
+}

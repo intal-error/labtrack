@@ -2,31 +2,176 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function to check user role
+    // ── Identity ──────────────────────────────────────────────────────────────
+    //
+    // EVERY FIELD IS READ WITH .get(key, default), NEVER AS map.key.
+    //
+    // That is not a style choice. In Firestore security rules, touching a key that
+    // the document does not have is an ERROR, and an error in a rule DENIES the
+    // request -- it does not evaluate to false or to null. Verified against the
+    // emulator: a legacy admin with no `adminLevel` and no `courseId` was denied
+    // every course-scoped read with "Null value error", which would have locked out
+    // most of the existing roster. Half the accounts in this project are still in
+    // the pre-migration shape, so this is the normal case, not an edge case.
+    function caller() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
     function getRole() {
-      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
-      return userDoc.data.role;
+      return caller().get('role', '');
+    }
+
+    function getTier() {
+      return caller().get('adminLevel', '');
     }
 
     function isAdmin() {
-      return request.auth != null && getRole() == "admin";
+      return isSignedIn() && getRole() == "admin";
+    }
+
+    function isSuperAdmin() {
+      return isAdmin() && getTier() == "super";
     }
 
     function isOwner(userId) {
-      return request.auth != null && request.auth.uid == userId;
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // ── Privileged fields ──────────────────────────────────────────────────────
+    //
+    // These decide what an account can REACH. Editing your own name is fine;
+    // editing your own access is not.
+    //
+    // WHY THE LIST IS EXPLICIT rather than "anything an admin would not write":
+    // the escalation that motivated it is adminLevel alone. The old rule blocked
+    // only `role`, so any signed-in user could write adminLevel:"super" into their
+    // OWN users/{uid} document and courseScope would then grant them every course.
+    // courseId and the legacy assigned* fields are on the list because they are
+    // exactly what scopeCodes() reads to decide which courses someone sees.
+    function PRIV() {
+      return [
+        'role',
+        'adminLevel',
+        'courseId',
+        'assignedCourse',
+        'assignedCourses',
+        'assignedYear',
+        'permissions',
+      ];
+    }
+
+    function changedPrivilegedFields() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny(PRIV());
+    }
+
+    // ── Course scoping (READ) ─────────────────────────────────────────────────
+    //
+    // WHICH COLLECTIONS THIS APPLIES TO, AND WHY NOT labAttendance.
+    //   scoped below : catalog, incidents, maintenance, transactions, labRooms --
+    //                  each already carries an unambiguous `course`.
+    //   NOT scoped   : labAttendance.
+    //
+    // labAttendance is scoped by ROOM OWNERSHIP, not by the student's course: any
+    // student may log any room, so the course lives on the room. The attendance row
+    // stores `room_code`, but lab_rooms is keyed by a UUID, and Firestore rules can
+    // only get() by document ID -- they cannot run the query that would map a code to
+    // a room. It is therefore NOT expressible as a per-document predicate without a
+    // schema change, and a guessed rule would deny legitimate access. It stays OPEN.
+    //
+    // WHY THE READ ONLY, NOT THE WRITE: writes in this application go through the
+    // firebase-admin SDK, which bypasses these rules entirely. Adding write
+    // predicates here would guard a path nothing uses, while risking a rule that
+    // rejects a legitimate admin write.
+    //
+    // The backend already enforces all of this (middleware/courseScope.js,
+    // scopeCodes/scoped/scopedAny). These rules make the Firestore layer agree with
+    // it, so a direct client-side read cannot become a way around the backend.
+    //
+    // WHY isScopedAdmin() AND NOT isCourseAdmin():
+    //
+    // isCourseAdmin() was `adminLevel == "course"`, which left every PRE-MIGRATION
+    // admin unscoped -- they have no adminLevel, so they failed the test and fell
+    // through to the unrestricted branch. That was the open gap. An admin that
+    // already declares courses is scoped whether or not it has been migrated yet,
+    // which only ever narrows what someone can read.
+    //
+    // Still unscoped, and deliberately so: an admin with NO adminLevel AND no
+    // courses at all. courseScope.isSuperAdmin() resolves that shape as super
+    // (legacy behaviour, so migration cannot strip access), while
+    // adminController.isExplicitSuperAdmin() does not. The two layers disagree by
+    // design, and no current account has that shape -- pinned by a test below.
+    function isScopedAdmin() {
+      return isAdmin() && (getTier() == "course" || (getTier() == "" && myCourses().size() > 0));
+    }
+
+    // Mirrors getAdminCourses() in backend/src/utils/adminTiers.js:
+    // courseId wins, then assignedCourses, then the singular assignedCourse. An
+    // admin with none of them is NOT given every course here -- courseScope infers
+    // super for that case on legacy data, but adminController's isExplicitSuperAdmin
+    // deliberately does not, and this layer must not become the weaker of the two.
+    //
+    // Written as one expression because rules functions have no `if` and no early
+    // `return`. The conditions are explicit `!= null` because a rules ternary needs a
+    // BOOL condition and a bare string is a type error. Every field uses .get() for
+    // the reason in the note at the top of this file.
+    function myCourses() {
+      let u = caller();
+      return u.get('courseId', null) != null ? [u.get('courseId', null)]
+           : (u.get('assignedCourses', null) != null && u.get('assignedCourses', null).size() > 0) ? u.get('assignedCourses', null)
+           : u.get('assignedCourse', null) != null ? [u.get('assignedCourse', null)]
+           : [];
+    }
+
+    function courseGranted(course) {
+      let mine = myCourses();
+      return mine.size() > 0 && course in mine;
+    }
+
+    // Transactions are read by EITHER the borrower's course OR the course that owns
+    // the equipment, so a Course Admin must see both halves. This is the rules
+    // equivalent of scopedAny() in courseScope.js.
+    function transactionGranted(data) {
+      return courseGranted(data.get('course', '')) || courseGranted(data.get('equipment_course', ''));
+    }
+
+    // Lab rooms: a Course Admin sees the rooms it owns. A room with no course is
+    // unassigned and stays Super-Admin-only, which is what roomScope.js does.
+    function roomGranted(data) {
+      return data.get('course', '') != '' && courseGranted(data.get('course', ''));
     }
 
     // Users collection
     match /users/{userId} {
       // Users can read their own profile; admins can read all
       allow read: if request.auth != null && (isOwner(userId) || isAdmin());
-      // Users can create their own profile during registration
-      allow create: if request.auth != null && request.auth.uid == userId;
-      // Users can update their own profile (without changing role); admins can update anyone
-      allow update: if request.auth != null && (isOwner(userId) || isAdmin())
-        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
-      // Only admins can delete users
-      allow delete: if isAdmin();
+
+      // Self-registration may only ever produce a student.
+      //
+      // The old rule was `allow create: if request.auth != null && uid == userId`,
+      // which let any client write its own document with role:"admin" and satisfy
+      // isAdmin() from the next request onward -- a self-promotion that needed no
+      // exploit at all. Requiring role=="student" closes it.
+      allow create: if isOwner(userId)
+        && request.resource.data.get('role', '') == 'student'
+        && !request.resource.data.keys().hasAny(PRIV());
+
+      // Editing your own profile is allowed; editing your own PRIVILEGES is not.
+      //
+      // Only a Super Admin may change any of PRIV(). This is what stops a Course
+      // Admin from promoting itself or a peer by writing adminLevel:"super".
+      allow update: if isSuperAdmin()
+        || (isOwner(userId) && !changedPrivilegedFields());
+
+      // No admin may be deleted by a client. A Super Admin additionally may not
+      // delete itself, mirroring adminController.js which refuses to remove the
+      // Super Admin account and leave the system with nobody who can appoint one.
+      // Course Admins keep the ability to remove student records.
+      allow delete: if (isSuperAdmin() && !isOwner(userId))
+        || (isAdmin() && resource.data.get('role', '') == 'student');
 
       // Subcollections for borrowed/returned items
       match /borrowed/{transactionId} {
@@ -39,21 +184,87 @@ service cloud.firestore {
       }
     }
 
-    // Admins collection (legacy - restrict to admin only)
+    // Admins collection (legacy mirror of admin profiles)
     match /admins/{adminId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+
+      // Super Admin only.
+      //
+      // This collection holds the Super Admin appointment itself, so a flat
+      // isAdmin() write let any Course Admin mint one for itself -- and
+      // resolveProfile falls back here when a profile exists only in admins/.
+      allow write: if isSuperAdmin();
     }
 
-    // Catalog - anyone authenticated can read; admin can write
+    // Catalog
     match /catalog/{itemId} {
-      allow read: if request.auth != null;
+      // Students legitimately browse the catalog to see what they can borrow, so the
+      // `request.auth != null` read stays for them and for any non-admin. Only ADMINS
+      // are scoped, by the course that owns the item.
+      //
+      // Justified by the data rather than assumed: all 65 live items carry a `course`
+      // across 7 codes with zero NULLs, so this cannot hide an item from a student.
+      // A future NULL-course item would be invisible to a Course Admin and visible to
+      // the Super Admin, which is the intended fail-closed direction.
+      allow get, list: if request.auth != null && (!isScopedAdmin() || courseGranted(resource.data.course));
       allow create, update: if isAdmin();
       allow delete: if isAdmin();
     }
 
+    // Incidents
+    match /incidents/{id} {
+      //
+      // WHY THIS IS NOT JUST "SCOPED LIKE EVERYTHING ELSE"
+      //
+      // The old rule was `allow read: if request.auth != null`, so ANY signed-in
+      // student could read EVERY incident document directly through the Firestore
+      // SDK -- including other students' reporter_name, reporter_school_id,
+      // reporter_course and reporter_year. That is a student directory with incident
+      // details attached, in one query.
+      //
+      // The REST API was never affected: GET /api/incidents refuses non-admins
+      // (incidentController.js:130), /api/incidents/mine filters on reported_by, and
+      // GET /api/incidents/:id 403s a report you did not file. This block closes the
+      // direct-client path so the two layers agree.
+      //
+      // The predicate also keys off `reporter_course`, not `course`. The previous
+      // version read `resource.data.course`, a field the application NEVER writes --
+      // incident rows carry `reporter_course` (the reporter's course) and
+      // `item_course` (the course that owns the damaged equipment). Reading a
+      // non-existent field meant the scoping silently evaluated against null and
+      // matched nothing useful.
+      //
+      // `list` is ADMIN-ONLY rather than owner-filtered: a per-document predicate
+      // cannot filter a query, so the only honest options are "deny the query" or
+      // "return every row". Students keep their own reports through the REST
+      // /api/incidents/mine endpoint, which is how the app actually does it -- the
+      // frontend imports no Firestore SDK.
+      allow get: if isAdmin()
+        ? (!isScopedAdmin() || courseGranted(resource.data.get('reporter_course', '')))
+        : (isSignedIn() && resource.data.get('reported_by', '') == request.auth.uid);
+      allow list: if isAdmin() && (!isScopedAdmin() || courseGranted(resource.data.get('reporter_course', '')));
+
+      // Students file their own reports, so create stays open -- but only for their
+      // OWN row. Without this a student could write a document attributing an
+      // incident to another student's uid.
+      allow create: if isSignedIn()
+        && request.resource.data.get('reported_by', '') == request.auth.uid;
+
+      allow update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    // Maintenance
+    match /maintenance/{id} {
+      // Was `isAdmin()` for everything. A Course Admin is now limited to its own
+      // course; `maintenance.course` is created by schema/21-course-scope.sql.
+      allow get, list: if request.auth != null && (!isScopedAdmin() || courseGranted(resource.data.course));
+      allow write: if isAdmin();
+    }
+
     // Transactions - backend-only writes (Admin SDK bypasses rules)
     match /transactions/{transactionId} {
-      allow read: if request.auth != null && isAdmin();
+      allow get, list: if request.auth != null && (!isScopedAdmin() || transactionGranted(resource.data));
       allow create: if false;
       allow update: if false;
       allow delete: if isAdmin();
@@ -71,20 +282,6 @@ service cloud.firestore {
     match /documents/{docId} {
       allow read: if request.auth != null && isAdmin();
       allow write: if isAdmin();
-    }
-
-    // Maintenance - admin can manage
-    match /maintenance/{id} {
-      allow read: if request.auth != null && isAdmin();
-      allow write: if isAdmin();
-    }
-
-    // Incidents - anyone can read; anyone can create; admin can update
-    match /incidents/{id} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null && isAdmin();
-      allow delete: if isAdmin();
     }
 
     // Manuals - anyone authenticated can read; admin can manage
@@ -132,9 +329,12 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    // Lab Rooms - anyone authenticated can read; admin can manage
+    // Lab Rooms - reads are course-scoped
     match /labRooms/{roomId} {
-      allow read: if request.auth != null;
+      // Was `request.auth != null`, i.e. every signed-in user could read every room.
+      // A Course Admin now sees only the rooms it owns; a room with NO course is
+      // unassigned and stays Super-Admin-only, mirroring roomScope.js.
+      allow get, list: if request.auth != null && (!isScopedAdmin() || roomGranted(resource.data));
       allow create, update, delete: if isAdmin();
     }
   }

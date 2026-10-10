@@ -77,12 +77,20 @@ function check(label, actual, expected) {
 }
 
 (async () => {
+  // queryTransactions now REQUIRES the request, because the course scope is the
+  // only thing keeping an admin inside their own course on this endpoint. A
+  // request without a profile is a programming error, not an unscoped export.
+  //
+  // Super Admin for the two existing cases: they are explicitly filtering by
+  // ?course=, which is exactly what the top tier is for.
+  const asSuper = (query) => ({
+    query,
+    profile: { role: "admin", adminLevel: "super", courseId: null },
+  });
+
   // --- Borrowed export filtered to BIT / 3rd Year ---
   const res1 = makeRes();
-  await borrowedReport(
-    { query: { course: "BIT", year: "3rd Year", sort: "date-desc" } },
-    res1
-  );
+  await borrowedReport(asSuper({ course: "BIT", year: "3rd Year", sort: "date-desc" }), res1);
 
   check("borrowed: filename reflects filters", res1.headers["Content-Disposition"], "attachment; filename=Transactions_Borrowed_BIT_3rd_Year.xlsx");
   check("borrowed: correct content type", res1.headers["Content-Type"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -104,10 +112,7 @@ function check(label, actual, expected) {
 
   // --- Returned export with a custom date range ---
   const res2 = makeRes();
-  await returnedReport(
-    { query: { course: "CT", dateFrom: "2026-09-01", dateTo: "2026-09-30" } },
-    res2
-  );
+  await returnedReport(asSuper({ course: "CT", dateFrom: "2026-09-01", dateTo: "2026-09-30" }), res2);
 
   check("returned: filename", res2.headers["Content-Disposition"], "attachment; filename=Transactions_Returned_CT.xlsx");
 
@@ -128,6 +133,61 @@ function check(label, actual, expected) {
   check("returned: Returned Date uses returned_at",
     returnedDate.startsWith("Sep 27, 2026"), true);
   check("returned: summary row", s2.getRow(6).getCell(2).value, "Total Records: 1");
+
+  // --- A Course Admin's export must not carry another course's loans ---
+  //
+  // This is the worst-case leak in the whole feature: an export is a file the
+  // admin walks away with, so a scoping bug here outlives the session and is not
+  // visible on any screen afterwards. The Course Admin below is scoped to BIT and
+  // asks for NO ?course= filter, so the scope is the only thing keeping them in.
+  const namesIn = async (req) => {
+    const res = makeRes();
+    await borrowedReport(req, res);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(await res.buffer());
+    const sheet = wb.getWorksheet(1);
+
+    const names = [];
+    let total = null;
+    for (let r = 4; r <= sheet.rowCount; r++) {
+      const row = sheet.getRow(r);
+      const name = row.getCell(1).value;
+      if (name) names.push(name);
+      const second = row.getCell(2).value;
+      if (typeof second === "string" && second.startsWith("Total Records:")) total = second;
+    }
+    return { names, total, status: res.statusCode };
+  };
+
+  const bitAdmin = await namesIn({
+    query: { sort: "date-desc" },
+    profile: { role: "admin", adminLevel: "course", courseId: "BIT" },
+  });
+
+  // Marc is a BIT student with BIT equipment. Ana is a BIT student who borrowed
+  // CT equipment -- still the BIT admin's business, because `course` matched.
+  check("BIT admin: sees both BIT students", bitAdmin.names, ["Marc Lawrence", "Ana Reyes"]);
+  check("BIT admin: the CT student's loan is absent", bitAdmin.names.includes("Jude Santos"), false);
+  check("BIT admin: summary counts only their rows", bitAdmin.total, "Total Records: 2");
+
+  // The mirror image: that same CT-equipment loan belongs to the CT admin too,
+  // because the CT admin's scope matched `equipment_course`. This is why the
+  // scope is an OR across both columns and not just the student's course.
+  const ctAdmin = await namesIn({
+    query: { sort: "date-desc" },
+    profile: { role: "admin", adminLevel: "course", courseId: "CT" },
+  });
+  check("CT admin: sees the CT student's own loan", ctAdmin.names.includes("Jude Santos"), false);
+  check("CT admin: sees CT equipment borrowed by a BIT student", ctAdmin.names, ["Ana Reyes"]);
+  check("CT admin: does not see the pure-BIT loan", ctAdmin.names.includes("Marc Lawrence"), false);
+
+  // A Course Admin with no course sees nothing at all -- never an error.
+  const orphanAdmin = await namesIn({
+    query: {},
+    profile: { role: "admin", adminLevel: "course", courseId: "ZZZ" },
+  });
+  check("an admin scoped to an unknown course exports nothing", orphanAdmin.names, []);
+  check("and is not a 500", orphanAdmin.status, 200);
 
   console.log("");
   if (failures > 0) {

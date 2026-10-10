@@ -7,13 +7,17 @@ const { transformKeys } = require("../utils/transformKeys");
 // reports enforce the identical "responsible for this course" rule instead of
 // growing a second copy of it. Re-exported here for existing importers.
 const {
-  isSuperAdmin,
-  isAdminForCourse,
-  getAdminCourses,
   getTargetCourseAdmins,
   getActiveAdminsList,
   autoAssignAdmin,
 } = require("../utils/adminScope");
+// `isSuperAdmin` is imported for the course-less approve/reject guards below.
+// NOTE: it is the tier predicate from courseScope, NOT adminController's
+// `isExplicitSuperAdmin`. Those two deliberately disagree -- courseScope infers super
+// for a pre-migration admin that holds no courses, so migration cannot strip access,
+// while the appointment itself is only ever explicit. A Course Admin is false under
+// both, which is what the guards need.
+const { scopeCodes, assertCourseInScope, isSuperAdmin } = require("../middleware/courseScope");
 
 // Borrow requests are "still open" only while pending; once approved or
 // rejected the handler's queue is clear.
@@ -51,15 +55,23 @@ const getAllRequests = async (req, res) => {
 
     let filtered = requests || [];
 
-    // authorize("admin") already read this document; see the note in
-    // incidentController.getAll.
-    const reviewer = req.profile || {};
-
-    if (!isSuperAdmin(reviewer)) {
-      const adminCourses = getAdminCourses(reviewer);
+    // Shared scope, applied AFTER the read rather than before it. That ordering is
+    // forced by the column: a request is owned by the course of its EQUIPMENT
+    // (target_course / equipment_course), not the course of the student asking,
+    // and those are two different columns on the same row. Pushing the predicate
+    // into SQL would need an OR across both, which is `scopedAny` -- but the
+    // approve/reject/reassign handlers key off the same pair and are unchanged, so
+    // the list is filtered here against the SAME rule they use rather than a
+    // parallel copy.
+    //
+    // Fail closed: a handler whose scope is empty keeps the previous behaviour of
+    // seeing nothing.
+    const codes = scopeCodes(req);
+    if (codes !== null) {
+      if (codes.length === 0) return res.json(paginatedResponse([], 0, 1, requests.length));
       filtered = filtered.filter((r) => {
         const target = r.target_course || r.equipment_course || "";
-        return adminCourses.includes(target);
+        return codes.includes(target);
       });
     }
 
@@ -267,8 +279,29 @@ const approveRequest = async (req, res) => {
     const reviewer = req.profile || {};
     const targetCourse = request.target_course || request.equipment_course || "";
 
-    if (targetCourse && !isSuperAdmin(reviewer) && !isAdminForCourse(reviewer, targetCourse)) {
-      return res.status(403).json({ error: "You are not authorized to approve requests for this course" });
+    // The shared guard. It was `isSuperAdmin(reviewer) && isAdminForCourse(...)`
+    // inline, which is the same predicate spelled a second time in a third file;
+    // the three checks had to be kept in step by hand and had already drifted once.
+    //
+    // CHANGED FROM FAIL-OPEN. It used to be `if (targetCourse && ...)`, which skipped
+    // the check entirely when a request carried no course on either column -- so ANY
+    // admin, including a Course Admin of an unrelated course, could approve it and
+    // emit a transactions row attributed to that request. The comment claimed this
+    // was deliberate so a course-less request would not sit pending forever. That is
+    // a routing problem being solved with a permission hole: `isSuperAdmin()` below
+    // gives the Super Admin a way to clear it, which is who such an orphan should go
+    // to anyway.
+    //
+    // assertCourseInScope already returns false for an empty course, so the
+    // course-less case now falls through to the explicit-super-admin branch.
+    if (!assertCourseInScope(req, targetCourse)) {
+      if (!isSuperAdmin(req.profile)) {
+        return res.status(403).json({
+          error: targetCourse
+            ? "You are not authorized to approve requests for this course"
+            : "This request has no assigned course; only the Super Admin can approve it",
+        });
+      }
     }
 
     const { data: catalogItem, error: catalogError } = await supabase
@@ -370,8 +403,16 @@ const rejectRequest = async (req, res) => {
     const reviewer = req.profile || {};
     const targetCourse = request.target_course || request.equipment_course || "";
 
-    if (targetCourse && !isSuperAdmin(reviewer) && !isAdminForCourse(reviewer, targetCourse)) {
-      return res.status(403).json({ error: "You are not authorized to reject requests for this course" });
+    // Same fail-closed rule as approve: a course-less request is an orphan to be
+    // resolved by the Super Admin, not something any course admin may action.
+    if (!assertCourseInScope(req, targetCourse)) {
+      if (!isSuperAdmin(req.profile)) {
+        return res.status(403).json({
+          error: targetCourse
+            ? "You are not authorized to reject requests for this course"
+            : "This request has no assigned course; only the Super Admin can reject it",
+        });
+      }
     }
 
     const { error: updateError } = await supabase
@@ -457,7 +498,27 @@ const reassignRequest = async (req, res) => {
     if (newAdminData.status === "inactive") return res.status(400).json({ error: "Cannot assign to inactive admin" });
 
     const targetCourse = request.target_course || request.equipment_course || "";
-    if (targetCourse && !isSuperAdmin(newAdminData) && !isAdminForCourse(newAdminData, targetCourse)) {
+    /*
+     * BOTH checks are required, and the order matters.
+     *
+     * (1) THE CALLER. Only the destination admin's scope was verified here, which is
+     * a real cross-course hole: a Course Admin of CT could PUT
+     * /api/borrow-requests/<an MT request id>/reassign and rewrite assigned_admin_id
+     * plus reassignment_history on a row that is not theirs. The destination check
+     * below does not catch that -- it answers "can the person I am handing this to
+     * handle it", never "may I touch it".
+     *
+     * (2) THE DESTINATION. Kept from the original code: it answers "can the person I
+     * am handing this to handle it", which is what stops a request being parked with
+     * someone who will never see it.
+     *
+     * 404 rather than 403 so a Course Admin cannot use this endpoint to probe for the
+     * existence of another course's requests.
+     */
+    if (!assertCourseInScope(req, targetCourse)) {
+      return res.status(404).json({ error: "Borrow request not found" });
+    }
+    if (targetCourse && !assertCourseInScope({ profile: newAdminData }, targetCourse)) {
       return res.status(400).json({ error: "Admin is not assigned to the target course" });
     }
 

@@ -36,10 +36,18 @@ const adminCreateSchema = z.object({
     .regex(/[0-9]/, "Password must contain at least one number"),
   contact: z.string().max(20).trim().optional().default(""),
   position: z.string().max(100).trim().optional().default(""),
-  assignedCourse: z.string().max(50).trim().optional().default(""),
-  assignedCourses: z.array(z.string()).optional().default([]),
-  assignedYear: z.string().max(10).trim().optional().default(""),
-  permissions: z.array(z.string()).optional().default(["view_catalog", "manage_catalog", "view_transactions", "view_requests", "process_requests"]),
+
+  // ONE course per admin, as a real `courses.id` (which is the program code).
+  // Replaces assignedCourse / assignedCourses: the old shape was an array, and
+  // an array is what allowed a single admin to span two courses -- the exact
+  // thing courseScope.js exists to prevent.
+  courseId: z.string().min(1, "A Course Admin must be assigned a course").max(50).trim(),
+
+  // Only "course" is accepted, and the default means an omitted value creates a
+  // Course Admin rather than an ambiguous unassigned account. "super" is refused
+  // by adminController.create with a message pointing at set-super-admin.js,
+  // because it must be rejected loudly here rather than silently ignored.
+  adminLevel: z.literal("course").optional().default("course"),
 });
 
 const catalogCreateSchema = z.object({

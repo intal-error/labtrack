@@ -16,7 +16,20 @@ const STEPS = {
   ERROR: "error",
 };
 
-export default function AttendanceKioskPage() {
+/**
+ * kioskBlocked and onScanBusy come from KioskAuthGate, which owns the 5-minute idle
+ * timeout. Two things depend on them:
+ *
+ *   - a scan must not START while the 60-second sign-out countdown is running, or a scan
+ *     begun at 4:59 would keep the device busy indefinitely and the sign-out could never
+ *     complete;
+ *   - while a scan is being submitted, onScanBusy(true) tells the gate to hold the
+ *     sign-off until setSubmitting(false) fires, so a time-in the backend already
+ *     accepted is never abandoned mid-flight.
+ *
+ * Both default to safe values, so the page still works if mounted without the gate.
+ */
+export default function AttendanceKioskPage({ kioskBlocked = false, onScanBusy } = {}) {
   const [searchParams] = useSearchParams();
   const roomName = searchParams.get("room") || "Laboratory";
 
@@ -51,6 +64,10 @@ export default function AttendanceKioskPage() {
 
   const handleScan = useCallback(async (decodedText) => {
     const text = decodedText.trim();
+      // Refuse NEW work while the sign-out countdown runs. Without this a scan begun
+      // at 4:59 would keep the device busy indefinitely, so the sign-out could never
+      // complete. Work already in flight is unaffected -- see onScanBusy below.
+      if (kioskBlocked) return;
 
     if (text.startsWith("SLSU-STUDENT:")) {
       const schoolId = text.replace("SLSU-STUDENT:", "").trim();
@@ -66,7 +83,7 @@ export default function AttendanceKioskPage() {
 
     setSchoolIdInput(text);
     setStep(STEPS.MODE_SELECT);
-  }, []);
+  }, [kioskBlocked]);
 
   /*
    * Cancelled between an await inside startScanner and its completion.
@@ -170,6 +187,7 @@ export default function AttendanceKioskPage() {
   const handleTimeIn = async () => {
     if (!schoolIdInput || !subject || !professor) return;
     setSubmitting(true);
+      if (onScanBusy) onScanBusy(true);
     try {
       const result = await api.timeIn({
         schoolId: schoolIdInput,
@@ -187,12 +205,14 @@ export default function AttendanceKioskPage() {
       setStep(STEPS.ERROR);
     } finally {
       setSubmitting(false);
+      if (onScanBusy) onScanBusy(false);
     }
   };
 
   const handleTimeOut = async () => {
     if (!schoolIdInput) return;
     setSubmitting(true);
+      if (onScanBusy) onScanBusy(true);
     try {
       const result = await api.timeOut({
         schoolId: schoolIdInput,
@@ -207,6 +227,7 @@ export default function AttendanceKioskPage() {
       setStep(STEPS.ERROR);
     } finally {
       setSubmitting(false);
+      if (onScanBusy) onScanBusy(false);
     }
   };
 

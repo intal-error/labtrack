@@ -2,7 +2,6 @@ import { auth } from "./firebase";
 import { getIdToken } from "firebase/auth";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
-const KIOSK_SECRET = import.meta.env.VITE_KIOSK_SECRET || "";
 const TIMEOUT_MS = 30000;
 const DOCUMENT_UPLOAD_TIMEOUT_MS = 120000;
 
@@ -158,48 +157,6 @@ async function request(path, options = {}) {
   }
 }
 
-/*
- * The kiosk path, which authenticates with a shared secret rather than a token.
- *
- * It now composes signals the same way request() does. It previously did
- * `{ ...options, signal: controller.signal }` -- signal LAST, so it silently
- * overwrote any caller-supplied signal. Latent only because nothing passed one, but
- * the first person to thread one through would get a cancellation that never fired
- * and a kiosk request that held a socket for the full 30 s timeout.
- *
- * It also used `err.message === "Failed to fetch"` to detect a network failure,
- * which is Chrome's wording only -- iOS Safari says "Load failed", and the kiosk is
- * precisely where that matters.
- */
-async function kioskRequest(path, options = {}) {
-  const { signal: externalSignal, ...rest } = options;
-  const headers = {
-    "Content-Type": "application/json",
-    "X-Kiosk-Token": KIOSK_SECRET,
-    ...rest.headers,
-  };
-
-  const abort = combineSignals(externalSignal, TIMEOUT_MS);
-
-  try {
-    const res = await fetch(`${API_URL}${path}`, { ...rest, headers, signal: abort.signal });
-    if (!res.ok) {
-      const body = await res.json().catch(() => null);
-      throw toError(body, res.status);
-    }
-    return await res.json();
-  } catch (err) {
-    if (err.name === "AbortError" || err.name === "TimeoutError") {
-      throw new Error(describeNetworkError(err));
-    }
-    if (err instanceof TypeError) {
-      throw new Error("Server is offline. Please try again later.");
-    }
-    throw err;
-  } finally {
-    abort.cleanup();
-  }
-}
 
 export const api = {
   getBorrowed: (params, signal) => request(`/transactions/borrowed${toQuery(params)}`, { signal }),
@@ -221,7 +178,17 @@ getCatalog: (params, signal) => request(`/catalog${toQuery(params)}`, { signal }
   updateCatalogItem: (id, data) => request(`/catalog/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteCatalogItem: (id) => request(`/catalog/${id}`, { method: "DELETE" }),
 
-  searchUser: (firstName, lastName, signal) => request(`/users/search?firstName=${encodeURIComponent(firstName)}&lastName=${encodeURIComponent(lastName)}`, { signal }),
+searchUser: (firstName, lastName, signal) => request(`/users/search?firstName=${encodeURIComponent(firstName)}&lastName=${encodeURIComponent(lastName)}`, { signal }),
+
+  // Paginated student roster, scoped server-side to the caller's course.
+  //
+  // ?course= is a SUPER ADMIN filter; the backend ignores it for a Course Admin, so
+  // it is never safe to rely on client-side for scoping. A Course Admin also cannot
+  // list another admin: GET /api/admin returns only their own record.
+  getStudents: (params, signal) => request(`/users${toQuery(params)}`, { signal }),
+
+  // Course scopes. Readable by every admin; only the Super Admin may write.
+  getCourses: (signal) => request("/courses", { signal }),
 
   // Replaces a client-side Firestore lookup in BorrowerLookup.jsx.
   resolveUserCode: ({ code, candidates, ids }) =>
@@ -461,10 +428,10 @@ getCatalog: (params, signal) => request(`/catalog${toQuery(params)}`, { signal }
   },
 
   // Lab Attendance (kiosk endpoints use kiosk auth)
-  lookupStudent: (schoolId) => kioskRequest(`/attendance/lookup-student/${schoolId}`),
-  timeIn: (data) => kioskRequest("/attendance/time-in", { method: "POST", body: JSON.stringify(data) }),
-  timeOut: (data) => kioskRequest("/attendance/time-out", { method: "POST", body: JSON.stringify(data) }),
-  autoScan: (data) => kioskRequest("/attendance/auto-scan", { method: "POST", body: JSON.stringify(data) }),
+  lookupStudent: (schoolId) => request(`/attendance/lookup-student/${schoolId}`),
+  timeIn: (data) => request("/attendance/time-in", { method: "POST", body: JSON.stringify(data) }),
+  timeOut: (data) => request("/attendance/time-out", { method: "POST", body: JSON.stringify(data) }),
+  autoScan: (data) => request("/attendance/auto-scan", { method: "POST", body: JSON.stringify(data) }),
   getActiveStudents: (params, signal) => request(`/attendance/active${toQuery(params)}`, { signal }),
   getTodayAttendance: (params, signal) => request(`/attendance/today${toQuery(params)}`, { signal }),
   getAttendanceFacets: (signal) => request("/attendance/facets", { signal }),

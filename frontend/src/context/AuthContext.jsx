@@ -77,7 +77,35 @@ const [role, setRole] = useState(undefined);
         // unmountedRef: rejects anything arriving after teardown.
         if (unmountedRef.current || sessionRef.current !== sessionIdRef.current) return;
         setRole((data.role || "").toLowerCase() || null);
-        setUserProfile({ id: data.id, ...data });
+
+        /*
+         * The course tier comes from the profile response rather than a second
+         * request. GET /api/auth/profile already reads the document this needs --
+         * it has to, to resolve the role -- so it now also resolves the course name
+         * and the landing route. `landingPath` is defaulted here so a backend that
+         * has not yet shipped the field still produces a usable route, rather than
+         * navigating to undefined.
+         */
+        setUserProfile({
+          id: data.id,
+          ...data,
+          adminLevel: data.adminLevel || "",
+          courseId: data.courseId || null,
+          courseName: data.courseName || "",
+          isSuperAdmin: Boolean(data.isSuperAdmin),
+          // The kiosk fallback mirrors the backend branch in authController.getProfile. It is
+      // only a fallback for an older backend that does not send landingPath -- but if it
+      // disagreed, a kiosk would be routed to /dashboard, which renders the student
+      // dashboard for a profile with no schoolId, stranding the operator on a broken
+      // page with no route back to /attend/kiosk.
+      landingPath:
+        data.landingPath ||
+        (data.role === "kiosk"
+          ? "/attend/kiosk"
+          : data.role === "student"
+            ? "/my-activity"
+            : "/dashboard"),
+        });
       } catch (err) {
         if (unmountedRef.current || sessionRef.current !== sessionIdRef.current) return;
         // Distinguish "no profile" from "could not reach the server". Both leave
@@ -178,7 +206,24 @@ const [role, setRole] = useState(undefined);
  * alongside `role`, which is already in the list.
  */
 const value = useMemo(
-    () => ({ user, role, userProfile, setUserProfile, loading, logout, profileError, refreshProfile }),
+    () => ({
+      user,
+      role,
+      userProfile,
+      setUserProfile,
+      loading,
+      logout,
+      profileError,
+      refreshProfile,
+      // The tier and the route the backend chose. Read straight off userProfile
+      // rather than stored separately, because they come from the same response
+      // and could only ever disagree if written separately.
+      isSuperAdmin: Boolean(userProfile?.isSuperAdmin),
+      isCourseAdmin: Boolean(userProfile?.adminLevel === "course"),
+      courseId: userProfile?.courseId || null,
+      courseName: userProfile?.courseName || "",
+      landingPath: userProfile?.landingPath || null,
+    }),
     [user, role, userProfile, loading, logout, profileError, refreshProfile]
   );
 

@@ -19,6 +19,53 @@ import { api } from "../services/api";
  * and skip its retry.
  */
 
+// ── Course scopes ──
+/*
+ * The course list, which is the source of truth for every course picker.
+ *
+ * Previously the pickers read the hardcoded COURSES constant in
+ * src/constants/courses.js. That list is still correct -- those ARE the program
+ * codes, and they are what a student picks at registration -- but it is a second
+ * copy of the data in `courses`, and it silently disagrees the moment the Super
+ * Admin adds a course. A room could then be assigned a course the server rejects as
+ * unknown, with the form offering it as if it were fine.
+ *
+ * Long staleTime because a course code effectively never changes: `courses.id` is a
+ * FROZEN join key, and renaming writes `name` only.
+ */
+export function useCourses() {
+  return useQuery({
+    queryKey: ["courses"],
+    queryFn: ({ signal }) => api.getCourses(signal),
+    staleTime: 30 * 60 * 1000,
+  });
+}
+
+/** Convenience for pickers: the id/name pairs, with active courses first. */
+export function useCourseOptions() {
+  const { data, isLoading } = useCourses();
+  const options = (data || [])
+    .map((c) => ({ value: c.id, label: c.name, id: c.id, name: c.name, status: c.status }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  return { options, isLoading };
+}
+
+/**
+ * Paginated student roster, scoped SERVER-SIDE to the caller's course.
+ *
+ * `course` is passed through only because the Super Admin needs it; the backend
+ * ignores it for a Course Admin. That is deliberate -- honouring it would either
+ * leak the roster or return a confusingly empty page.
+ */
+export function useStudents(params) {
+  return useQuery({
+    queryKey: ["students", params],
+    queryFn: ({ signal }) => api.getStudents(params, signal),
+    staleTime: 2 * 60 * 1000,
+    placeholderData: keepPreviousData,
+  });
+}
+
 // ── Catalog ──
 export function useCatalog(params) {
   return useQuery({

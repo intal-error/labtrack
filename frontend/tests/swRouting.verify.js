@@ -247,9 +247,19 @@ console.log("--- api-cache is bucketed per identity ---");
       !/`api-cache-\$\{\s*(bearer|token|kiosk)\b/.test(src),
     "an un-hashed credential leaked into the cache name",
   );
+  // CHANGED. This asserted that sw.js still reads X-Kiosk-Token and buckets the api
+  // cache on that shared secret. The kiosk now signs in as a real Firebase account and
+  // sends a bearer token, so there is no kiosk header to read and no secret in the
+  // bundle. Inverted deliberately: the assertion now FAILS if the old header comes
+  // back, so re-adding a client-exposed credential breaks CI instead of passing.
   check(
-    "kiosk requests are bucketed on the shared secret too",
-    src.includes('request.headers.get("X-Kiosk-Token")'),
+    "no client-exposed kiosk secret is read by the service worker",
+    !src.includes('request.headers.get("X-Kiosk-Token")'),
+    "X-Kiosk-Token is being read again -- the shared-secret kiosk scheme has returned",
+  );
+  check(
+    "the kiosk is bucketed by its bearer token like any other identity",
+    src.includes("identityTag(`auth:${bearer}`)"),
     "",
   );
   check(

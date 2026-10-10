@@ -8,11 +8,15 @@
     "dev": "nodemon server.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "verify": "node tests/attendanceExport.verify.js && node tests/authMiddleware.verify.js && node tests/authRateLimit.verify.js && node tests/querySafety.verify.js && node tests/finesPaging.verify.js && node tests/reportSummaryShape.verify.js && node tests/roomAttendance.verify.js && node tests/roomCrud.verify.js && node tests/attendanceVisibility.verify.js && node tests/attendanceClock.verify.js && node tests/labRoomResolution.verify.js && node tests/regressions.verify.js && node tests/catalogFilters.verify.js && node tests/catalogPaging.verify.js && node tests/reportExport.verify.js && node tests/transactionFilters.verify.js && node tests/transactionSort.verify.js && node tests/incidentWorkflow.verify.js && node tests/uploadConfig.verify.js && node tests/validateIndexMigration.mjs && node tests/classifyMigration.mjs",
+    "verify": "npm run verify:rules && npm run verify:rollback && node tests/apiAuthz.verify.js && node tests/notifications.verify.js && node tests/attendanceExport.verify.js && node tests/authMiddleware.verify.js && node tests/authRateLimit.verify.js && node tests/adminScoping.verify.js && node tests/setSuperAdmin.verify.js && node tests/superAdmin.verify.js && node tests/catalogScope.verify.js && node tests/roomScope.verify.js && node tests/studentScope.verify.js && node tests/querySafety.verify.js && node tests/finesPaging.verify.js && node tests/reportSummaryShape.verify.js && node tests/roomAttendance.verify.js && node tests/roomCrud.verify.js && node tests/attendanceVisibility.verify.js && node tests/attendanceClock.verify.js && node tests/labRoomResolution.verify.js && node tests/autoScan.verify.js && node tests/regressions.verify.js && node tests/catalogFilters.verify.js && node tests/catalogPaging.verify.js && node tests/reportExport.verify.js && node tests/transactionFilters.verify.js && node tests/transactionSort.verify.js && node tests/incidentWorkflow.verify.js && node tests/uploadConfig.verify.js && node tests/validateIndexMigration.mjs && node tests/classifyMigration.mjs",
     "backfill:attendance-section": "node scripts/backfill-attendance-section.js",
     "backfill:attendance-section:dry": "node scripts/backfill-attendance-section.js --dry-run",
+    "kiosk:create": "node scripts/create-kiosk-account.js",
+    "kiosk:list": "node scripts/create-kiosk-account.js --list",
     "check:room-codes": "node scripts/check-room-codes.js",
     "schema:check": "node tests/validateIndexMigration.mjs && node tests/classifyMigration.mjs",
+    "verify:rules": "firebase emulators:exec --only firestore --project demo-labtrack-rules \"node tests/firestoreRules.verify.js\"",
+    "verify:rollback": "firebase emulators:exec --only firestore,auth --project demo-labtrack-rules \"node tests/adoptSuperRollback.verify.js\"",
     "schema:size": "node tests/probeTableSizes.mjs"
   },
   "dependencies": {
@@ -33,6 +37,9 @@
     "zod": "^4.5.2"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4"
+    "@firebase/rules-unit-testing": "^6.0.0",
+    "firebase-tools": "^15.33.0",
+    "nodemon": "^3.1.4",
+    "supertest": "^7.3.1"
   }
 }
