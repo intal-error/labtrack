@@ -354,6 +354,86 @@
   color: var(--text);
 }
 
+/*
+ * Evidence photo tiles.
+ *
+ * These four classes had NO rules anywhere in the app, so the whole Evidence
+ * section rendered as bare inline text -- literally "📷 Add photo" -- with
+ * uncontrolled height. That height fed the overflow that pushed the form's action
+ * row out of reach on a phone, so it is worth fixing rather than leaving to
+ * chance.
+ *
+ * Mobile only, deliberately. The drawer is the only viewport where this section
+ * is inside a scroll container that has to fit four sections on one screen, and
+ * scoping it here keeps the desktop Evidence section pixel-identical.
+ */
+@media (max-width: 1024px) {
+  .incident-photo-upload-area {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .incident-photo-thumb {
+    position: relative;
+    width: 72px;
+    height: 72px;
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  .incident-photo-thumb img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* Clipped by the thumb's border-radius, so it reads as a badge on the photo. */
+  .incident-photo-remove {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, .65);
+    color: #fff;
+    cursor: pointer;
+  }
+
+  /* Same 72px box as a filled tile, so the row keeps its rhythm as photos are
+     added. It wraps a hidden file input, so the label IS the tap target. */
+  .incident-photo-add {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: 72px;
+    height: 72px;
+    flex-shrink: 0;
+    text-align: center;
+    font-size: 11px;
+    border: 1.5px dashed var(--border);
+    border-radius: 10px;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+
+  body.dark .incident-photo-add {
+    border-color: rgba(255, 255, 255, .18);
+  }
+}
+
 /* ── Student panel ───────────────────────────────────────────── */
 .incident-my-intro {
   margin: 4px 0 18px;

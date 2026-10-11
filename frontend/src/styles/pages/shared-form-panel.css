@@ -85,9 +85,26 @@
 /* Scrollable body */
 .lab-slide-body {
   flex: 1;
+  /*
+   * min-height:0 -- a flex item's automatic minimum size floors it at its content
+   * height instead of letting the panel scroll it. Today .lab-slide-body is also
+   * a scroll container, which already zeroes that floor, so this is NOT what is
+   * breaking the drawer: it is the property that keeps the body shrinkable if a
+   * future rule ever gives it a min-height or drops its overflow. Declaring it
+   * explicitly is the difference between "still scrolls" and a silent trap.
+   *
+   * overscroll-behavior / -webkit-overflow-scrolling -- global.css:173-194 gives
+   * both of these to .main-content, but .main-content is NOT the scroll container
+   * while the drawer is open; .lab-slide-body is. Without them iOS rubber-bands
+   * the drawer body against the page behind it rather than scrolling it, which
+   * reads as "the form is stuck".
+   */
+  min-height: 0;
   overflow-y: auto;
   padding: 20px 24px 24px;
   scrollbar-width: none;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .lab-slide-body::-webkit-scrollbar {
@@ -625,4 +642,68 @@ body.dark .lab-password-hints span.hint-met::before {
 
 body.dark .lab-password-hints span.hint-met {
   color: #81c784;
+}
+
+/* =============================================
+   Mobile: the drawer IS the viewport
+   =============================================
+   On a phone the panel goes full width (line 37) and covers the whole screen,
+   so it inherits the two fixed bands the page normally reserves space for: the
+   ~70px .bottom-nav and the home-indicator safe area. Neither is accounted for
+   here. .main-wrap's padding-bottom: calc(70px + env(safe-area-inset-bottom))
+   (bottomnav.css:129-131) clears the nav for page content, but this panel is
+   position:fixed with overflow:hidden, so that padding never reaches it -- and
+   the panel's own padding-bottom: env(safe-area-inset-bottom) at line 31 sits
+   INSIDE the border-box 100dvh height (global.css:14), so it buys no scrollable
+   room either. The action row therefore lands in the band the nav covers, on top
+   of a form far taller than a phone screen.
+
+   The fix is to make the action row a sticky footer inside the scroll container.
+   It is the last child of the <form>, so it parks at the end of the scroll and
+   rides at the bottom of the scrollport above that -- reachable at every scroll
+   position, with no JS, no restructuring, and no new component.
+   --------------------------------------------------------------- */
+@media (max-width: 1024px) {
+  /*
+   * The bottom clearance belongs to the action bar below, not to the panel and
+   * the body both -- padding it on both would double-count the safe area.
+   */
+  .lab-slide-panel,
+  .lab-slide-body {
+    padding-bottom: 0;
+  }
+
+  .lab-form-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    /*
+     * -24px cancels .lab-slide-body's horizontal padding so the bar spans the
+     * full panel width; the 24px on the padding side restores the content inset
+     * so the buttons still line up with the fields above them.
+     */
+    margin: 18px -24px 0;
+    padding: 14px 24px calc(14px + env(safe-area-inset-bottom, 0px));
+    /* Opaque: the panel background, so form content never scrolls through it. */
+    background: var(--bg-card);
+  }
+
+  /* 44px is the platform touch-target floor; the base 12px padding only just
+     clears it at 14px type, and this row sits exactly where thumbs land. */
+  .lab-form-cancel-btn,
+  .lab-form-submit-btn {
+    min-height: 48px;
+  }
+}
+
+@media (max-width: 600px) {
+  /*
+   * tabs.css:556 already had a single-column fallback here, but it set
+   * grid-template-columns on an element shared-form-panel.css:179 had made a flex
+   * container -- so the declaration was inert, and Type / How serious stayed side
+   * by side at flex:1 on a 360px screen. Flex is what actually applies now.
+   */
+  .lab-form-row {
+    flex-direction: column;
+  }
 }
