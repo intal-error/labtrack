@@ -501,37 +501,51 @@
     flex: 1 1 auto;
   }
 
-  /* My Records: 4 stacked rows -> 2x2 chips. ~301px -> ~200px. */
+  /* My Records.
+     This was compacted to a 2x2 chip grid here (~301px -> ~200px) because
+     .dash-status-bar sat above it and the vertical budget was tight. That bar
+     is now hidden below 768px (see .hide-stats-mobile in stat-strip.css), which
+     returns roughly 66px -- so the list goes back to one row per record and
+     the description and metric it was dropping come back too. At 360px a 2x2
+     grid gave each chip ~130px, enough for "Borrowing History" to wrap to two
+     lines with no context; a full-width row has room for all three elements. */
   .sd-record-list {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    flex-direction: column;
     gap: 8px;
   }
   .sd-record {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 7px;
-    padding: 11px;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 13px;
   }
-  /* The base rule's `flex:1` now targets the vertical axis and leaves the text
-     shrink-to-fit, so the label would wrap at min-content. Force full width. */
+  /* The base rule's `flex:1` on .sd-record-text was only ever needed because
+     the chip went column-direction, which put it on the cross axis. Row layout
+     restores it, but pin the width anyway so the label/desc cannot shrink-wrap. */
   .sd-record-text {
-    flex: none;
-    width: 100%;
+    flex: 1;
+    width: auto;
   }
   .sd-record-icon {
-    width: 34px;
-    height: 34px;
-    border-radius: 10px;
+    width: 38px;
+    height: 38px;
+    border-radius: 11px;
   }
-  /* Too long for a ~110px column; the label alone carries the meaning. */
   .sd-record-desc,
   .sd-record-meta {
-    display: none;
+    /* No override needed: the rule that used to set `display:none` on these is
+       gone. Both are flex items (.sd-record-desc inside .sd-record-text,
+       .sd-record-meta directly in .sd-record), so `display` is blockified by
+       their flex parents and they need no help laying out. */
+    display: block;
+  }
+  .sd-record-meta {
+    align-self: center;
   }
   .sd-record-label {
-    font-size: 12.5px;
-    white-space: normal;
+    font-size: 13.5px;
+    white-space: nowrap;
   }
 }
 

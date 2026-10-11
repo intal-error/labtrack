@@ -413,7 +413,14 @@ function StudentDashboard() {
 
   return (
     <div className="dash-page">
-      <div className="dash-status-bar">
+      {/* Opt-in mobile hide. These three chips are a summary of state the list below
+          already shows in full, so on a phone they are pure redundancy. They are
+          not decoration though -- each one navigates to the matching My Activity
+          tab -- and that navigation is preserved: the "My Records" card and the
+          Lab Manual / Incident rows underneath cover the same destinations.
+          The admin dashboard's .dash-kpis / .dash-period-strip are a different
+          element in a different branch and are not touched. */}
+      <div className="dash-status-bar hide-stats-mobile">
         {statusItems.map(({ key, label, value, detail, tone, icon: Icon, path }) => (
           <button
             key={key}

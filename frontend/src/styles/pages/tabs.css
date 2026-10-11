@@ -417,6 +417,45 @@
 .incident-search input::placeholder{color:var(--text-muted);opacity:.6}
 .incident-search input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 2px rgba(184,217,0,.15)}
 
+/* ── narrow viewport ──────────────────────────────────────────────────────
+   The <=600px block below forces .incident-toolbar to a column, but it also
+   forced .incident-filter-tabs to `flex-wrap:nowrap; overflow-x:auto`, which
+   pushed the status chips -- the only way a student can narrow their reports by
+   state -- off the right edge behind an invisible scrollbar. Since the search
+   box is no longer nested inside that row (MyIncidentsPanel.jsx moves it out to
+   be a sibling of the chip row), the chips are free to wrap: a 2-column grid
+   shows all six states at once instead of roughly three and a hidden scroll.
+
+   The search input goes full width on its own row, which is the one control that
+   benefits from the whole width. min-height 44px matches the touch floor
+   global.css:101 applies to .btn. */
+@media(max-width:600px){
+  .incident-toolbar{gap:10px}
+  .incident-filter-tabs{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:6px;
+    overflow-x:visible;
+    flex-wrap:wrap;
+    justify-content:stretch;
+  }
+  .incident-filter-btn{
+    justify-content:center;
+    min-height:44px;
+    padding:8px 10px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .incident-search{width:100%}
+  .incident-search input{min-width:0;width:100%;min-height:44px}
+}
+/* One column below 380px: at 360px two columns leave ~150px each, which
+   truncates "Under Review". */
+@media(max-width:380px){
+  .incident-filter-tabs{grid-template-columns:1fr}
+}
+
 .incident-list{display:flex;flex-direction:column;gap:12px;margin:20px 0;max-height:calc(100vh - 280px);overflow-y:auto;scrollbar-width:none}
 .incident-list::-webkit-scrollbar{width:0}
 @media(max-width:1024px){.incident-list{max-height:none}}
@@ -665,20 +704,34 @@ body.dark .cx-thumb.manual-thumb-file{background:#0a0a0a;color:#777}
   .search-box input{min-width:0;width:100%}
   .maintenance-stats,.maintenance-stats.stats-5{grid-template-columns:1fr}
   .maintenance-toolbar{flex-direction:column;align-items:stretch}
-  .maintenance-filter-tabs{justify-content:center;overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}
-  .maintenance-search input{min-width:0;width:100%}
+  /* Wrapped instead of a nowrap scroller. With the duplicate stat tiles hidden
+     below 768px, this row is now the only place the All / Unpaid / Paid / Waived
+     states exist on a phone -- so hiding the ones past the fold behind an
+     invisible horizontal scrollbar cost the user the filter entirely. See the
+     dedicated narrow block near .incident-search for the incident equivalent. */
+  .maintenance-filter-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;overflow-x:visible;flex-wrap:wrap;justify-content:stretch}
+  .maintenance-filter-btn{justify-content:center;min-height:44px;padding:8px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .maintenance-search input{min-width:0;width:100%;min-height:44px}
+  .maintenance-sort{width:100%}
+  .maintenance-sort select{width:100%;min-height:44px}
   .manual-pdf-frame{height:350px}
   .manual-detail-actions{flex-direction:column}
   .manual-detail-actions .btn{justify-content:center}
   .incident-stats{grid-template-columns:1fr}
   .incident-toolbar{flex-direction:column;align-items:stretch}
-  .incident-filter-tabs{justify-content:center;overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}
-  .incident-search input{min-width:0;width:100%}
+  /* The chip row's grid layout, the 44px targets and the full-width search are
+     defined in the dedicated block next to .incident-search further up. They are
+     deliberately NOT repeated here: this block is a plain
+     `overflow-x:auto;flex-wrap:nowrap` restore, and a second declaration of the
+     same properties at equal specificity would simply win on source order and
+     undo that fix. Only .incident-stats and the toolbar's column stacking,
+     which nothing else sets, remain here. */
   .activity-stats{grid-template-columns:1fr}
   .activity-toolbar{flex-direction:column;align-items:stretch}
   .activity-tab-bar{justify-content:center}
   .activity-search input{min-width:0;width:100%}
-  .notif-filters{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}
+  .notif-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;overflow-x:visible;flex-wrap:wrap}
+  .notif-filter-btn{justify-content:center;min-height:44px}
 }
 @media(max-width:480px){
   .overview-cards{grid-template-columns:1fr}
@@ -994,6 +1047,61 @@ body.dark .fines-kebab-dropdown button.danger:hover{background:#3a1b1b}
 .fines-outstanding-amount{font-size:20px;font-weight:800;color:#f57c00;margin:8px 0}
 .fines-outstanding-more{font-size:12px;color:var(--text-muted);margin-bottom:12px}
 .fines-outstanding-actions{display:flex;gap:8px}
+
+/* ── Student fine cards (narrow viewports) ─────────────────────────────────
+   Rendered by StudentFineCard in place of `.fines-table`, which carries eight
+   columns and a 640px min-width floor (tabs.css:946). Scoped tightly to
+   `.fine-card` so nothing here can reach `.fines-table` or the admin
+   AdminView, which keeps its table on every width. */
+.fine-card-list{display:flex;flex-direction:column;gap:10px}
+.fine-card{
+  display:flex;flex-direction:column;gap:10px;
+  padding:14px 15px;
+  background:var(--bg-card);
+  border:1px solid var(--border);
+  border-left:3px solid var(--border);
+  border-radius:12px;
+  box-shadow:var(--card-shadow);
+  cursor:pointer;
+  transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;
+}
+.fine-card:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,0,0,.16)}
+.fine-card[role="button"]:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+.fine-card--outstanding{border-left-color:var(--red)}
+
+.fine-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.fine-card-heading{display:flex;flex-direction:column;gap:5px;min-width:0}
+.fine-card-name{
+  margin:0;font-size:14px;font-weight:600;color:var(--text);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+/* The amount is the headline a student opens this tab for, so it gets the
+   strongest type on the card and reads red while money is still owed. */
+.fine-card-amount{
+  font-size:17px;font-weight:800;letter-spacing:-.02em;
+  color:var(--text);white-space:nowrap;font-variant-numeric:tabular-nums;
+}
+.fine-card--outstanding .fine-card-amount{color:var(--red)}
+
+.fine-card-meta{display:flex;flex-direction:column;gap:0;margin:0}
+.fine-card-row{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:7px 0;border-bottom:1px solid var(--border);
+}
+.fine-card-row:last-child{border-bottom:none}
+.fine-card-label{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:12px;color:var(--text-muted);white-space:nowrap;
+}
+.fine-card-value{font-size:12.5px;font-weight:600;color:var(--text);text-align:right}
+.fine-card .student-card-cta{border-top-color:var(--border)}
+
+body.dark .fine-card{background:#131313;border-color:rgba(255,255,255,.08)}
+body.dark .fine-card-name,body.dark .fine-card-amount{color:#fff}
+body.dark .fine-card--outstanding{border-left-color:#ef9a9a}
+body.dark .fine-card--outstanding .fine-card-amount{color:#ef9a9a}
+body.dark .fine-card-row{border-bottom-color:rgba(255,255,255,.06)}
+body.dark .fine-card-label{color:#888}
 body.dark .fines-outstanding{background:rgba(245,124,0,.05);border-color:rgba(245,124,0,.2)}
 
 /* ========== DETAIL MODAL SECTIONS ========== */

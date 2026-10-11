@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMyBorrowed, useMyReturned, useMyTransactionStats } from "../../hooks/useQueries";
 import useTransactionFilters from "../../hooks/useTransactionFilters";
+import useMediaQuery, { STUDENT_CARD_MAX_WIDTH } from "../../hooks/useMediaQuery";
 import Modal from "../../components/ui/Modal";
 import LoadError from "../../components/ui/LoadError";
 import StatStrip from "../../components/ui/StatStrip";
 import TransactionTable from "../../components/transactions/TransactionTable";
 import TransactionCard from "../../components/transactions/TransactionCard";
+import StudentTxnCard from "../../components/transactions/StudentTxnCard";
 import TransactionDetail from "../../components/transactions/TransactionDetail";
 import TransactionToolbar from "../../components/transactions/TransactionToolbar";
 import TransactionEmpty from "../../components/transactions/TransactionEmpty";
@@ -40,6 +42,19 @@ export default function TransactionsPanel({ mode = "borrowed" }) {
   const [viewMode, setViewMode] = useState("list");
   const [selected, setSelected] = useState(null);
 
+  /*
+   * The table below needs ~900px for its nine columns, and the toolbar above it
+   * has no horizontal scroll of its own -- .main-content is overflow-x:hidden,
+   * so anything wider than the viewport is CLIPPED, not scrollable. Below the
+   * card breakpoint this panel renders StudentTxnCard instead.
+   *
+   * Forced rather than offered: a view toggle that can put back a layout which
+   * cannot fit would hand the user a broken screen, so the toggle is not even
+   * rendered at this width. Only one of the two is ever mounted -- see the note
+   * on hooks/useMediaQuery.js.
+   */
+  const isNarrow = useMediaQuery(`(max-width: ${STUDENT_CARD_MAX_WIDTH}px)`);
+
   // Keep the hook's copy of search aligned with the URL without clobbering typing.
   useEffect(() => {
     if (search !== filters.search) setFilters({ search });
@@ -72,6 +87,11 @@ export default function TransactionsPanel({ mode = "borrowed" }) {
   return (
     <section className="transactions-page activity-panel">
       <StatStrip
+        /* Opt-in mobile hide. These four tiles are purely informational --
+         no onSelect, no activeKey -- so nothing is lost on a phone where the
+           Borrowed/Returned list itself is the answer. The admin
+           TransactionsPage renders this same component WITHOUT the class. */
+        className="hide-stats-mobile"
         variant="stack"
         items={[
           { label: "Active Borrows", value: stats?.activeBorrows ?? 0 },
@@ -92,6 +112,7 @@ export default function TransactionsPanel({ mode = "borrowed" }) {
         viewStorageKey="labtrack-my-transactions-view"
         pagination={pagination}
         onPageChange={setPage}
+        showViewToggle={!isNarrow}
       />
 
       {rows.length === 0 ? (
@@ -109,7 +130,13 @@ export default function TransactionsPanel({ mode = "borrowed" }) {
         />
       ) : (
         <div className={`tx-results${activeQuery.isFetching ? " tx-results--busy" : ""}`}>
-          {viewMode === "grid" ? (
+          {isNarrow ? (
+            <div className="tx-grid tx-grid--cards">
+              {rows.map((view) => (
+                <StudentTxnCard key={view.id} view={view} onSelect={setSelected} />
+              ))}
+            </div>
+          ) : viewMode === "grid" ? (
             <div className="tx-grid">
               {rows.map((view) => (
                 <TransactionCard key={view.id} view={view} onSelect={setSelected} />

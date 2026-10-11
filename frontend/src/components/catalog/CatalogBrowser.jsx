@@ -3,6 +3,7 @@ import { MdSearch, MdMoreVert, MdQrCodeScanner, MdEdit, MdDelete, MdImage } from
 import Pagination from "../ui/Pagination";
 import ViewToggle from "../ui/ViewToggle";
 import FilterSelect from "../ui/FilterSelect";
+import useMediaQuery, { STUDENT_CARD_MAX_WIDTH } from "../../hooks/useMediaQuery";
 import {
   ALL,
   CATALOG_CATEGORIES,
@@ -92,11 +93,36 @@ export default function CatalogBrowser({
   onDelete,
   onQr,
   actions = null,
+  narrowAsCards = false,
   emptyTitle = "No items found",
   emptyMessage = "Try adjusting your filters.",
   emptyAction = null,
 }) {
   const [openKebab, setOpenKebab] = useState(null);
+
+  /*
+   * `narrowAsCards` is OPT-IN and is what keeps this out of the admin catalog.
+   *
+   * This component is shared by /inventory (student) and /catalog (admin). The
+   * table is floored at 820px by catalog-browser.css:564 (a <=1024px rule),
+   * while an 820px viewport offers only ~788px inside .main-content, so on a
+   * tablet the table cannot fit and .main-content's overflow-x:hidden clips it
+   * rather than scrolling it.
+   *
+   * That is a real problem, but it is a STUDENT problem: the student catalog is
+   * a browse surface where cards are the right layout anyway, whereas the admin
+   * catalog is a work surface whose table carries the per-row QR / Edit / Delete
+   * kebab and the Barcode/Asset-Tag popup. Switching the admin view to cards
+   * would be an unrequested change to a surface nobody asked us to touch, so the
+   * admin call site deliberately does NOT set this flag and keeps its table at
+   * every width exactly as before.
+   *
+   * The hook is called unconditionally (rules of hooks) but only consulted when
+   * the caller opted in.
+   */
+  const isNarrow = useMediaQuery(`(max-width: ${STUDENT_CARD_MAX_WIDTH}px)`);
+  const forceCards = narrowAsCards && isNarrow;
+  const showGrid = forceCards || viewMode === "grid";
 
   useEffect(() => {
     if (!openKebab) return undefined;
@@ -161,7 +187,7 @@ export default function CatalogBrowser({
           ))}
         </select>
 
-        <ViewToggle value={viewMode} onChange={onViewChange} localStorageKey={viewStorageKey} />
+        <ViewToggle value={viewMode} onChange={onViewChange} localStorageKey={viewStorageKey} hide={forceCards} />
 
         <div className="cx-toolbar-tail">
           {pagination && (
@@ -195,7 +221,7 @@ export default function CatalogBrowser({
         </div>
       ) : (
         <div className={`cx-results${busy ? " cx-results--busy" : ""}`}>
-          {viewMode === "grid" ? (
+          {showGrid ? (
             <div className="cx-grid">
               {items.map((item) => (
                 <div className="cx-card" key={item.id}>

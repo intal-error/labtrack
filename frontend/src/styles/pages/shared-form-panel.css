@@ -673,6 +673,20 @@ body.dark .lab-password-hints span.hint-met {
     padding-bottom: 0;
   }
 
+  /*
+   * The panel is `position:fixed; top:0; height:100dvh` and the stylesheet
+   * already accounted for the home indicator at the bottom (the sticky action
+   * bar below), but the top was never given the notch inset. On a notched
+   * phone the title and the close button sat underneath the status bar, with
+   * the panel's own top border hidden behind it -- the "Report Damaged / Lost
+   * Item" form and the Manuals detail panel both opened on a header you could
+   * not fully read. `height` is unchanged, so the header simply grows by the
+   * inset and the body flexes to compensate.
+   */
+  .lab-slide-header {
+    padding-top: calc(16px + env(safe-area-inset-top, 0px));
+  }
+
   .lab-form-actions {
     position: sticky;
     bottom: 0;

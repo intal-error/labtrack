@@ -565,11 +565,65 @@ body.dark .catalog-alert-title {
   }
 }
 @media (max-width: 768px) {
+  /* Now moot for the student Inventory page, which renders cards below 900px,
+     but retained so the admin Catalog table (which does still render a table at
+     phone widths) keeps the narrower item column it had. */
   .cx-th-item,
   .cx-td-item {
     min-width: 190px;
   }
+  /*
+   * Search + four filter selects + sort + view toggle inside a ~304px toolbar.
+   * With `flex-wrap:wrap` and content-width flex bases they wrapped one or two
+   * to a line at arbitrary widths, so the controls never lined up into columns
+   * and the eye had no vertical rhythm to follow. A 2-column grid gives equal,
+   * predictable rows instead: search spans the full width, then every other
+   * control occupies a predictable cell.
+   *
+   * `min-width:0` on the children is required -- a grid item's default
+   * `min-width:auto` floors it at min-content, which is what pushed the row
+   * past the viewport and got it clipped by .main-content's overflow-x:hidden.
+   */
+  .cx-toolbar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 10px;
+    align-items: stretch;
+  }
+  .cx-toolbar > * {
+    min-width: 0;
+  }
+  .cx-search {
+    grid-column: 1 / -1;
+    max-width: none;
+    min-width: 0;
+  }
+  .cx-select {
+    max-width: none;
+    width: 100%;
+    min-height: 44px;
+    /* The base rule's text-overflow/nowrap let a long "All Categories" clip
+       mid-word; on a phone the native select menu is the affordance, so let
+       the control be short and the label truncate cleanly. */
+    text-overflow: ellipsis;
+  }
+  .view-toggle {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .view-toggle-btn {
+    justify-content: center;
+    min-height: 44px;
+  }
+  .cx-toolbar-tail {
+    grid-column: 1 / -1;
+    margin-left: 0;
+    width: 100%;
+  }
   .cx-toolbar-actions {
+    grid-column: 1 / -1;
     border-left: none;
     padding-left: 0;
     width: 100%;
@@ -585,8 +639,10 @@ body.dark .catalog-alert-title {
   }
 }
 @media (max-width: 480px) {
+  /* One card per row. Two 136px cards at 360px leave the title truncating to
+     two or three characters, which is worse than the extra scroll. */
   .cx-grid {
-    grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
+    grid-template-columns: 1fr;
   }
   .cx-card-body {
     padding: 9px 10px 10px;

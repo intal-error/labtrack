@@ -5,6 +5,8 @@ import toast from "react-hot-toast";
 import TransactionToolbar from "../../components/transactions/TransactionToolbar";
 import TransactionEmpty from "../../components/transactions/TransactionEmpty";
 import RequestsTable from "../../components/transactions/RequestsTable";
+import StudentRequestCard from "../../components/transactions/StudentRequestCard";
+import useMediaQuery, { STUDENT_CARD_MAX_WIDTH } from "../../hooks/useMediaQuery";
 import { fmtDate } from "../../utils/helpers";
 import { REQUEST_STATUS_LABELS, REQUEST_FILTERS } from "../../constants/requests";
 import "../../styles/pages/tables.css";
@@ -85,6 +87,13 @@ export default function RequestsPanel() {
   const [selected, setSelected] = useState(null);
   const [viewMode, setViewMode] = useState("list");
   const [reloadKey, setReloadKey] = useState(0);
+
+  /* See hooks/useMediaQuery.js. RequestsTable needs ~900px for its eight
+     columns and .main-content clips overflow-x, so below the card breakpoint
+     this panel renders StudentRequestCard and the view toggle is suppressed --
+     offering a toggle that could restore an unrenderable table would be worse
+     than not offering one. */
+  const isNarrow = useMediaQuery(`(max-width: ${STUDENT_CARD_MAX_WIDTH}px)`);
 
   useEffect(() => {
     let cancelled = false;
@@ -182,6 +191,7 @@ export default function RequestsPanel() {
         viewMode={viewMode}
         onViewChange={setViewMode}
         viewStorageKey="labtrack-myrequests-view"
+        showViewToggle={!isNarrow}
       />
 
       {filtered.length === 0 ? (
@@ -192,7 +202,15 @@ export default function RequestsPanel() {
         />
       ) : (
         <div className="tx-results">
-          <RequestsTable requests={filtered} onSelect={setSelected} onView={setSelected} />
+          {isNarrow ? (
+            <div className="tx-grid tx-grid--cards">
+              {filtered.map((req) => (
+                <StudentRequestCard key={req.id} request={req} onView={setSelected} />
+              ))}
+            </div>
+          ) : (
+            <RequestsTable requests={filtered} onSelect={setSelected} onView={setSelected} />
+          )}
         </div>
       )}
 

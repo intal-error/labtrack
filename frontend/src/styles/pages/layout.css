@@ -5,7 +5,14 @@
    + 14px pad bottom + 46px tallest child (.dash-header-user) = 74px. */
 .app-layout{display:flex;height:100vh;height:100dvh;background:var(--bg);--hdr-h:74px}
 .main-wrap{flex:1;display:flex;flex-direction:column;min-height:100vh;min-height:100dvh;overflow-x:hidden}
-.main-content{flex:1;padding:24px 24px 0;overflow-y:auto;overflow-x:hidden;position:relative;scrollbar-width:none}
+/* 0 bottom padding put the last row of any page flush against the viewport
+   edge. The 70px of .main-wrap (bottomnav.css:129) reserves the space the fixed
+   tab bar occupies, so nothing was actually hidden -- but pages that ship their
+   own bottom rhythm (.dash-page 16-28px, .tab-content 20px) and pages that do
+   not (.transactions-page.activity-panel, .catalog-page, .scanner-page) ended
+   up looking like one of them was cut off. 16px is the smallest value that
+   matches .main-content's own top padding. */
+.main-content{flex:1;padding:24px 24px 16px;overflow-y:auto;overflow-x:hidden;position:relative;scrollbar-width:none}
 .main-content::-webkit-scrollbar{width:0}
 
 /* Sidebar */
@@ -739,7 +746,10 @@ body.dark .dash-ud-menu-item.danger:hover {
   .dash-header {
     height: var(--hdr-h);
     min-height: var(--hdr-h);
-    padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px;
+    /* `max()` rather than a bare 16px so a landscape phone with a side notch
+       pushes the burger and the bell clear of it. The safe-area-inset-* calls
+       resolve to 0 on every device without insets, so nothing shifts there. */
+    padding: calc(10px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px));
     gap: 10px;
   }
   .dash-header-left {

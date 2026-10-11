@@ -33,6 +33,17 @@ const withAll = (allLabel, values) => [{ value: ALL, label: allLabel }, ...value
 
 const CATEGORY_OPTIONS = withAll("All Categories", MANUAL_CATEGORIES);
 const COURSE_OPTIONS = withAll("All Courses", COURSES);
+/*
+ * The status filter's home in the toolbar.
+ *
+ * The stat tiles above were the ONLY status control on this page -- `onSelect`
+ * there calls selectStatus(), which writes `filterStatus`. Hiding those tiles on
+ * a phone would therefore have deleted the feature, not just a summary. This
+ * dropdown is the mobile counterpart and drives the identical state, so the
+ * filter works on every width and `filterStatus` stays the single source of
+ * truth. The tiles remain on desktop, where they are the nicer affordance.
+ */
+const STATUS_OPTIONS = withAll("All Statuses", MANUAL_STATUSES);
 const SORT_OPTIONS = MANUAL_SORTS;
 
 const FILE_TYPE_ICONS = {
@@ -361,6 +372,13 @@ const paged = useMemo(() => {
   return (
     <section className="catalog-page">
         <StatStrip
+          /* Opt-in mobile hide. These tiles are not only a summary: `onSelect`
+             below is the page's ONLY status filter, and an admin reaches this
+             exact call site through /resources, where the tiles must survive.
+             So the tiles are hidden on a phone AND the equivalent Status
+             <FilterSelect> is added to the toolbar in its place -- `filterStatus`
+             remains the single source of truth for both. */
+          className="hide-stats-mobile"
           variant="stack"
           onSelect={selectStatus}
           activeKey={filterStatus}
@@ -386,6 +404,7 @@ const paged = useMemo(() => {
 
           <FilterSelect label="Category" value={filterCategory} onChange={setFilterCategory} options={CATEGORY_OPTIONS} />
           <FilterSelect label="Course" value={filterCourse} onChange={setFilterCourse} options={COURSE_OPTIONS} />
+          <FilterSelect label="Status" value={filterStatus} onChange={setFilterStatus} options={STATUS_OPTIONS} />
 
           <select
             className="cx-select cx-select--sort"

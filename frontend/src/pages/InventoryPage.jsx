@@ -30,6 +30,11 @@ export default function InventoryPage() {
   return (
     <section className="catalog-page">
       <StatStrip
+        /* Opt-in mobile hide. Inventory is the student catalog, so the four
+           summary tiles are redundant on a phone -- the per-item availability
+           bar below carries the same information contextually. Desktop keeps
+           them. */
+        className="hide-stats-mobile"
         variant="stack"
         items={[
           { label: "Total Items", value: statsData?.total ?? 0 },
@@ -48,6 +53,10 @@ export default function InventoryPage() {
         viewMode={viewMode}
         onViewChange={setViewMode}
         viewStorageKey="labtrack-inventory-view"
+        /* Student-only: below the card breakpoint show the grid cards instead of
+           a table that is floored at 820px and cannot fit a tablet viewport.
+           The admin catalog deliberately does not set this and keeps its table. */
+        narrowAsCards
         busy={isFetching}
         onImageClick={setImageOverlay}
         emptyTitle={activeFilterCount > 0 ? "No matching items" : "Nothing available yet"}

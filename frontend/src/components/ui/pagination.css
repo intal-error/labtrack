@@ -107,3 +107,55 @@ body.dark .pagination-btn.active {
     font-size: 12px;
   }
 }
+
+/* ── compact, narrow viewport ───────────────────────────────────────────────
+   The compact variant sits INSIDE a toolbar (.cx-toolbar / .tx-toolbar), which
+   is nested in .main-content -- and .main-content is overflow-x:hidden
+   (layout.css:8). Overflow there is clipped, not scrollable.
+
+   At its base width the compact bar needs roughly 440px: the "Page X of Y"
+   label plus four 28px nav buttons, a five-number window, up to two ellipses
+   and the gaps between them. A 360px phone offers about 304px inside the
+   toolbar. So every page number past the first was rendered and then silently
+   discarded, leaving a pagination control whose middle was unreachable -- not
+   obviously broken, just missing.
+
+   Three changes, none of which touch the standalone footer above:
+     · wrapping instead of one nowrap line, so nothing is ever clipped
+     · first/last suppressed -- the two arrows already cover the extremes, and
+       on a narrow bar they cost ~56px of the ~300 available
+     · the 28px buttons raised to the 44px touch floor that global.css:101
+       already applies to .btn, minus the min-width so five still fit
+   `.pagination-info` is kept: it is the only statement of position, and
+   dropping it would leave an unlabelled cluster of numbers. */
+@media (max-width: 768px) {
+  .pagination--compact {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    max-width: 100%;
+  }
+  .pagination--compact .pagination-info {
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .pagination--compact .pagination-btn {
+    min-width: 32px;
+    height: 44px;
+    font-size: 13px;
+  }
+  .pagination--compact .pagination-ellipsis {
+    min-width: 20px;
+    height: 44px;
+    font-size: 12px;
+  }
+  /* First/last are redundant next to prev/next at this width and were the two
+     widest fixed blocks in the bar. */
+  .pagination--compact .pagination-btn[title="First page"],
+  .pagination--compact .pagination-btn[title="Last page"] {
+    display: none;
+  }
+  .pagination--compact .pagination-controls {
+    gap: 4px;
+  }
+}

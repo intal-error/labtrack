@@ -126,7 +126,7 @@ const params = useMemo(() => {
         follow the status and read their remarks here.
       </p>
 
-      <div className="incident-stats">
+      <div className="incident-stats hide-stats-mobile">
         {[
           { key: "all", label: "All", icon: <MdWarning size={20} /> },
           { key: "pending", label: "Pending", icon: <MdSchedule size={20} /> },
@@ -169,6 +169,16 @@ const params = useMemo(() => {
       )}
 
       <div className="incident-toolbar">
+        {/*
+          The search input used to be a CHILD of .incident-filter-tabs. That
+          container is forced to `flex-wrap:nowrap; overflow-x:auto` at <=600px
+          (tabs.css:675), so six status chips plus a `width:100%` input were
+          compressed into one non-wrapping scroller -- the input collapsed
+          toward zero width and had to be swiped into view to be used at all.
+          It is now a sibling of the chip row, which is what the desktop
+          layout always wanted too: six chips plus a 160px search do not fit
+          on one nowrap line, so the toolbar overflowed its own container.
+        */}
         <div className="incident-filter-tabs">
           <button
             className={`incident-filter-btn ${statusFilter === "all" ? "active" : ""}`}
@@ -192,18 +202,19 @@ const params = useMemo(() => {
               {stats[s] > 0 && <span className="filter-count">{stats[s]}</span>}
             </button>
           ))}
-          <div className="incident-search">
-            <MdSearch size={16} />
-            <input
-              type="text"
-              placeholder="Search your reports..."
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-            />
-          </div>
+        </div>
+        <div className="incident-search">
+          <MdSearch size={16} />
+          <input
+            type="search"
+            placeholder="Search your reports..."
+            aria-label="Search your reports"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+          />
         </div>
       </div>
 

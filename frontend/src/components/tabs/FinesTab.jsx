@@ -4,8 +4,10 @@ import { api } from "../../services/api";
 import { useFines, useMyFines, useOverdueCount } from "../../hooks/useQueries";
 import { useAuth } from "../../context/AuthContext";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
+import useMediaQuery, { STUDENT_CARD_MAX_WIDTH } from "../../hooks/useMediaQuery";
 import { getInitials, getAvatarColor, fmtDate, fmtDateTime } from "../../utils/helpers";
 import Modal from "../ui/Modal";
+import StudentFineCard from "./StudentFineCard";
 import toast from "react-hot-toast";
 import "../../styles/pages/tabs.css";
 import { MdSearch, MdCheckCircle, MdCancel, MdWarning, MdSort, MdPerson, MdMoreVert, MdVisibility, MdAttachMoney, MdEventBusy, MdPeople, MdClose } from "react-icons/md";
@@ -13,7 +15,9 @@ import PesoIcon from "../ui/PesoIcon";
 
 import Pagination from "../ui/Pagination";
 
-const STATUS_LABELS = { pending: "Unpaid", paid: "Paid", waived: "Waived" };
+/* Shared with StudentFineCard via constants/fines.js -- see the note there for
+   why this is not exported from this file (it would be a circular import). */
+import { STATUS_LABELS } from "../../constants/fines";
 
 export default function FinesTab() {
   const { role } = useAuth();
@@ -352,9 +356,25 @@ function AdminView({ stats, overdueCount, filter, setFilter, search, setSearch, 
 }
 
 function StudentView({ stats, outstandingFine, pendingCount, filter, setFilter, search, setSearch, sortBy, setSortBy, filtered, paginationData, setPage, setSelectedFine }) {
+  /*
+   * `.fines-table` is eight columns with a min-width floor; below the card
+   * breakpoint the student list becomes StudentFineCard. AdminView below is
+   * untouched -- this hook is called inside StudentView only, so the admin
+   * branch never changes layout.
+   */
+  const isNarrow = useMediaQuery(`(max-width: ${STUDENT_CARD_MAX_WIDTH}px)`);
+
   return (
     <>
-      <div className="maintenance-stats">
+      {/* Opt-in mobile hide. The tiles below double as the status filter, but
+          unlike ManualsTab there is no second, tile-only source: the
+          `.maintenance-filter-tabs` row immediately below this block renders
+          the identical All / Unpaid / Paid / Waived set and drives the same
+          `filter` state, so hiding the tiles costs no functionality.
+          NOTE: AdminView below (line ~226) renders its own `.maintenance-stats`
+          and is deliberately NOT given this class -- /fines is admin-only and
+          its five tiles must keep working on mobile. */}
+      <div className="maintenance-stats hide-stats-mobile">
         {[
           { key: "all", label: "All Fines", count: stats.total, icon: <PesoIcon size={20} />, cls: "" },
           { key: "pending", label: "Unpaid", count: stats.pending, icon: <MdWarning size={20} />, cls: "outstanding" },
@@ -424,6 +444,13 @@ function StudentView({ stats, outstandingFine, pendingCount, filter, setFilter, 
           <PesoIcon size={48} />
           <h3>{search || filter !== "all" ? "No Fine Records Found" : "No Fine Records"}</h3>
           <p>{search || filter !== "all" ? "No fine records match your current filters." : "You currently have no recorded fines."}</p>
+        </div>
+      ) : isNarrow ? (
+        /* Card list. Same rows, same `setSelectedFine` target, same modal. */
+        <div className="fine-card-list">
+          {filtered.map((fine) => (
+            <StudentFineCard key={fine.id} fine={fine} onSelect={setSelectedFine} />
+          ))}
         </div>
       ) : (
         <div className="fines-table-wrapper">

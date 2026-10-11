@@ -49,11 +49,46 @@
 
 .tx-tabs {
   display: inline-flex;
+  /* WRAP, do not scroll.
+
+     The five request-status chips with counts ("All 12", "Pending 2",
+     "Approved 7", "Rejected 1", "Cancelled 2") need ~521px on one line
+     (measured). Below 768px `.tx-tabs` spans the whole toolbar grid row, so
+     there is room and they sit on one line. Between roughly 769px and 900px
+     the toolbar is a plain flex row instead, sharing that space with the
+     result count and the pagination tail, which leaves about 513px -- a few
+     px short. "Rejected" and "Cancelled" fell off the right edge, and because
+     scrollbar-width:none plus a hidden ::-webkit-scrollbar gave no indication
+     of it, while .main-content is overflow-x:hidden (layout.css:8), the row
+     just looked like it ended. Two of five filters were unreachable.
+
+     Wrapping makes every chip reachable at every width without an affordance
+     to discover, and it only manifests when they genuinely do not fit: from
+     768px up they stay on one line and this changes nothing, which is why the
+     1440px desktop layout is untouched. Under 600px they fall to two rows.
+
+     `max-width:100%` is still required. As a flex item a row of nowrap chips
+     will not shrink below its min-content width on its own, so without it the
+     container is still pushed wider than the toolbar and clipped.
+
+     The admin page (TransactionsPage) passes only two short tabs -- Borrowed
+     and Returned -- so this is inert there.
+
+     overflow-x:auto is retained only as a safety net for a single chip wider
+     than the toolbar; it is inert once the row wraps. */
+  flex-wrap: wrap;
   gap: 4px;
   padding: 3px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 10px;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.tx-tabs::-webkit-scrollbar {
+  display: none;
 }
 .tx-tab {
   display: inline-flex;
@@ -616,6 +651,91 @@
   color: var(--text-muted);
 }
 
+/* ── Student cards (narrow viewports) ─────────────────────────────────────
+   Used by StudentTxnCard and StudentRequestCard below the card breakpoint.
+   They reuse the existing .tx-card shell so the two layouts cannot drift apart
+   on padding, radius, shadow or the dark-mode overrides at the foot of this
+   file -- only the header block differs, because the shared TransactionCard
+   leads with a 46px avatar of the borrower, which on a student's own record is
+   a picture of the reader. */
+.student-card-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: rgba(46, 125, 50, 0.09);
+  color: var(--green);
+}
+.student-card-icon--blue {
+  background: rgba(25, 118, 210, 0.09);
+  color: #1976d2;
+}
+
+/* The affordance that tells the reader the card opens the same modal the table
+   row used to. Hidden from assistive tech because the <article> already carries
+   role="button" and an aria-label; this is purely the visual cue. */
+.student-card-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+  width: 100%;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.student-card-note {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-muted);
+  /* Two lines then an ellipsis: a borrow purpose can be a paragraph, and the
+     full text is one tap away in the detail modal. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Requests have no row-click target (the table's affordance was an explicit
+   View button), so the card keeps a real 44px button rather than making the
+   whole <article> interactive. */
+.student-card-action {
+  width: 100%;
+  min-height: 44px;
+  margin-top: auto;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg-card);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.16s ease, color 0.16s ease, background 0.16s ease;
+}
+.student-card-action:hover {
+  border-color: var(--green);
+  color: var(--green);
+  background: var(--accent-glow);
+}
+
+.tx-card--request {
+  border-left-color: #1976d2;
+}
+.tx-card[role="button"] {
+  cursor: pointer;
+}
+.tx-card[role="button"]:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
 /* ── Empty state ───────────────────────────────────────────────────────── */
 .tx-empty {
   display: flex;
@@ -797,13 +917,65 @@
   }
 }
 @media (max-width: 768px) {
-  .tx-table {
-    min-width: 900px;
+  /*
+   * Same 2-column treatment as .cx-toolbar, for the same reasons: a wrapped
+   * flex row of search + sort + view toggle produced ragged, unaligned rows at
+   * phone widths, and `min-width:auto` on the flex children could push the row
+   * past the viewport where .main-content's overflow-x:hidden would clip it.
+   *
+   * `.tx-tabs` keeps its own scroll (see its own rule above) but spans the
+   * full grid width so the status chips get the whole row rather than one cell.
+   */
+  .tx-toolbar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 10px;
+    align-items: stretch;
   }
-  .tx-th-borrower {
-    min-width: 190px;
+  .tx-toolbar > * {
+    min-width: 0;
+  }
+  .tx-search {
+    grid-column: 1 / -1;
+    max-width: none;
+    min-width: 0;
+  }
+  .tx-search input {
+    min-height: 44px;
+  }
+  .tx-tabs {
+    grid-column: 1 / -1;
+  }
+  .tx-tab {
+    min-height: 44px;
+    justify-content: center;
+  }
+  .tx-select,
+  .tx-date {
+    width: 100%;
+    max-width: none;
+    min-height: 44px;
+  }
+  .view-toggle {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .view-toggle-btn {
+    justify-content: center;
+    min-height: 44px;
+  }
+  .tx-count {
+    grid-column: 1 / -1;
+  }
+  .tx-toolbar-tail {
+    grid-column: 1 / -1;
+    margin-left: 0;
+    width: 100%;
   }
   .tx-toolbar-actions {
+    grid-column: 1 / -1;
     border-left: none;
     padding-left: 0;
     width: 100%;
@@ -816,8 +988,16 @@
   .tx-grid {
     grid-template-columns: 1fr;
   }
-  .tx-date {
-    flex: 1 1 130px;
+  .tx-grid--cards {
+    /* Card lists are the whole point below this width: full-width rows, one
+       record per card, nothing to scroll sideways. */
+    gap: 10px;
+  }
+  .tx-table {
+    min-width: 900px;
+  }
+  .tx-th-borrower {
+    min-width: 190px;
   }
 }
 @media (max-width: 480px) {

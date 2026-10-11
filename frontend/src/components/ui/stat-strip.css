@@ -54,3 +54,41 @@ body.dark .stat-strip-value{color:#FFFFFF}
 body.dark .stat-strip-icon{background:rgba(67,160,71,.12);color:var(--green-light)}
 body.dark .stat-strip-card.tone-warn .stat-strip-icon{background:rgba(255,183,77,.12);color:#ffb74d}
 body.dark .stat-strip-card.tone-alert .stat-strip-icon{background:rgba(239,154,154,.12);color:#ef9a9a}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Mobile stat-card suppression — OPT-IN, <=768px
+   ══════════════════════════════════════════════════════════════════════════
+   `.hide-stats-mobile` is applied by the CALL SITE, never inferred from the
+   DOM shape. That is deliberate, because every stat-card class in this app is
+   shared with an admin surface:
+
+     .stat-strip      -> TransactionsPage, CatalogPage, AttendanceLogsPage,
+                         RoomAttendancePage  (admin) + InventoryPage,
+                         activity/TransactionsPanel, ManualsTab
+     .maintenance-stats -> MaintenanceTab, BorrowRequestsTab (admin) + FinesTab
+     .incident-stats  -> IncidentReportsTab (admin) + activity/MyIncidentsPanel
+
+   A structural selector (".tab-content > .maintenance-stats", or a rule on
+   `.stat-strip` itself) matched BOTH roles. In particular FinesTab is one
+   component rendered by two callers -- /fines is RoleRoute["admin"] but
+   MyActivityPage lazy-imports the same file for students -- and its AdminView
+   sits under the same `.tab-content` wrapper as StudentView. Opt-in means the
+   admin branches never carry the class, so they cannot be matched.
+
+   WHY !important
+   This file is imported by StatStrip.jsx, which is itself a lazy chunk, so it
+   loads AFTER main.jsx's global.css and after sibling page stylesheets.
+   incident-reports.css:20 re-declares `.incident-stats{display:grid}` at equal
+   specificity and is imported after tabs.css by MyIncidentsPanel.jsx; likewise
+   dashboard.css:101 sets `.dash-status-bar{display:flex}` at <=720px. Without
+   !important those later declarations would win on source order alone and the
+   rule would silently do nothing. Only `display` is forced -- nothing else about
+   the strip is touched, so re-enabling it at >768px restores the original
+   layout byte for byte.
+
+   Nothing is removed from the DOM, from any query, or from any calculation: the
+   underlying hooks (useCatalogStats, useMyTransactionStats, the FinesTab `stats`
+   memo) keep running exactly as before. This is presentation only. */
+@media(max-width:768px){
+  .hide-stats-mobile{display:none!important}
+}

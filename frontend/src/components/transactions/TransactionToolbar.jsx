@@ -28,6 +28,12 @@ export default function TransactionToolbar({
   showDateFilter = false,
   showSearch = true,
   showSort = true,
+  /*
+   * Set false by a caller that has FORCED a layout (the student panels swap the
+   * table for a card list below the card breakpoint). Left at its default the
+   * toggle renders exactly as before, so the admin page is unaffected.
+   */
+  showViewToggle = true,
   searchPlaceholder = "Search borrower, ID, item...",
   viewMode,
   onViewChange,
@@ -147,7 +153,7 @@ export default function TransactionToolbar({
         </select>
       )}
 
-      {viewMode !== undefined && (
+      {showViewToggle && viewMode !== undefined && (
         <ViewToggle value={viewMode} onChange={onViewChange} localStorageKey={viewStorageKey} />
       )}
 

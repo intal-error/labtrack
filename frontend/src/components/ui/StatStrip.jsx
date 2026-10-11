@@ -16,11 +16,20 @@ import "./stat-strip.css";
 // memo is what makes that the next step rather than a re-render every time.
 import { memo } from "react";
 
-function StatStrip({ items, variant, onSelect, activeKey }) {
+/*
+ * `className` is opt-in and additive. It exists so a CALL SITE can opt into the
+ * mobile hide rule without any structural selector having to guess whether it is
+ * looking at a student page: `.stat-strip` is rendered by five admin call sites
+ * (TransactionsPage, CatalogPage, AttendanceLogsPage, RoomAttendancePage and
+ * ManualsTab for admins) as well as three student ones, so the class alone is
+ * not a safe thing to target from CSS. Pass `className="hide-stats-mobile"` and
+ * the strip disappears at <=768px; omit it and nothing changes.
+ */
+function StatStrip({ items, variant, onSelect, activeKey, className = "" }) {
   const interactive = typeof onSelect === "function";
 
   return (
-    <div className={`stat-strip${variant ? ` stat-strip--${variant}` : ""}`}>
+    <div className={`stat-strip${variant ? ` stat-strip--${variant}` : ""}${className ? ` ${className}` : ""}`}>
       {items.map((item) => {
         const active = interactive && item.key !== undefined && item.key === activeKey;
         const classes = `stat-strip-card${item.tone && item.tone !== "default" ? ` tone-${item.tone}` : ""}${interactive ? " is-clickable" : ""}${active ? " is-active" : ""}`;

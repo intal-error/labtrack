@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../services/api";
 import { useCatalogPreview } from "../../hooks/useQueries";
@@ -162,7 +163,37 @@ const { data: catalogData } = useCatalogPreview({ enabled: open });
     user?.displayName ||
     "You";
 
-  return (
+  /*
+   * WHY THIS IS PORTALED TO <body>
+   *
+   * The drawer is `position: fixed; z-index: 9998`, which only beats the app's
+   * own chrome (`.dash-header` z-index 100, `.bottom-nav` z-index 1000) if both
+   * sit in the SAME stacking context. They did not.
+   *
+   * On /my-activity?tab=incidents this panel rendered inside
+   *   .main-content > .my-activity-page > .tab-strip-panel > .tab-content
+   * and `tab-strip.css` puts a FILLED opacity animation on `.tab-strip-panel`
+   * (`animation: tabStripIn .18s ease both`). A filled animation keeps the
+   * element composited, so it forms a stacking context, and the drawer's 9998
+   * was confined to that subtree -- the whole drawer painted as one flat unit
+   * at z-index 0, UNDER the header and the bottom nav. The visible symptom was
+   * exactly that: the form scrolled and the fields were editable, but the
+   * drawer's own title/close button and the Cancel / Submit Report action bar
+   * were hidden underneath the app chrome. The action bar is a ~76px sticky
+   * footer parked at the viewport bottom while `.bottom-nav` is ~56px tall in
+   * the same place, so roughly 87% of both buttons was covered.
+   *
+   * The sticky rule in shared-form-panel.css was never at fault -- the buttons
+   * were painted, just behind the nav. That is also why no test caught it:
+   * jsdom has no layout or paint engine.
+   *
+   * Rendering into <body> puts the drawer directly in the root stacking
+   * context, where 9998 genuinely outranks 100 and 1000. Nothing about the
+   * panel's appearance changes: it is `position: fixed`, so its position never
+   * depended on its DOM parent, and the viewport-relative offsets are
+   * identical.
+   */
+  return createPortal(
     <>
       <div className={`lab-slide-panel ${open ? "open" : ""}`} aria-hidden={!open}>
         <div className="lab-slide-header">
@@ -364,6 +395,7 @@ const { data: catalogData } = useCatalogPreview({ enabled: open });
         </div>
       </div>
       {open && <div className="lab-slide-backdrop" onClick={close} />}
-    </>
+    </>,
+    document.body,
   );
 }

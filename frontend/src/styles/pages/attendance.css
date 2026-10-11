@@ -1063,6 +1063,65 @@ body.dark .attendance-date-filter {
   .attendance-toolbar-right { justify-content: center; }
 }
 
+/* ──────────────────────────────────
+   Narrow-viewport filter bar
+   ────────────────────────────────── */
+@media (max-width: 768px) {
+  /*
+   * The <=900px block above stacks the toolbar but only centres it, and only
+   * `.attendance-search input` was ever given `width:100%` (in the <=600px
+   * block). So at 600-768px the subject <select> and the date input kept their
+   * content widths and the Clear button landed on whichever row it wrapped to
+   * -- four controls of four different widths, centred, with no shared edge.
+
+   * Everything here becomes one full-width control per row. `flex: 1 1 100%`
+   * rather than `width:100%` so the gap still applies between rows; the
+   * `min-width:0` is what actually allows a flex item to shrink to the row
+   * width, since `.attendance-search input` carries `min-width:170px` from its
+   * base rule and a date input's intrinsic width is its own.
+   *
+   * The right-hand group is left-aligned rather than centred so its contents
+   * share the same left edge as the controls above it.
+   */
+  .attendance-toolbar { gap: 8px; }
+  .attendance-toolbar-left,
+  .attendance-toolbar-right {
+    justify-content: flex-start;
+    gap: 8px;
+  }
+  .attendance-toolbar-left > *,
+  .attendance-search,
+  .attendance-filter-select,
+  .attendance-date-filter {
+    flex: 1 1 100%;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+  .attendance-search input {
+    min-width: 0;
+    width: 100%;
+    min-height: 44px;
+  }
+  .attendance-filter-select,
+  .attendance-date-filter {
+    min-height: 44px;
+  }
+  /* The result count and the Export button share a row rather than the count
+     being centred above a full-width button. */
+  .attendance-toolbar-right {
+    width: 100%;
+  }
+  .attendance-result-count { flex: 1 1 auto; }
+  .attendance-toolbar-right .scan-attendance-btn {
+    flex: 0 0 auto;
+    min-height: 44px;
+    /* The inline style on this button sets padding/font-size; height is what
+       actually reaches the 44px floor here without fighting it. */
+    height: 44px;
+  }
+}
+
 @media (max-width: 600px) {
   .attendance-tabs { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; justify-content: flex-start; }
   .attendance-tabs::-webkit-scrollbar{width:0}

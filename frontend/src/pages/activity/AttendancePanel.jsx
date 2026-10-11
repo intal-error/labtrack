@@ -1,6 +1,7 @@
-import { useEffect, useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useStudentAttendance } from "../../hooks/useQueries";
+import useMediaQuery from "../../hooks/useMediaQuery";
 import { useAuth } from "../../context/AuthContext";
 import { formatDuration, formatTime, getTodayString } from "../../utils/attendanceHelpers";
 import { filterBySearch } from "../../utils/search";
@@ -44,23 +45,15 @@ export default function AttendancePanel() {
    * on every keystroke in the search box. That is the single most expensive thing on
    * this panel, and it was pure waste on whichever side was hidden.
    *
-   * matchMedia is read once and kept in sync via its change event, so a rotation or a
-   * window resize still switches layouts without a reload.
-   *
    * Rendering only one layout is also better for accessibility: the hidden copy is
    * still exposed to screen readers on some configurations, so a screen-reader user
    * previously heard each session twice.
+   *
+   * The implementation moved to hooks/useMediaQuery.js so the transaction,
+   * request and fine panels can use the same one; the 768px threshold and the
+   * single-mount behaviour are unchanged.
    */
-  const [isNarrow, setIsNarrow] = useState(
-    () => typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches
-  );
-
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 768px)");
-    const onChange = (e) => setIsNarrow(e.matches);
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, []);
+  const isNarrow = useMediaQuery("(max-width: 768px)");
 
   const exportCSV = () => {
     if (!filteredRecords.length) return;

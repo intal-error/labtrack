@@ -107,9 +107,18 @@ beforeEach(() => {
 
 describe.each(["damage", "lost"])("the %s report form", (type) => {
   it("renders Cancel and Submit Report at the end of the scrollable body", async () => {
-    const { container } = renderForm();
+    const { baseElement } = renderForm();
 
-    const body = container.querySelector(".lab-slide-body");
+    /*
+     * Queried through `baseElement` (document.body) rather than RTL's
+     * `container`. The drawer is rendered with createPortal into document.body
+     * so that its z-index escapes the stacking context that .tab-strip-panel's
+     * filled opacity animation creates -- see the note in IncidentReportForm.jsx.
+     * A portal places the node under <body>, outside RTL's container div, so
+     * `container.querySelector` would no longer find it even though the drawer
+     * is present and correct.
+     */
+    const body = baseElement.querySelector(".lab-slide-body");
     expect(body).not.toBeNull();
 
     const form = body.querySelector("form");
