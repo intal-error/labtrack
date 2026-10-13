@@ -360,10 +360,45 @@ searchUser: (firstName, lastName, signal) => request(`/users/search?firstName=${
   updateSafetyRule: (id, data) => request(`/safety-rules/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteSafetyRule: (id) => request(`/safety-rules/${id}`, { method: "DELETE" }),
 
-  // File delivery goes through the API so the course check runs on every open. The
-  // response is a redirect-free stream; there is no Cloudinary URL anywhere in this file
-  // for safety rules, because the component is never given one.
+  // File delivery goes through the API so the course check runs on every open.
+  //
+  // NOTE: this URL is NOT usable as a plain `<img src>` or `window.open(url)`. The
+  // endpoint requires `Authorization: Bearer`, and neither an <img> tag nor a new browser
+  // tab can attach a header -- both would simply receive 401. Use
+  // fetchSafetyRuleFileUrl() below, which authenticates the request and hands back an
+  // object URL. There is no Cloudinary URL anywhere for safety rules, because the
+  // component is never given one.
   safetyRuleFileUrl: (id) => `${API_URL}/safety-rules/${id}/file`,
+
+  /**
+   * Fetches a safety rule file WITH authentication and returns a blob object URL.
+   *
+   * The caller OWNS the returned URL and must revoke it (URL.revokeObjectURL) when the
+   * image is replaced or the component unmounts. Leaking these pins the whole file in
+   * memory for the life of the tab, and a grid of them adds up fast.
+   *
+   * Aborts on unmount via the caller's signal so a closed panel cannot resolve into a
+   * setState on a gone component.
+   */
+  fetchSafetyRuleFileUrl: async (id, signal) => {
+    let headers = {};
+    if (auth.currentUser) {
+      try {
+        const token = await getIdToken(auth.currentUser);
+        headers["Authorization"] = `Bearer ${token}`;
+      } catch {}
+    }
+    const res = await fetch(`${API_URL}/safety-rules/${id}/file`, { headers, signal });
+    if (!res.ok) {
+      // 404 here means "not yours" rather than "gone" -- the endpoint deliberately does
+      // not distinguish the two, so a refused file must not read as a server fault.
+      const err = new Error(res.status === 404 ? "This file is not available to you." : "Could not load the file");
+      err.status = res.status;
+      throw err;
+    }
+    const blob = await res.blob();
+    return window.URL.createObjectURL(blob);
+  },
 
   uploadSafetyRuleFile: async (file) => {
     const formData = new FormData();

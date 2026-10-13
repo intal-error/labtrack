@@ -105,7 +105,23 @@ async function enrichWithUploaderNames(rules) {
   return rules.map((r) => ({ ...r, uploaderName: userMap[r.uploaded_by] || r.uploaded_by || "Unknown" }));
 }
 
-/** Drops every field that would leak storage internals to the client. */
+/**
+ * The client-facing shape of a rule.
+ *
+ * `file_public_id`, `file_url` and `thumbnail_url` are ALL deliberately absent.
+ *
+ * The first two are storage internals: the frontend must never hold a Cloudinary
+ * reference, because the only sanctioned way to read a file is the authorised
+ * /:id/file endpoint, which re-checks the course on every request.
+ *
+ * `thumbnail_url` is dropped for a different reason. It looked harmless -- just a cover
+ * image -- but it is a free-form URL the client supplies at create/update time and the
+ * server then renders as an <img src> for every other user in that course. That is a
+ * request-forgery and tracking-pixel vector: a Course Admin could point it at an internal
+ * host and have every reader's browser probe it, or hand out a URL that quietly changes.
+ * Previews are generated from the uploaded file itself through the authenticated
+ * endpoint, so the field has no purpose here and no place in the payload.
+ */
 function toClientRule(rule) {
   return {
     id: rule.id,
@@ -118,7 +134,6 @@ function toClientRule(rule) {
     file_name: rule.file_name || "",
     file_size: rule.file_size || "",
     file_type: rule.file_type || "",
-    thumbnail_url: rule.thumbnail_url || "",
     uploaded_by: rule.uploaded_by || "",
     uploaderName: rule.uploaderName || "",
     has_file: Boolean(rule.file_public_id),
@@ -200,7 +215,7 @@ const getRule = async (req, res) => {
 
 const create = async (req, res) => {
   try {
-    const { title, description, category, course, labRoom, status, fileName, fileSize, fileType, filePublicId, fileFormat, thumbnailUrl } = req.body;
+    const { title, description, category, course, labRoom, status, fileName, fileSize, fileType, filePublicId, fileFormat } = req.body;
 
     if (!title || !String(title).trim()) {
       return res.status(400).json({ error: "Title is required" });
@@ -237,7 +252,7 @@ const create = async (req, res) => {
       file_name: fileName || "",
       file_size: fileSize || "",
       file_type: fileType || "",
-      thumbnail_url: thumbnailUrl || "",
+      // thumbnail_url is never accepted from the client -- see toClientRule.
       uploaded_by: req.user.uid,
       created_at: now,
       updated_at: now,
@@ -282,7 +297,9 @@ const update = async (req, res) => {
 
     const allowed = [
       "title", "description", "category", "course", "lab_room", "status",
-      "file_public_id", "file_format", "file_name", "file_size", "file_type", "thumbnail_url",
+      "file_public_id", "file_format", "file_name", "file_size", "file_type",
+      // thumbnail_url is absent on purpose: accepting it would let a caller store a URL
+      // that is rendered for other users in the course. See toClientRule.
     ];
     const camelToSnake = {
       labRoom: "lab_room",
@@ -291,7 +308,6 @@ const update = async (req, res) => {
       fileName: "file_name",
       fileSize: "file_size",
       fileType: "file_type",
-      thumbnailUrl: "thumbnail_url",
     };
 
     const updates = {};

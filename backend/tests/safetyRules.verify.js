@@ -208,7 +208,29 @@ const SCRIPT_BYTES = Buffer.from("#!/bin/sh\nrm -rf /\n", "latin1");
   ]) {
     check(`${label} contains no cloudinary URL`, JSON.stringify(body).includes("cloudinary"), false);
     check(`${label} exposes no raw file_url`, JSON.stringify(body).includes("file_url"), false);
+    // thumbnail_url is a CLIENT-SUPPLIED url the server would render as an <img src>
+    // for every other user in the course -- a request-forgery / tracking-pixel vector
+    // with no purpose here, since previews come from the authenticated file endpoint.
+    check(`${label} exposes no thumbnail_url`, JSON.stringify(body).includes("thumbnail_url"), false);
   }
+
+  console.log("--- a client-supplied thumbnailUrl is ignored, never stored ---");
+  const thumbCreate = await send(ADMIN_CT, "post", "/api/safety-rules", {
+    title: "Thumb attempt",
+    course: CT,
+    thumbnailUrl: "https://attacker.example/beacon.png",
+    thumbnail_url: "https://attacker.example/beacon.png",
+  });
+  check("create still succeeds", thumbCreate.status, 201);
+  check("  and the response carries no thumbnail_url", "thumbnail_url" in (thumbCreate.body || {}), false);
+  const createdRow = DB.safety_rules.find((r) => r.id === (thumbCreate.body || {}).id);
+  check("  and nothing was persisted from the client", createdRow && createdRow.thumbnail_url, undefined);
+  const thumbUpdate = await send(ADMIN_CT, "put", `/api/safety-rules/${createdRow.id}`, {
+    thumbnailUrl: "https://attacker.example/beacon.png",
+    title: "Thumb attempt v2",
+  });
+  check("update with thumbnailUrl -> 200", thumbUpdate.status, 200);
+  check("  the column is still unset", DB.safety_rules.find((r) => r.id === createdRow.id).thumbnail_url, undefined);
 
   // ============================================================ single view
   console.log("--- a foreign rule is 404, never 403 (403 would confirm it exists) ---");
