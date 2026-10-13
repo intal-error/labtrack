@@ -1,0 +1,219 @@
+/*
+ * Modal shell -- the single canonical definition of .modal-overlay / .modal-content.
+ *
+ * WHY THIS FILE IS NEW
+ *
+ * Both classes were defined TWICE with conflicting values: in styles/global.css
+ * (background .6, no overlay padding, width 420px, max-width 95vw, max-height 85vh) and
+ * again in styles/pages/tabs.css (background .5, overlay padding 20px, width 100%,
+ * max-width 520px, max-height 90vh). Stylesheets are concatenated in import order, so
+ * which set applied depended on where the two files landed in the bundle. The dialog's
+ * width, backdrop opacity and padding were all non-deterministic as a result.
+ *
+ * The values kept here are the tabs.css ones (the wider 520px panel, the 20px overlay
+ * gutter, the softer backdrop) because tabs.css is the later import for the tabs that
+ * are the modal's heaviest users, so that is what the built app has been showing.
+ *
+ * ── THE MOBILE PROBLEMS THIS FILE ALSO FIXES ─────────────────────────────────
+ *
+ * The Transaction Details dialog was reported unusable at phone widths. Three separate
+ * causes, all handled below:
+ *
+ *   1. No visible close button. Now added by the component; styled here.
+ *   2. No width ceiling that accounts for the OVERLAY's own padding. With
+ *      `width:100%` and `max-width:520px` inside a padded flex overlay, the panel
+ *      measured against the padded content box and could still push past a narrow
+ *      viewport. `width:100%` + `max-width:min(520px, 100%)` + `min-width:0` closes it.
+ *   3. `100vh` on a mobile browser is the LARGEST viewport: it includes the area behind
+ *      the collapsing URL bar, so a `max-height:85vh` panel could extend under the
+ *      browser chrome. `100dvh` tracks the visible viewport instead, with `100vh`
+ *      kept first as the fallback for browsers without dynamic viewport units.
+ */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* The gutter has to come out of the budget, not be added on top of it, or the panel
+     overflows exactly at the widths this fix exists for. */
+  padding: 20px;
+  /* env() for the notch/home-indicator on a phone held in landscape. */
+  padding-left: max(20px, env(safe-area-inset-left, 0px));
+  padding-right: max(20px, env(safe-area-inset-right, 0px));
+  z-index: 9998;
+}
+
+.modal-content {
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  padding: 28px;
+  /* min(520px, 100%) rather than max-width:520px alone: the latter lets the panel be
+     520px wide inside a container narrower than that. */
+  width: 100%;
+  max-width: min(520px, 100%);
+  /* Lets the panel shrink inside the flex overlay instead of refusing to. Without
+     this, a flex item's default min-width:auto keeps it at its content width. */
+  min-width: 0;
+  max-height: 90vh;
+  max-height: 90dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: modalIn 0.25s ease;
+  /* The close button is absolutely positioned in the top-right corner; this keeps it
+     from covering the heading. */
+  position: relative;
+}
+
+.modal-content::-webkit-scrollbar {
+  width: 0;
+}
+
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/*
+ * The close button.
+ *
+ * Sized to 40x40 -- above the 24px minimum target, and thumb-sized on a phone. It sits
+ * above the backdrop's tap target so a near-miss still lands on the panel, not behind
+ * it. `touch-action:manipulation` removes the ~300ms double-tap-zoom delay on mobile
+ * Safari/Chrome without disabling pinch-zoom on the rest of the dialog.
+ */
+.modal-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  z-index: 1;
+  touch-action: manipulation;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.modal-close:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* A visible focus ring, not just the hover state: the button is the only dismissal
+   affordance a keyboard or screen-reader user can see. */
+.modal-close:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+/* ── Phone / tablet ─────────────────────────────────────────────────────── */
+
+/*
+ * The 768px breakpoint and the values below are NOT new. This bottom-sheet treatment
+ * existed in styles/global.css and worked; it has been MOVED here so that the base
+ * rules and the mobile override live in one file with the component that renders them.
+ * Previously there were three competing definitions (global.css base, tabs.css base,
+ * global.css mobile) and which one won depended on bundle order.
+ *
+ * What is NEW in this block is only the close-button sizing, the form-row stacking, the
+ * export-modal min-width reset, and the `dvh` fallback pairing.
+ */
+@media (max-width: 768px) {
+  .modal-overlay {
+    align-items: flex-end;
+    padding: 16px;
+  }
+
+  .modal-content {
+    width: 100%;
+    max-width: 100%;
+    /* 100vh first for browsers without dynamic viewport units: `100vh` is the LARGEST
+       viewport (it includes the area behind a collapsing URL bar), so a dialog sized
+       against it can extend under the browser chrome. `dvh` tracks what is visible. */
+    max-height: 85vh;
+    max-height: 85dvh;
+    border-radius: 16px 16px 0 0;
+    /* The bottom padding is the only clearance between the last action button and the
+       bottom of the screen -- without it, "Cancel"/"Save" sat inside the home-indicator
+       gesture strip on a phone. */
+    padding: 24px 18px calc(24px + env(safe-area-inset-bottom, 0px));
+    animation: modalSheetIn 0.25s ease;
+  }
+
+  /* Larger target, and pulled in against the reduced padding. */
+  .modal-close {
+    top: 6px;
+    right: 6px;
+    width: 44px;
+    height: 44px;
+  }
+
+  /* The heading must not run under the close button. */
+  .modal-content h2 {
+    padding-right: 44px;
+  }
+
+  /* Stacked full-width actions, matching .form-actions elsewhere in the app. */
+  .modal-content .form-actions {
+    flex-direction: column;
+  }
+
+  .modal-content .form-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Two-column form rows become one, rather than squeezing two labels and two fields
+     into ~300px. */
+  .modal-content .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-content .export-modal {
+    /* export-modal declares min-width:340px, which alone overflows a 320px phone. */
+    min-width: 0;
+  }
+}
+
+@keyframes modalSheetIn {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/*
+ * The bottom sheet slides, which is the one animation here that cannot be reduced to
+ * opacity alone. Disabled outright under prefers-reduced-motion.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .modal-content,
+  .modal-overlay {
+    animation: none;
+  }
+
+  .modal-close {
+    transition: none;
+  }
+}

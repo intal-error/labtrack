@@ -1,13 +1,15 @@
 import { useEffect, useId, useRef } from "react";
+import { MdClose } from "react-icons/md";
+import "../../styles/pages/modal.css";
 
 /**
  * Dialog shell shared by the export dialog, the QR viewer and the edit-record
  * dialog.
  *
- * Adds the four things a dialog needs to be usable without a mouse, none of which
- * this had before:
+ * Adds the things a dialog needs to be usable, none of which this had before:
  *   · role="dialog" + aria-modal, so assistive tech announces it as a dialog
  *   · Escape to dismiss
+ *   · a visible close button
  *   · focus moved in on open, and restored to the trigger on close
  *   · Tab cycling kept inside, so it cannot tab out onto the inert page behind
  */
@@ -75,8 +77,21 @@ export default function Modal({ title, onClose, children, wide }) {
 
     // Move focus in. requestAnimationFrame because the panel is mounted in the
     // same tick; focusing synchronously can race the paint on some browsers.
+    //
+    // `.modal-close` IS EXCLUDED, and it has to be. The close button is the first
+    // child of the panel so it can sit in the corner, which makes it the first match
+    // of this selector -- so without the exclusion every dialog focused its own
+    // DISMISS control on open. On a form dialog that is the one thing the user must
+    // not be on: it invites closing the dialog by pressing Enter, and it reintroduces
+    // the exact focus-steal the note at the top of this file describes having already
+    // fixed for FinesTab's waive-reason textarea.
+    //
+    // The fallback is the panel itself, which is focusable (tabIndex={-1}), so a
+    // content-free dialog still gets a sensible focus target.
     const raf = requestAnimationFrame(() => {
-      const target = panelRef.current?.querySelector("input, select, button");
+      const target = panelRef.current?.querySelector(
+        "input:not(.modal-close), select:not(.modal-close), textarea:not(.modal-close), button:not(.modal-close)"
+      );
       (target || panelRef.current)?.focus();
     });
 
@@ -109,6 +124,28 @@ export default function Modal({ title, onClose, children, wide }) {
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
       >
+        {/*
+         * The close button.
+         *
+         * WHY IT HAD TO BE ADDED: until now a dialog could only be dismissed with the
+         * Escape key or by clicking the overlay. On a phone neither works well --
+         * there is no Escape key, and a dialog sized near the viewport leaves only a
+         * sliver of overlay to tap, which is easy to miss and easy to hit by accident.
+         * The Transaction Details dialog was effectively undismissable on a phone short
+         * of swiping or reloading. All 12 call sites get it.
+         *
+         * It is a real <button>, so it is reachable by Tab and activated by Enter or
+         * Space for free. It sits inside the panel (the overlay click handler is
+         * stopped here), so clicking it does not also fire onClose twice.
+         *
+         * It calls onCloseRef rather than onClose for the same reason the keydown
+         * handler does -- see the note above. A bare onClick closure would be a new
+         * identity per render, which is harmless here (there is no effect to re-run),
+         * but the ref keeps the one dismissal path in the file single-sourced.
+         */}
+        <button type="button" className="modal-close" onClick={() => onCloseRef.current()} aria-label="Close dialog">
+          <MdClose size={20} />
+        </button>
         {title && (
           <h2 id={titleId}>{title}</h2>
         )}

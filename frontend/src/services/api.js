@@ -1,5 +1,6 @@
 import { auth } from "./firebase";
 import { getIdToken } from "firebase/auth";
+import { noteResponse } from "./cacheStatus";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 const TIMEOUT_MS = 30000;
@@ -136,6 +137,17 @@ async function request(path, options = {}) {
     abort.cleanup();
   }
 
+  // Recorded BEFORE the ok check, and deliberately outside every throw path below:
+  // this is a statement about where the bytes came from, which is true of a 401 or a
+  // 500 exactly as it is of a 200. A response served out of Cache Storage means the
+  // network did not answer, whatever the status turned out to be -- and that is
+  // precisely when the user most needs to be told the view is not live.
+  //
+  // noteResponse clears the banner on a genuinely live response and leaves it alone
+  // otherwise; failures never reach here, because every throw below happens after
+  // the fetch rejected. See services/cacheStatus.js for the clearing rule.
+  noteResponse(res);
+
   // `res.json()` is inside the try because it is still part of the request: an HTML
   // error page served with a 200 (a misconfigured proxy does this) would otherwise
   // surface as a raw SyntaxError in a toast. The timeout is also still armed here,
@@ -223,6 +235,9 @@ searchUser: (firstName, lastName, signal) => request(`/users/search?firstName=${
       clearTimeout(timer);
     }
     if (!res.ok) throw new Error("Download failed");
+    // A GET under /api/, so the worker may have answered this from cache after a
+    // slow upload. Recorded before the body is read -- see the note in request().
+    noteResponse(res);
     const blob = await res.blob();
     const url = window.URL.createObjectURL(blob);
     const disposition = res.headers.get("Content-Disposition") || "";
@@ -389,6 +404,7 @@ searchUser: (firstName, lastName, signal) => request(`/users/search?firstName=${
       } catch {}
     }
     const res = await fetch(`${API_URL}/safety-rules/${id}/file`, { headers, signal });
+    noteResponse(res);
     if (!res.ok) {
       // 404 here means "not yours" rather than "gone" -- the endpoint deliberately does
       // not distinguish the two, so a refused file must not read as a server fault.
@@ -465,6 +481,7 @@ searchUser: (firstName, lastName, signal) => request(`/users/search?firstName=${
     try {
       const res = await fetch(`${API_URL}/backup/download`, { headers, signal: controller.signal });
       clearTimeout(timer);
+      noteResponse(res);
       if (!res.ok) throw new Error("Download failed");
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -551,6 +568,7 @@ searchUser: (firstName, lastName, signal) => request(`/users/search?firstName=${
     } finally {
       clearTimeout(timer);
     }
+    noteResponse(res);
     if (!res.ok) throw new Error("Export failed");
     const blob = await res.blob();
     const url = window.URL.createObjectURL(blob);

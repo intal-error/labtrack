@@ -41,9 +41,18 @@ if (!window.matchMedia) {
   });
 }
 
-// ── 3. scrollTo ─────────────────────────────────────────────────────────────
-// Several components scroll a table container into view on filter change. jsdom has
-// no layout engine and no scrollTo, so it is absent and the call throws.
+// ── 3. scrollTo / scrollIntoView ──────────────────────────────────────────────
+//
+// jsdom has no layout engine, so the scrolling APIs are either absent or no-ops.
+//
+// `Element.prototype.scrollTo` was added for DashboardLayout, whose main content pane
+// is ref-ed and scrolled with `contentRef.current?.scrollTo({ top })`. jsdom does not
+// implement it on the prototype, so that call threw a TypeError which took down the
+// ENTIRE layout -- which is how a test for an unrelated notification dropdown was
+// failing on a scrolling detail instead of on the thing under test.
+if (!Element.prototype.scrollTo) {
+  Element.prototype.scrollTo = function scrollTo() {};
+}
 if (!window.scrollTo) {
   window.scrollTo = () => {};
 }

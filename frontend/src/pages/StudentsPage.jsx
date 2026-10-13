@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { MdPeople, MdSearch, MdRefresh } from "react-icons/md";
 import { useStudents, useCourseOptions } from "../hooks/useQueries";
+import useDebouncedValue from "../hooks/useDebouncedValue";
 import { useAuth } from "../context/AuthContext";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import LoadError from "../components/ui/LoadError";
@@ -32,6 +33,21 @@ export default function StudentsPage() {
   const limit = 25;
   const { options: courseOptions } = useCourseOptions();
 
+  /*
+   * Debounced, and it was the only search box in the app that was not.
+   *
+   * `search` is bound straight to the <input> and was fed straight into the query
+   * key, so every keystroke minted a new key and fired a new `GET /api/users`. Typing
+   * "Santos" issued six requests, and because the server does the filtering and the
+   * sorting, each one was a full roster read rather than a cheap client-side filter.
+   *
+   * The input still shows `search` -- it must stay live, that is what makes typing
+   * feel responsive -- while `debouncedSearch` is what reaches the query key. This is
+   * the same shape useCatalogFilters, FinesTab, MaintenanceTab, IncidentReportsTab,
+   * BorrowRequestsTab and RoomAttendancePage already use.
+   */
+  const debouncedSearch = useDebouncedValue(search, 300);
+
   // Scoped to the caller's course server-side; `course` only narrows for a Super
   // Admin. Kept out of the key when empty so it does not create a second cache
   // entry for "no filter".
@@ -39,10 +55,10 @@ export default function StudentsPage() {
     () => ({
       page: String(page),
       limit: String(limit),
-      ...(search.trim() ? { search: search.trim() } : {}),
+      ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
       ...(isSuperAdmin && courseFilter ? { course: courseFilter } : {}),
     }),
-    [page, search, courseFilter, isSuperAdmin]
+    [page, debouncedSearch, courseFilter, isSuperAdmin]
   );
 
   const query = useStudents(params);

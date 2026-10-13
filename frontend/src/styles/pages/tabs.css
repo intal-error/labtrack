@@ -298,10 +298,12 @@
 .badge-warning{background:#fff3e0;color:#ef6c00}
 .badge-outline{border:1px solid var(--border);color:var(--text-muted)}
 
-/* Modal */
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9998;padding:20px}
-.modal-content{background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;padding:28px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;scrollbar-width:none;box-shadow:0 20px 60px rgba(0,0,0,.3)}
-.modal-content::-webkit-scrollbar{width:0}
+/* Modal
+   The .modal-overlay / .modal-content definitions that used to be here are gone --
+   they duplicated the ones in global.css with different width, padding and background,
+   so the effective values depended on stylesheet order in the bundle. The canonical
+   definitions now live in styles/pages/modal.css, beside the component. Everything
+   below styles the CONTENTS of a dialog and is still needed here. */
 .modal-content h3{margin:0 0 20px 0;color:var(--dark-green);font-size:1.2rem}
 .form-group{margin-bottom:14px}
 .form-group label{display:block;font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:5px}

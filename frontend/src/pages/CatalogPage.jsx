@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { MdAdd, MdDownload, MdWarning } from "react-icons/md";
 import { api } from "../services/api";
@@ -6,7 +6,6 @@ import { useCatalog, useCatalogStats } from "../hooks/useQueries";
 import useCatalogFilters from "../hooks/useCatalogFilters";
 import { COURSES } from "../constants/courses";
 import { CATALOG_COURSE_UNASSIGNED } from "../constants/catalog";
-import LoadingSpinner from "../components/ui/LoadingSpinner";
 import Modal from "../components/ui/Modal";
 import StatStrip from "../components/ui/StatStrip";
 import CatalogBrowser from "../components/catalog/CatalogBrowser";
@@ -49,7 +48,10 @@ export default function CatalogPage() {
     return response.pagination || null;
   }, [response]);
 
-  const invalidateCatalog = () => queryClient.invalidateQueries({ queryKey: ["catalog"] });
+  const invalidateCatalog = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: ["catalog"] }),
+    [queryClient]
+  );
 
   const courseOptions = useMemo(() => {
     const options = COURSES.map((c) => ({ value: c, label: c }));
@@ -69,27 +71,30 @@ export default function CatalogPage() {
     return options;
   }, [statsData]);
 
-  const handleDelete = async (item) => {
-    if (!confirm(`Delete "${item.itemName || "this item"}"?`)) return;
-    try {
-      await api.deleteCatalogItem(item.id);
-      toast.success("Deleted!");
-      invalidateCatalog();
-    } catch (err) {
-      toast.error(err.message);
-    }
-  };
+  const handleDelete = useCallback(
+    async (item) => {
+      if (!confirm(`Delete "${item.itemName || "this item"}"?`)) return;
+      try {
+        await api.deleteCatalogItem(item.id);
+        toast.success("Deleted!");
+        invalidateCatalog();
+      } catch (err) {
+        toast.error(err.message);
+      }
+    },
+    [invalidateCatalog]
+  );
 
-  const handleQr = async (item) => {
+  const handleQr = useCallback(async (item) => {
     try {
       const { dataUrl } = await api.generateQR(`SLSU-TOOL:${item.id}`);
       setShowQr({ name: item.itemName, value: `SLSU-TOOL:${item.id}`, dataUrl });
     } catch {
       toast.error("Failed to generate QR");
     }
-  };
+  }, []);
 
-  const handleExport = async () => {
+  const handleExport = useCallback(async () => {
     setExporting(true);
     try {
       await api.downloadReport("catalog");
@@ -99,23 +104,64 @@ export default function CatalogPage() {
     } finally {
       setExporting(false);
     }
-  };
+  }, []);
 
-  // isPending, not isLoading: with keepPreviousData the first paint is the
-  // only time isLoading and isPending differ, and isPending is the one that
-  // means "no data at all yet" rather than "refetching".
-  if (isPending) return <LoadingSpinner />;
+  /*
+   * Memoized because StatStrip is wrapped in memo with a shallow compare, and these
+   * four objects were rebuilt inline on every render -- so the memo could never hit
+   * and the strip re-rendered with the page even when the numbers had not changed.
+   */
+  const statItems = useMemo(
+    () => [
+      { label: "Total Items", value: statsData?.total ?? 0 },
+      { label: "Available", value: statsData?.available ?? 0 },
+      { label: "Borrowed", value: statsData?.borrowed ?? 0 },
+      { label: "Total Quantity", value: statsData?.totalQuantity ?? 0 },
+    ],
+    [statsData]
+  );
 
-  const emptyAction =
-    activeFilterCount > 0 ? (
-      <button className="btn btn-green" onClick={resetFilters}>
-        Clear filters
-      </button>
-    ) : (
-      <button className="btn btn-green" onClick={() => setShowCreate(true)}>
-        <MdAdd size={16} /> Create Item
-      </button>
-    );
+  const emptyAction = useMemo(
+    () =>
+      activeFilterCount > 0 ? (
+        <button className="btn btn-green" onClick={resetFilters}>
+          Clear filters
+        </button>
+      ) : (
+        <button className="btn btn-green" onClick={() => setShowCreate(true)}>
+          <MdAdd size={16} /> Create Item
+        </button>
+      ),
+    [activeFilterCount, resetFilters]
+  );
+
+  const toolbarActions = useMemo(
+    () => (
+      <>
+        <button className="btn btn-green" onClick={() => setShowCreate(true)}>
+          <MdAdd size={16} /> Create Item
+        </button>
+        <button className="btn btn-outline" onClick={handleExport} disabled={exporting}>
+          <MdDownload size={16} /> {exporting ? "Preparing..." : "Report"}
+        </button>
+      </>
+    ),
+    [handleExport, exporting]
+  );
+
+  /*
+   * isPending, not isLoading: with keepPreviousData the first paint is the
+   * only time isLoading and isPending differ, and isPending is the one that
+   * means "no data at all yet" rather than "refetching".
+   *
+   * NO EARLY RETURN ANY MORE. This used to be `if (isPending) return
+   * <LoadingSpinner />`, which replaced the entire page -- toolbar, four filters,
+   * sort, view toggle, pagination, Create Item, Report and the StatStrip -- for one
+   * request that affects only the rows. None of that chrome depends on the item
+   * list, so on a slow link a user could not begin typing a search until the first
+   * response arrived. The rows now get a skeleton (see CatalogBrowser's `loading`)
+   * while everything else paints immediately.
+   */
 
   return (
     <section className="catalog-page">
@@ -131,15 +177,7 @@ export default function CatalogPage() {
         </div>
       )}
 
-      <StatStrip
-        variant="stack"
-        items={[
-          { label: "Total Items", value: statsData?.total ?? 0 },
-          { label: "Available", value: statsData?.available ?? 0 },
-          { label: "Borrowed", value: statsData?.borrowed ?? 0 },
-          { label: "Total Quantity", value: statsData?.totalQuantity ?? 0 },
-        ]}
-      />
+      <StatStrip variant="stack" items={statItems} />
 
       <CatalogBrowser
         items={items}
@@ -152,6 +190,7 @@ export default function CatalogPage() {
         viewStorageKey="labtrack-catalog-view"
         courseOptions={courseOptions}
         busy={isFetching}
+        loading={isPending}
         canManage
         onImageClick={setImageOverlay}
         onEdit={setEditing}
@@ -160,16 +199,7 @@ export default function CatalogPage() {
         emptyTitle={activeFilterCount > 0 ? "No matching items" : "No items yet"}
         emptyMessage={activeFilterCount > 0 ? "No catalog item matches the current filters." : "Create the first item to get started."}
         emptyAction={emptyAction}
-        actions={
-          <>
-            <button className="btn btn-green" onClick={() => setShowCreate(true)}>
-              <MdAdd size={16} /> Create Item
-            </button>
-            <button className="btn btn-outline" onClick={handleExport} disabled={exporting}>
-              <MdDownload size={16} /> {exporting ? "Preparing..." : "Report"}
-            </button>
-          </>
-        }
+        actions={toolbarActions}
       />
 
       {/* Both drawers stay mounted so the slide-in transition runs; each

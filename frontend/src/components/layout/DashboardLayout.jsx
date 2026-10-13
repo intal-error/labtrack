@@ -131,9 +131,46 @@ export default function DashboardLayout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const notifData = useMyNotifications();
-  const notifications = pickNotifications(notifData?.data);
-  const unreadCount = useUnreadCount();
+/*
+ * Bounded to 8, which is exactly what the dropdown renders (`slice(0, 8)` below).
+ *
+ * It used to be called with no params, i.e. `GET /notifications/user` with no limit.
+ * The backend applies no default limit either -- notificationsController.getAll does an
+ * unbounded `.select("*")` and paginates in JavaScript -- so opening the app on a
+ * logged-in device downloaded that user's entire notification history, every message
+ * and link string included, to draw eight rows in a dropdown. The endpoint orders by
+ * created_at DESC, so the first 8 are the same 8 either way; the rest was dead weight.
+ */
+const { data: notifData, isPending: notifPending } = useMyNotifications("limit=8");
+
+/*
+ * `pickNotifications` is given the RESPONSE, and `.data` is destructured OUT of the
+ * query result to get there.
+ *
+ * ── WHY THE DESTRUCTURE IS LOAD-BEARING ───────────────────────────────────────
+ *
+ * `useMyNotifications()` returns the whole react-query RESULT:
+ *
+ *     { data: <the response>, isPending, isFetching, error, ... }
+ *
+ * `pickNotifications(raw)` accepts either shape the ENDPOINT can return -- a bare
+ * array (no page/limit params) or `{ data: [...], pagination: {...} }` (with them) --
+ * and nothing else. Handing it the query result instead gives it
+ *
+ *     { data: { data: [...], pagination: {...} }, isPending: false, ... }
+ *
+ * where `Array.isArray(raw)` is false AND `Array.isArray(raw.data)` is false (it is the
+ * envelope, not the rows). It therefore returned `[]` unconditionally, and the bell
+ * rendered "No notifications yet" forever while the badge -- a separate query reading
+ * `pagination.total` directly -- kept counting correctly. That is exactly the reported
+ * symptom: a badge showing 1 above an empty list.
+ *
+ * The two other call sites get this right and are the pattern to copy:
+ * DashboardPage.jsx (`const { data: notifData } = ...`) and NotificationsTab.jsx
+ * (`const { data: response } = ...`).
+ */
+const notifications = pickNotifications(notifData);
+const unreadCount = useUnreadCount();
 
   // The course badge. A Course Admin sees their program in every page title; a Super
   // Admin sees "All Courses", which is the honest description of what they can reach.
@@ -390,7 +427,21 @@ export default function DashboardLayout() {
                       <button className="dash-dd-mark-read" onClick={handleMarkAllRead}>Mark all read</button>
                     )}
                   </div>
-                  {notifications.length === 0 ? (
+                  {notifPending ? (
+                    /*
+                     * Loading, not empty.
+                     *
+                     * `notifications.length === 0` is true while the query is still in
+                     * flight, so the dropdown claimed "No notifications yet" on every
+                     * open that outran the network -- the same misleading-empty reading
+                     * that made the extraction bug hard to spot from the UI. A spinner
+                     * costs nothing and tells the truth in the meantime.
+                     */
+                    <div className="dash-dd-empty" aria-live="polite" aria-busy="true">
+                      <div className="spinner" />
+                      <p>Loading notifications...</p>
+                    </div>
+                  ) : notifications.length === 0 ? (
                     <div className="dash-dd-empty">
                       <MdNotifications size={36} />
                       <p>No notifications yet</p>

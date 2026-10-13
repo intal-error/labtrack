@@ -812,6 +812,9 @@
 .txd-borrower-text {
   min-width: 0;
   flex: 1;
+  /* Below this the name, school id and tags cannot lay out without pushing the
+     dialog wider; see the phone rules in modal.css for how the dialog handles it. */
+  overflow-wrap: anywhere;
 }
 .txd-borrower-text h4 {
   margin: 0;
@@ -828,6 +831,9 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  /* Same flex-shrink reason as .txd-row: a single tag wider than the row would refuse
+     to wrap and stretch the borrower block past the dialog. */
+  min-width: 0;
 }
 .txd-tag {
   display: inline-block;
@@ -837,6 +843,21 @@
   color: var(--green);
   font-size: 11px;
   font-weight: 600;
+  /*
+   * THE BUG THAT WAS REPORTED. `.txd-tags` wraps BETWEEN tags, but a tag holds a single
+   * unbreakable token -- a student email like `intalmarclawrence01604@gmail.com` is one
+   * 31-character word with no break opportunity. `flex-wrap` cannot help, so the tag
+   * was pushed straight out through the right edge of the dialog and clipped by the
+   * viewport, dragging any tag after it off-screen with it.
+   *
+   * `overflow-wrap:anywhere` lets the browser break inside the token when it does not
+   * fit; `max-width:100%` stops a single tag exceeding the row it sits in; `min-width:0`
+   * lets the flex item actually shrink to that bound.
+   */
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .txd-tag--muted {
   background: var(--bg-card);
@@ -880,15 +901,33 @@
 .txd-row:last-child {
   border-bottom: none;
 }
+/*
+ * min-width:0 on BOTH children.
+ *
+ * A flex item defaults to min-width:auto, i.e. it refuses to shrink below its content.
+ * `.txd-value` holds dates, quantities and item names -- an item name or a course is
+ * easily long enough that the pair overflowed the dialog on a phone, pushing the right
+ * edge of the label column out of view. This is the standard flex-shrink fix: it lets
+ * the value column compress so the row can wrap within the panel instead of growing it.
+ */
+.txd-label,
+.txd-value {
+  min-width: 0;
+}
 .txd-label {
   font-size: 12.5px;
   color: var(--text-muted);
+  /* "Condition (Return)" must be able to break rather than force the row wider. */
+  overflow-wrap: anywhere;
 }
 .txd-value {
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
   text-align: right;
+  /* Long unbroken values (an unspaced asset tag, a URL-like id) must wrap inside the
+     column rather than extend the dialog. */
+  overflow-wrap: anywhere;
 }
 .txd-photos {
   display: flex;

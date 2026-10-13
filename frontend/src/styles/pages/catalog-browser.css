@@ -730,6 +730,20 @@ body.dark .cx-card-actions {
   border-top-color: rgba(255, 255, 255, 0.07);
 }
 
+/* First-load placeholder. Only the results region is replaced -- the toolbar above
+   is already interactive, because none of it depends on the item list. */
+.cx-skeleton {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.cx-skeleton .cx-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cx-card,
   .cx-card-image img,

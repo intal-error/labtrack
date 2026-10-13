@@ -50,14 +50,16 @@ export default function BorrowRequestsTab() {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState("pending");
   const [search, setSearch] = useState("");
-  const [selectedRequest, setSelectedRequest] = useState(null);
+  // Only the ID is held; the row itself is derived from `requests` below so an
+  // open dialog can never show a stale copy. See the note on the derivation.
+  const [selectedRequestId, setSelectedRequestId] = useState(null);
   const [reviewNotes, setReviewNotes] = useState("");
   const [processing, setProcessing] = useState(null);
   const [viewMode, setViewMode] = useState("list");
   const [sortBy, setSortBy] = useState("newest");
   const [page, setPage] = useState(1);
   // Reassignment state
-  const [reassignTarget, setReassignTarget] = useState(null);
+  const [reassignTargetId, setReassignTargetId] = useState(null);
   const [reassignAdminId, setReassignAdminId] = useState("");
   const [reassignReason, setReassignReason] = useState("");
   const [reassignLoading, setReassignLoading] = useState(false);
@@ -95,6 +97,33 @@ export default function BorrowRequestsTab() {
     return requestsData.data || [];
   }, [requestsData]);
 
+  /*
+   * Re-sync the two open dialogs against the refetched list.
+   *
+   * `selectedRequest` and `reassignTarget` hold the ROW OBJECT captured when the user
+   * clicked. handleApprove / handleReject / handleReassign all call
+   * invalidateBorrowRequests(), which refetches -- but nothing re-derived the held
+   * object, so the dialog kept rendering the pre-mutation values. The reported symptom
+   * was Borrow Request Details showing the PREVIOUS assigned admin immediately after a
+   * successful reassign, while the row behind it had already changed.
+   *
+   * Storing the ID and re-deriving from `requests` on every render is what keeps them
+   * honest: there is now no second copy to go stale. Derived rather than assigned, so
+   * the dialogs can never hold a row that is not in the list, and when the request
+   * leaves the current page (paged away, or filtered out) `selectedRequest` becomes
+   * null and the modal closes instead of showing a phantom row.
+   *
+   * No extra request: this reads the cache the invalidation already refilled.
+   */
+  const selectedRequest = useMemo(
+    () => (selectedRequestId ? requests.find((r) => r.id === selectedRequestId) || null : null),
+    [selectedRequestId, requests]
+  );
+  const reassignTarget = useMemo(
+    () => (reassignTargetId ? requests.find((r) => r.id === reassignTargetId) || null : null),
+    [reassignTargetId, requests]
+  );
+
   const paginationData = useMemo(() => {
     if (!requestsData || Array.isArray(requestsData)) return null;
     return requestsData.pagination || null;
@@ -126,7 +155,7 @@ export default function BorrowRequestsTab() {
     try {
       await api.approveBorrowRequest(id, reviewNotes);
       toast.success("Request approved");
-      setSelectedRequest(null);
+      setSelectedRequestId(null);
       setReviewNotes("");
       invalidateBorrowRequests();
     } catch (err) {
@@ -145,7 +174,7 @@ export default function BorrowRequestsTab() {
     try {
       await api.rejectBorrowRequest(id, reviewNotes);
       toast.success("Request rejected");
-      setSelectedRequest(null);
+      setSelectedRequestId(null);
       setReviewNotes("");
       invalidateBorrowRequests();
     } catch (err) {
@@ -164,7 +193,7 @@ export default function BorrowRequestsTab() {
         reason: reassignReason,
       });
       toast.success("Request reassigned");
-      setReassignTarget(null);
+      setReassignTargetId(null);
       setReassignAdminId("");
       setReassignReason("");
       invalidateBorrowRequests();
@@ -270,7 +299,7 @@ export default function BorrowRequestsTab() {
             const thumb = catalogImageMap[req.catalogId];
             const isCrossCourse = req.equipment_course && req.course && req.equipment_course !== req.course;
             return (
-              <div className={`maintenance-card ${dueInfo && dueInfo.days < 0 && req.status !== "rejected" && req.status !== "cancelled" ? "card-overdue" : ""}`} key={req.id} onClick={() => setSelectedRequest(req)}>
+              <div className={`maintenance-card ${dueInfo && dueInfo.days < 0 && req.status !== "rejected" && req.status !== "cancelled" ? "card-overdue" : ""}`} key={req.id} onClick={() => setSelectedRequestId(req.id)}>
                 <div className="maintenance-card-header">
                   <div className="maintenance-card-title">
                     {thumb ? (
@@ -323,10 +352,10 @@ export default function BorrowRequestsTab() {
                 </div>
                 {req.status === "pending" && role === "admin" && (
                   <div className="maintenance-card-actions">
-                    <button className="btn btn-sm btn-primary" onClick={(e) => { e.stopPropagation(); setSelectedRequest(req); }}>
+                    <button className="btn btn-sm btn-primary" onClick={(e) => { e.stopPropagation(); setSelectedRequestId(req.id); }}>
                       <MdCheckCircle size={14} /> Review
                     </button>
-                    <button className="btn btn-sm btn-secondary" onClick={(e) => { e.stopPropagation(); setReassignTarget(req); }} title="Reassign">
+                    <button className="btn btn-sm btn-secondary" onClick={(e) => { e.stopPropagation(); setReassignTargetId(req.id); }} title="Reassign">
                       <MdSwapHoriz size={14} /> Reassign
                     </button>
                   </div>
@@ -355,7 +384,7 @@ export default function BorrowRequestsTab() {
               {filtered.map((req) => {
                 const dueInfo = getDueDateInfo(toDate(req.dueDate));
                 return (
-                  <tr key={req.id} onClick={() => setSelectedRequest(req)} style={{ cursor: "pointer" }}>
+                  <tr key={req.id} onClick={() => setSelectedRequestId(req.id)} style={{ cursor: "pointer" }}>
                     <td>{req.firstName} {req.lastName}</td>
                     <td>{req.schoolId || "-"}</td>
                     <td>{req.itemName}</td>
@@ -376,8 +405,8 @@ export default function BorrowRequestsTab() {
                     <td>
                       {req.status === "pending" && role === "admin" && (
                         <div style={{ display: "flex", gap: 4 }}>
-                          <button className="btn btn-sm btn-primary" onClick={(e) => { e.stopPropagation(); setSelectedRequest(req); }}>Review</button>
-                          <button className="btn btn-sm btn-secondary" onClick={(e) => { e.stopPropagation(); setReassignTarget(req); }} title="Reassign">
+                          <button className="btn btn-sm btn-primary" onClick={(e) => { e.stopPropagation(); setSelectedRequestId(req.id); }}>Review</button>
+                          <button className="btn btn-sm btn-secondary" onClick={(e) => { e.stopPropagation(); setReassignTargetId(req.id); }} title="Reassign">
                             <MdSwapHoriz size={14} />
                           </button>
                         </div>
@@ -401,7 +430,7 @@ export default function BorrowRequestsTab() {
 
       {/* Request Detail Modal */}
       {selectedRequest && (
-        <Modal title="Borrow Request Details" onClose={() => { setSelectedRequest(null); setReviewNotes(""); }}>
+        <Modal title="Borrow Request Details" onClose={() => { setSelectedRequestId(null); setReviewNotes(""); }}>
           <div className="txn-detail-modal">
             <div className="txn-detail-section">
               <div className="txn-detail-grid">
@@ -524,7 +553,7 @@ export default function BorrowRequestsTab() {
 
       {/* Reassignment Modal */}
       {reassignTarget && (
-        <Modal title="Reassign Request" onClose={() => { setReassignTarget(null); setReassignAdminId(""); setReassignReason(""); }}>
+        <Modal title="Reassign Request" onClose={() => { setReassignTargetId(null); setReassignAdminId(""); setReassignReason(""); }}>
           <div className="txn-detail-modal">
             <div className="txn-detail-section">
               <div className="txn-detail-grid">
@@ -559,7 +588,7 @@ export default function BorrowRequestsTab() {
                 />
               </div>
               <div className="form-actions">
-                <button className="btn btn-secondary" onClick={() => { setReassignTarget(null); setReassignAdminId(""); setReassignReason(""); }}>
+                <button className="btn btn-secondary" onClick={() => { setReassignTargetId(null); setReassignAdminId(""); setReassignReason(""); }}>
                   Cancel
                 </button>
                 <button

@@ -19,7 +19,10 @@
  *      serve instantly; the revalidation keeps a new deploy reachable.
  *   3. API GETs: network-first with a 10 s timeout, then cache. Offline the app
  *      still shows the last known data with an offline banner rather than an
- *      empty screen. Writes are never cached -- see the fetch handler note.
+ *      empty screen. Because that cache is also the 10 s TIMEOUT path, anything
+ *      served from it is stamped X-LabTrack-Served-From so the page can say so
+ *      rather than presenting old inventory as current -- see stampCachedResponse.
+ *      Writes are never cached -- see the fetch handler note.
  */
 
 import { clientsClaim } from "workbox-core";
@@ -233,6 +236,56 @@ registerRoute(
 );
 
 /*
+ * Catalog and incident photos, which are NOT first-party.
+ *
+ * WHY THIS EXISTS: the rule above requires `sameOrigin`, so it has never applied to a
+ * single item photo. Those come back from the backend as Cloudinary `secure_url`s
+ * (uploadController.js returns `{ url: data.secure_url }`), which are cross-origin, so
+ * every Catalog visit re-downloaded up to 25 full-resolution originals with the
+ * service worker sitting right there unable to help. Only the browser's own HTTP cache
+ * stood between a phone on a congested link and 25 image fetches.
+ *
+ * WHY A HOSTNAME ALLOWLIST AND NOT A LOOSER RULE: this is the one place in the file
+ * where dropping `sameOrigin` would be a mistake rather than an oversight. The safety
+ * property the other rules have -- that a cross-origin opaque response can never be
+ * stored and replayed -- is exactly what is being given up, deliberately and only for
+ * one known, public, image-only host. A generic "cache any cross-origin GET" rule would
+ * put opaque API responses into Cache Storage under a URL-only key, which is the exact
+ * cross-user leak the per-identity bucketing above exists to prevent. Matching on the
+ * hostname, not on the absence of sameOrigin, keeps that impossible by construction:
+ * nothing but an image on res.cloudinary.com can reach this strategy.
+ *
+ * CacheFirst, not StaleWhileRevalidate: a Cloudinary delivery URL is immutable for the
+ * life of its public_id, so revalidating one costs a request to learn nothing.
+ *
+ * HOW A CHANGED PHOTO INVALIDATES: the cache key is the URL, and replacing an item's
+ * photo stores a different public_id, so it produces a different URL and therefore a
+ * different key. The new photo is fetched on its first appearance, with no version
+ * field and no cache-busting code. The superseded entry simply becomes the least
+ * recently used one and is evicted by the caps below.
+ *
+ * KNOWN LIMIT: a cross-origin <img> request is `no-cors`, so the response arrives
+ * opaque with status 0 and a genuinely broken URL is indistinguishable from a good one.
+ * A dead photo URL would therefore replay from cache for up to 30 days on that device.
+ * Acceptable for immutable, content-addressed Cloudinary assets; a user who hits it
+ * hard-reloads. Tightening this would mean proxying images through the API, which is a
+ * larger change than this optimisation is worth.
+ */
+const CATALOG_IMAGE_HOSTS = new Set(["res.cloudinary.com"]);
+
+registerRoute(
+  ({ url }) => CATALOG_IMAGE_HOSTS.has(url.hostname),
+  new CacheFirst({
+    cacheName: "catalog-images",
+    // A page of Catalog rows is 25 images and a student may browse several, so this
+    // covers a few pages of history rather than one.
+    expiration: { maxEntries: 120, maxAgeSeconds: 60 * 60 * 24 * 30 },
+    cacheableResponse: { statuses: [0, 200] },
+  }),
+  "GET"
+);
+
+/*
  * API GETs, so a dropped connection shows the last known data instead of nothing.
  *
  * ── WHY /api/auth/* IS EXCLUDED ────────────────────────────────────────────────
@@ -325,6 +378,58 @@ const apiStrategies = new Map();
 /** Cap on tracked identities. A lab tablet sees a handful; 32 is generous headroom. */
 const MAX_TRACKED_IDENTITIES = 32;
 
+/*
+ * ── Marking a response as coming from Cache Storage ─────────────────────────
+ *
+ * WHY THIS EXISTS: NetworkFirst answers from cache on its 10-second TIMEOUT path,
+ * not only when the device is offline. A congested-but-working campus link that takes
+ * 11 s to answer /api/catalog therefore renders inventory quantities up to 24 hours
+ * old -- and OfflineBanner cannot help, because navigator.onLine reports true the
+ * whole time. That is the one failure this app must not have: a stale quantity shown
+ * as a current one.
+ *
+ * cachedResponseWillBeUsed is the hook for this because Workbox calls it on the cache
+ * path ONLY. A live response never passes through it, so "this came from the cache"
+ * needs no inference from a Date header or a heuristic -- it is simply the case where
+ * this function runs at all.
+ *
+ * The Date header is read only to show the user HOW old the data is. It is not what
+ * decides the outcome: a missing or unparseable Date degrades to "unknown age" and the
+ * banner still appears, which is the correct failure direction.
+ *
+ * This is additive. The strategy, the identity bucketing, the /api/auth exclusion and
+ * every write path are untouched, so a client that ignores these headers simply keeps
+ * the previous behaviour.
+ */
+const SERVED_FROM_HEADER = "X-LabTrack-Served-From";
+const CACHED_AT_HEADER = "X-LabTrack-Cached-At";
+
+function stampCachedResponse({ cachedResponse }) {
+  if (!cachedResponse) return cachedResponse;
+
+  // An opaque (status 0) or partial (206) response cannot be re-wrapped: the Response
+  // constructor rejects those statuses outright, and an opaque response has no
+  // readable headers to stamp in the first place. Handing it back untouched is the
+  // only correct option -- and it degrades to the old behaviour, not to an error.
+  if (cachedResponse.type === "opaque" || cachedResponse.status === 0 || cachedResponse.status === 206) {
+    return cachedResponse;
+  }
+
+  const headers = new Headers(cachedResponse.headers);
+  headers.set(SERVED_FROM_HEADER, "sw-cache");
+  const storedAt = cachedResponse.headers.get("date");
+  if (storedAt) headers.set(CACHED_AT_HEADER, storedAt);
+
+  // cachedResponse.body is transferred, not buffered: the new Response takes over the
+  // stream, so the response body is not read into memory an extra time on every
+  // cache hit.
+  return new Response(cachedResponse.body, {
+    status: cachedResponse.status,
+    statusText: cachedResponse.statusText,
+    headers,
+  });
+}
+
 function getApiStrategy(tag) {
   const cacheName = tag ? `api-cache-${tag}` : "api-cache-public";
   const existing = apiStrategies.get(cacheName);
@@ -340,9 +445,13 @@ function getApiStrategy(tag) {
     networkTimeoutSeconds: 10,
     expiration: { maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 },
     cacheableResponse: { statuses: [0, 200] },
-    // Without this, a QuotaExceededError on write REJECTS the request, turning a full
-    // disk into a hard API failure for the user. Purging keeps reads working instead.
-    plugins: [{ purgeOnQuotaError: true }],
+    plugins: [
+      // Without this, a QuotaExceededError on write REJECTS the request, turning a full
+      // disk into a hard API failure for the user. Purging keeps reads working instead.
+      { purgeOnQuotaError: true },
+      // Tells the page this answer is from cache. See the note above.
+      { cachedResponseWillBeUsed: stampCachedResponse },
+    ],
   });
 
   apiStrategies.set(cacheName, strategy);

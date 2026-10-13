@@ -62,8 +62,21 @@ export default function TransactionsPanel({ mode = "borrowed" }) {
   }, [search]);
 
   const isBorrowed = mode === "borrowed";
-  const borrowedQ = useMyBorrowed(params);
-  const returnedQ = useMyReturned(params);
+
+  /*
+   * Only the list actually on screen is requested.
+   *
+   * Both hooks used to be enabled unconditionally, so opening My Activity -> Borrowed
+   * issued `GET /transactions/my-borrowed` AND `GET /transactions/my-returned`, threw
+   * the second response away, and then -- worse -- waited on it: the guard below was
+   * `borrowedQ.isPending && returnedQ.isPending`, so a slow response for the list the
+   * user was NOT looking at held a full-page spinner over the one they were.
+   *
+   * `enabled` is passed through to the hook, so the inactive list costs nothing and
+   * cannot gate anything.
+   */
+  const borrowedQ = useMyBorrowed(params, { enabled: isBorrowed });
+  const returnedQ = useMyReturned(params, { enabled: !isBorrowed });
   const activeQuery = isBorrowed ? borrowedQ : returnedQ;
 
   const items = useMemo(() => normalize(activeQuery.data), [activeQuery.data]);
@@ -72,9 +85,29 @@ export default function TransactionsPanel({ mode = "borrowed" }) {
 
   const { data: stats } = useMyTransactionStats();
 
+  /*
+   * Memoized. StatStrip is `memo`d with a shallow compare, so an `items` array
+   * rebuilt inline guarantees the memo misses and the strip re-renders whenever the
+   * panel does -- which is every keystroke, because the search box above is the state
+   * that drives it. This is the last inline `items` array among the files this change
+   * touched; the admin TransactionsPage has the same shape and was left alone
+   * deliberately (it is not on the critical path this work covered).
+   */
+  const statItems = useMemo(
+    () => [
+      { label: "Active Borrows", value: stats?.activeBorrows ?? 0 },
+      { label: "Due Soon", value: stats?.dueSoon ?? 0, tone: (stats?.dueSoon ?? 0) > 0 ? "warn" : "default" },
+      { label: "Overdue", value: stats?.overdue ?? 0, tone: (stats?.overdue ?? 0) > 0 ? "alert" : "default" },
+      { label: "Total Returned", value: stats?.totalReturned ?? 0 },
+    ],
+    [stats]
+  );
+
   const error = activeQuery.isError ? activeQuery.error : null;
 
-  if (borrowedQ.isPending && returnedQ.isPending) return <div className="page-loading"><div className="spinner-lg" /></div>;
+  // The ACTIVE query only. See the note above: the inactive one is disabled, so waiting
+  // on it could only ever hold a spinner for data nobody is rendering.
+  if (activeQuery.isPending) return <div className="page-loading"><div className="spinner-lg" /></div>;
 
   if (error && rows.length === 0) {
     return (
@@ -93,12 +126,7 @@ export default function TransactionsPanel({ mode = "borrowed" }) {
            TransactionsPage renders this same component WITHOUT the class. */
         className="hide-stats-mobile"
         variant="stack"
-        items={[
-          { label: "Active Borrows", value: stats?.activeBorrows ?? 0 },
-          { label: "Due Soon", value: stats?.dueSoon ?? 0, tone: (stats?.dueSoon ?? 0) > 0 ? "warn" : "default" },
-          { label: "Overdue", value: stats?.overdue ?? 0, tone: (stats?.overdue ?? 0) > 0 ? "alert" : "default" },
-          { label: "Total Returned", value: stats?.totalReturned ?? 0 },
-        ]}
+        items={statItems}
       />
 
       <TransactionToolbar

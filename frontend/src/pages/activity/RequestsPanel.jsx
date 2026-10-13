@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { api } from "../../services/api";
+import { useMyBorrowRequests } from "../../hooks/useQueries";
 import Modal from "../../components/ui/Modal";
 import toast from "react-hot-toast";
 import TransactionToolbar from "../../components/transactions/TransactionToolbar";
@@ -80,13 +81,9 @@ function RequestDetail({ request, onCancel }) {
 }
 
 export default function RequestsPanel() {
-  const [requests, setRequests] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [filter, setFilter] = useState("all");
   const [selected, setSelected] = useState(null);
   const [viewMode, setViewMode] = useState("list");
-  const [reloadKey, setReloadKey] = useState(0);
 
   /* See hooks/useMediaQuery.js. RequestsTable needs ~900px for its eight
      columns and .main-content clips overflow-x, so below the card breakpoint
@@ -95,29 +92,31 @@ export default function RequestsPanel() {
      than not offering one. */
   const isNarrow = useMediaQuery(`(max-width: ${STUDENT_CARD_MAX_WIDTH}px)`);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await api.getMyBorrowRequests();
-        if (cancelled) return;
-        setRequests(data || []);
-        setError(null);
-      } catch (err) {
-        if (!cancelled) setError(err?.message || "Failed to load requests");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [reloadKey]);
+  /*
+   * Was a bare useEffect + api.getMyBorrowRequests() + local useState.
+   *
+   * That bypassed the query cache entirely, which cost three things: it refetched on
+   * every mount even though a student's Dashboard had just fetched the identical
+   * endpoint moments earlier through useMyBorrowRequests(); it had no AbortSignal, so
+   * closing the panel mid-flight left the request running; and it could not be shared.
+   *
+   * Now it is the hook, so this panel and the dashboard read one cache entry and a
+   * return to My Activity within the staleTime costs nothing. `reload()` is refetch()
+   * rather than a remount-counter bump, which also gives it a real loading state
+   * without the local state dance.
+   */
+  const {
+    data: requestsData,
+    isPending,
+    isError,
+    error: queryError,
+    refetch,
+  } = useMyBorrowRequests();
+
+  const requests = useMemo(() => requestsData || [], [requestsData]);
 
   function reload() {
-    setError(null);
-    setLoading(true);
-    setReloadKey((k) => k + 1);
+    refetch();
   }
 
   async function handleCancel(id) {
@@ -150,15 +149,27 @@ export default function RequestsPanel() {
     [requests],
   );
 
-  if (loading) return <div className="page-loading"><div className="spinner-lg" /></div>;
+  if (isPending) return <div className="page-loading"><div className="spinner-lg" /></div>;
 
-  if (error) {
+  /*
+   * Only when there is NOTHING to show.
+   *
+   * The local-state version this replaced also cleared the list on any failed load,
+   * but under react-query a failed refetch is much easier to hit than a failed first
+   * load: a cancelled request, a `reload()` after cancelling one, or a 30-second
+   * blip on a congested link all land here with a perfectly good `requests` array
+   * still in hand. Replacing the table with "Couldn't load your requests" in that
+   * situation throws away data the app already has, which is the opposite of helpful.
+   * A background refetch failure now leaves the table on screen; React Query surfaces
+   * it again on the next mount or retry.
+   */
+  if (isError && requests.length === 0) {
     return (
       <section className="transactions-page activity-panel">
         <TransactionEmpty
           mode="requests"
           title="Couldn't load your requests"
-          message={error}
+          message={queryError?.message || "Failed to load requests"}
           action={
             <button className="btn btn-green" onClick={reload}>
               Retry

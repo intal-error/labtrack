@@ -12,7 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
-    "verify": "node tests/exportReport.verify.js && node tests/incidentWorkflow.verify.js && node tests/apiErrors.verify.js && node tests/swRouting.verify.js && node tests/authFlow.verify.js && vitest run"
+    "verify": "node tests/exportReport.verify.js && node tests/incidentWorkflow.verify.js && node tests/apiErrors.verify.js && node tests/swRouting.verify.js && node tests/mobileModalCss.verify.js && node tests/authFlow.verify.js && vitest run"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.102.8",

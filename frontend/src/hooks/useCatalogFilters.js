@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ALL, CATALOG_PAGE_SIZE } from "../constants/catalog";
 
@@ -34,7 +34,19 @@ export default function useCatalogFilters() {
     setSearch(urlSearch);
   }
 
-  const filters = { search, course, status, category, condition, sort };
+  /*
+   * Memoized because CatalogBrowser is memoized and receives this as a prop.
+   *
+   * WHY IT MATTERS: `search` is raw input state, so it changes on every keystroke.
+   * An unmemoized object here is a new reference every render, which makes
+   * CatalogBrowser's memo miss every time and re-reconciles all 25 rows -- each row
+   * recomputing getAvailableQuantity / conditionClass / fmtDate -- for a keystroke
+   * that (thanks to the debounce above) has not yet produced a request.
+   */
+  const filters = useMemo(
+    () => ({ search, course, status, category, condition, sort }),
+    [search, course, status, category, condition, sort]
+  );
 
   // Render-phase reset, matching the pattern already used in this repo
   // (ViewToggle.jsx:18, TransactionsPage). Any filter change invalidates the
@@ -66,16 +78,39 @@ export default function useCatalogFilters() {
     return next;
   }, [page, sort, debouncedSearch, course, status, category, condition]);
 
-  const setFilters = (patch) => {
+  /*
+   * Stable identity: passed straight to CatalogBrowser as `onFilterChange`.
+   *
+   * Every useState setter above is referentially stable for the life of the
+   * component, so the dependency list is genuinely empty -- this closure can never
+   * read a stale value.
+   */
+  const setFilters = useCallback((patch) => {
     if ("search" in patch) setSearch(patch.search);
     if ("course" in patch) setCourse(patch.course);
     if ("status" in patch) setStatus(patch.status);
     if ("category" in patch) setCategory(patch.category);
     if ("condition" in patch) setCondition(patch.condition);
     if ("sort" in patch) setSort(patch.sort);
-  };
+  }, []);
 
-  const resetFilters = () => {
+  /*
+ * Memoized, and the dependency list is genuinely empty.
+ *
+ * Every setState setter above is referentially stable for the life of the component,
+ * so this closure can never read a stale value.
+ *
+ * WHY THIS MATTERS AND IT IS NOT OBVIOUS: both catalog pages memoise their
+ * `emptyAction` element on `[activeFilterCount, resetFilters]` and hand it to the
+ * memoized CatalogResults. An unmemoized `resetFilters` is a fresh function identity
+ * on every render, so `emptyAction` was rebuilt on every render too, so the shallow
+ * prop compare on CatalogResults missed on every render -- and the entire row-level
+ * memo, the thing that stops 25 rows reconciling per keystroke, did nothing in the
+ * real app. It looked fine in the component test because that test passes no
+ * `emptyAction`. Now that `emptyAction` is passed in a test too, so this cannot
+ * regress silently again.
+ */
+const resetFilters = useCallback(() => {
     setSearch("");
     setCourse(ALL);
     setStatus(ALL);
@@ -83,15 +118,18 @@ export default function useCatalogFilters() {
     setCondition(ALL);
     setSort("name");
     setPage(1);
-  };
+  }, []);
 
-  const activeFilterCount =
-    (search.trim() ? 1 : 0) +
-    (course !== ALL ? 1 : 0) +
-    (status !== ALL ? 1 : 0) +
-    (category !== ALL ? 1 : 0) +
-    (condition !== ALL ? 1 : 0) +
-    (sort !== "name" ? 1 : 0);
+  const activeFilterCount = useMemo(
+    () =>
+      (search.trim() ? 1 : 0) +
+      (course !== ALL ? 1 : 0) +
+      (status !== ALL ? 1 : 0) +
+      (category !== ALL ? 1 : 0) +
+      (condition !== ALL ? 1 : 0) +
+      (sort !== "name" ? 1 : 0),
+    [search, course, status, category, condition, sort]
+  );
 
   return { filters, params, page, setPage, setFilters, resetFilters, activeFilterCount };
 }

@@ -41,14 +41,17 @@ body.dark .btn-outline:hover{color:#000}
 input,select,textarea{padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:15px;transition:border .2s}
 input:focus,select:focus{outline:none;border-color:var(--green);box-shadow:0 0 3px rgba(46,125,50,.3)}
 body.dark input:focus,body.dark select:focus{box-shadow:0 0 3px rgba(67,160,71,.3)}
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;justify-content:center;align-items:center;z-index:9998}
-.modal-content{background:var(--bg-card);padding:30px 25px;border-radius:12px;width:420px;max-width:95vw;max-height:85vh;overflow-y:auto;scrollbar-width:none;box-shadow:0 0 20px rgba(0,0,0,.4);animation:modalIn .25s ease}
-.modal-content::-webkit-scrollbar{width:0}
-@keyframes modalIn{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:translateY(0)}}
-.modal-content h2{font-size:24px;color:var(--dark-green);margin-bottom:15px}
-body.dark .modal-content h2{color:var(--green)}
-.modal-content form{display:flex;flex-direction:column;gap:12px}
-.modal-content form input,.modal-content form select{width:100%;padding:12px;font-size:15px}
+/*
+ * The modal overlay/panel rules moved to styles/pages/modal.css.
+ *
+ * They used to be defined TWICE with different values -- here (background .6, no
+ * overlay padding, width 420px, max-width 95vw, max-height 85vh) and again in
+ * styles/pages/tabs.css (background .5, overlay padding 20px, width 100%,
+ * max-width 520px, max-height 90vh). Which one applied depended on the order the two
+ * stylesheets happened to land in the bundle, so the dialog's width, background and
+ * padding were effectively non-deterministic. One canonical definition now lives with
+ * the component that renders it.
+ */
 
 /* Export Report Modal - shared by transactions and attendance */
 .export-modal{display:flex;flex-direction:column;gap:16px;min-width:340px}
@@ -100,14 +103,10 @@ body.dark .card:hover{box-shadow:0 4px 16px rgba(0,0,0,.25)}
   html{font-size:14px}
   .btn{min-height:44px}
   input,select,textarea{min-height:44px;font-size:16px}
-  .modal-overlay{padding:16px;align-items:flex-end}
-  /* The bottom-sheet treatment already existed, but its 24px padding was the
-     only clearance between the last action button and the bottom of the screen
-     -- so on a phone with a home indicator, "Cancel"/"Save" in a Transaction,
-     Fine, Notification or Request detail sat inside the gesture strip.
-     `.modal-overlay` itself is not padded, and the sheet is inset 16px from the
-     viewport edge, so the home indicator is still never overlapped. */
-  .modal-content{width:100%;max-width:100%;max-height:85dvh;border-radius:16px 16px 0 0;padding:24px 18px calc(24px + env(safe-area-inset-bottom, 0px))}
+  /* The mobile modal bottom-sheet used to live here and is now in
+     styles/pages/modal.css beside the component, at the same 768px breakpoint and
+     with the same values -- so a tablet-sized viewport is unchanged. It was a third
+     competing definition alongside the two base rules that file removed. */
 }
 /* iOS focus-zoom lock: all form controls ≥16px on mobile (beats class selectors) */
 @media(max-width:1024px){
@@ -283,6 +282,14 @@ body.dark .hero-action-btn.ghost:hover {
 
 .offline-banner.is-online {
   background: #2e7d32;
+}
+
+/* Saved-data banner (components/ui/StaleDataBanner.jsx).
+   Amber rather than red: this is not an error and the app still works, it is a
+   disclosure that the numbers on screen may be old. Deliberately never shown at
+   the same time as the offline banner -- see the component for why. */
+.offline-banner.is-stale {
+  background: #8a5a00;
 }
 
 .offline-banner-icon {

@@ -1,8 +1,7 @@
-import { useState, useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
-import { useCourseOptions } from "../../hooks/useQueries";
+import { useAttendanceRooms, useCourseOptions } from "../../hooks/useQueries";
 import toast from "react-hot-toast";
 import {
   MdAdd,
@@ -27,11 +26,32 @@ import {
 import "../../styles/pages/attendance.css";
 
 export default function RoomManagementTab() {
-  const queryClient = useQueryClient();
   const { isSuperAdmin, courseId: myCourseId } = useAuth();
   const { options: courseOptions } = useCourseOptions();
-  const [rooms, setRooms] = useState([]);
-  const [loading, setLoading] = useState(true);
+
+  /*
+   * One room list, fetched once.
+   *
+   * This tab used to hold its own `useState` copy, refilled by `loadRooms()` on mount,
+   * and separately called `syncRoomCache()` -> `invalidateQueries(["attendance",
+   * "rooms"])` so the two OTHER surfaces reading the shared query would also refresh.
+   * That is two requests per refresh -- and refreshes happen on mount, after every
+   * create, after every edit and after every delete -- to keep two copies of the same
+   * list in agreement.
+   *
+   * `useAttendanceRooms()` is the same endpoint under the same cache key that
+   * AttendanceLogsPage and the room history hero chips already read, so a single
+   * `refetch()` now updates all three at once. The Room Logs grid can no longer drift
+   * out of step with this tab, because there is no longer a second copy to drift.
+   */
+  const {
+    data: roomsData,
+    isPending: loading,
+    isError: roomsFailed,
+    error: roomsError,
+    refetch: refetchRooms,
+  } = useAttendanceRooms();
+  const rooms = roomsData || [];
   const [showModal, setShowModal] = useState(false);
   const [editRoom, setEditRoom] = useState(null);
   const [roomName, setRoomName] = useState("");
@@ -40,35 +60,16 @@ export default function RoomManagementTab() {
   const [qrModal, setQrModal] = useState(null);
   const [qrImage, setQrImage] = useState("");
 
-  useEffect(() => { loadRooms(); }, []);
-
-  async function loadRooms() {
-    setLoading(true);
-    try {
-      const data = await api.getRooms();
-      setRooms(data);
-    } catch (err) {
-      toast.error(err.message || "Failed to load rooms");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // This tab keeps its own local copy of the room list, but two other surfaces
-  // read the cached one: the Room Logs grid and the room history hero chips,
-  // both via useAttendanceRooms (a 5 minute staleTime). Editing a room here left
-  // those stale for minutes -- including the grid still listing a room that had
-  // just been deleted. Refreshing the shared cache keeps all three in step.
-  function syncRoomCache() {
-    queryClient.invalidateQueries({ queryKey: ["attendance", "rooms"] });
-  }
-
-  // Both halves are needed. This tab renders from its own local copy, so
-  // loadRooms() alone is what updates the grid below; syncRoomCache() is what
-  // keeps the Room Logs tab and the room history hero chips in step.
+  /*
+   * The single refresh path for this tab.
+   *
+   * Previously loadRooms() (the local copy) + syncRoomCache() (the shared key) -- two
+   * requests for one user action. Now it is one refetch against the shared key, and
+   * every observer of it updates: this grid, the Room Logs tab, and the room history
+   * hero chips.
+   */
   function refreshRooms() {
-    loadRooms();
-    syncRoomCache();
+    refetchRooms();
   }
 
   function openAddModal() {
@@ -141,8 +142,7 @@ async function handleSave() {
         await api.createRoom({ roomName: roomName.trim(), location: location.trim(), course });
       }
       setShowModal(false);
-      loadRooms();
-      syncRoomCache();
+      refreshRooms();
 
       if (transferred > 0) {
         toast.success(
@@ -163,8 +163,7 @@ async function handleSave() {
     try {
       await api.deleteRoom(room.id);
       toast.success("Room deleted");
-      loadRooms();
-      syncRoomCache();
+      refreshRooms();
     } catch (err) {
       toast.error(err.message || "Failed to delete room");
     }
@@ -203,6 +202,28 @@ async function handleSave() {
         <div className="rooms-empty">
           <div className="spinner-lg" />
           <h3>Loading rooms...</h3>
+        </div>
+      ) : roomsFailed && rooms.length === 0 ? (
+        /*
+         * Must be checked BEFORE the empty state.
+         *
+         * A failed request leaves `rooms` as [], so without this branch the panel
+         * rendered "No Lab Rooms Yet -- add your first lab room" after every timeout.
+         * That is not a cosmetic wrong: an admin whose network blipped would read the
+         * building as having no rooms and create duplicates of rooms that already
+         * exist. The pre-react-query version toasted the failure instead, and this
+         * restores that information -- persistently, rather than as a toast that
+         * disappears before it is read.
+         */
+        <div className="rooms-empty">
+          <div className="rooms-empty-icon">
+            <MdOutlineBusiness size={28} />
+          </div>
+          <h3>Couldn&apos;t load rooms</h3>
+          <p>{roomsError?.message || "The room list could not be fetched. Check your connection."}</p>
+          <button className="btn btn-outline" onClick={refreshRooms}>
+            Try again
+          </button>
         </div>
       ) : rooms.length === 0 ? (
         <div className="rooms-empty">

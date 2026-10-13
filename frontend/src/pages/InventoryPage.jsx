@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { useCatalog, useCatalogStats } from "../hooks/useQueries";
 import useCatalogFilters from "../hooks/useCatalogFilters";
-import LoadingSpinner from "../components/ui/LoadingSpinner";
 import StatStrip from "../components/ui/StatStrip";
 import CatalogBrowser from "../components/catalog/CatalogBrowser";
 import "../styles/pages/catalog.css";
@@ -25,7 +24,29 @@ export default function InventoryPage() {
     return response.pagination || null;
   }, [response]);
 
-  if (isPending) return <LoadingSpinner />;
+  /*
+   * Memoized for the same reason as in CatalogPage: StatStrip is `memo`d with a
+   * shallow compare, so an inline `items` array guarantees the memo misses.
+   */
+  const statItems = useMemo(
+    () => [
+      { label: "Total Items", value: statsData?.total ?? 0 },
+      { label: "Available", value: statsData?.available ?? 0 },
+      { label: "Borrowed", value: statsData?.borrowed ?? 0 },
+      { label: "Total Quantity", value: statsData?.totalQuantity ?? 0 },
+    ],
+    [statsData]
+  );
+
+  const emptyAction = useMemo(
+    () =>
+      activeFilterCount > 0 ? (
+        <button className="btn btn-green" onClick={resetFilters}>
+          Clear filters
+        </button>
+      ) : null,
+    [activeFilterCount, resetFilters]
+  );
 
   return (
     <section className="catalog-page">
@@ -36,12 +57,7 @@ export default function InventoryPage() {
            them. */
         className="hide-stats-mobile"
         variant="stack"
-        items={[
-          { label: "Total Items", value: statsData?.total ?? 0 },
-          { label: "Available", value: statsData?.available ?? 0 },
-          { label: "Borrowed", value: statsData?.borrowed ?? 0 },
-          { label: "Total Quantity", value: statsData?.totalQuantity ?? 0 },
-        ]}
+        items={statItems}
       />
 
       <CatalogBrowser
@@ -58,18 +74,13 @@ export default function InventoryPage() {
            The admin catalog deliberately does not set this and keeps its table. */
         narrowAsCards
         busy={isFetching}
+        loading={isPending}
         onImageClick={setImageOverlay}
         emptyTitle={activeFilterCount > 0 ? "No matching items" : "Nothing available yet"}
         emptyMessage={
           activeFilterCount > 0 ? "No catalog item matches the current filters." : "Check back later for new equipment."
         }
-        emptyAction={
-          activeFilterCount > 0 ? (
-            <button className="btn btn-green" onClick={resetFilters}>
-              Clear filters
-            </button>
-          ) : null
-        }
+        emptyAction={emptyAction}
       />
 
       {imageOverlay && (

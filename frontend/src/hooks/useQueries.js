@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { api } from "../services/api";
 
@@ -41,13 +42,29 @@ export function useCourses() {
   });
 }
 
-/** Convenience for pickers: the id/name pairs, with active courses first. */
+/**
+ * Convenience for pickers: the id/name pairs, with active courses first.
+ *
+ * Both halves are memoized, and the reason is referential identity rather than cost.
+ * The list itself is ~9 entries so sorting it is free, but this hook has three
+ * consumers (StudentsPage, AdminPage, RoomManagementTab) whose pickers memoise on
+ * `options`. An unmemoized return gave every one of them a new array AND a new wrapper
+ * object on every render, so those memos could never hit and each picker re-derived
+ * its option list on every parent render. Memoizing the wrapper matters as much as
+ * memoizing the array.
+ */
 export function useCourseOptions() {
   const { data, isLoading } = useCourses();
-  const options = (data || [])
-    .map((c) => ({ value: c.id, label: c.name, id: c.id, name: c.name, status: c.status }))
-    .sort((a, b) => a.label.localeCompare(b.label));
-  return { options, isLoading };
+
+  const options = useMemo(
+    () =>
+      (data || [])
+        .map((c) => ({ value: c.id, label: c.name, id: c.id, name: c.name, status: c.status }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [data]
+  );
+
+  return useMemo(() => ({ options, isLoading }), [options, isLoading]);
 }
 
 /**
@@ -164,6 +181,10 @@ export function useMaintenance(params) {
     queryKey: ["maintenance", params],
     queryFn: ({ signal }) => api.getMaintenance(params, signal),
     staleTime: 60 * 1000,
+    // MaintenanceTab gates its whole body on `isLoading`, so without this every
+    // status filter and page change tore the list down and replaced it with a
+    // full-height spinner for the length of the round trip.
+    placeholderData: keepPreviousData,
   });
 }
 export function useCreateMaintenance() {
@@ -194,6 +215,7 @@ export function useBorrowRequests(params) {
     queryKey: ["borrowRequests", params],
     queryFn: ({ signal }) => api.getBorrowRequests(params, signal),
     staleTime: 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 }
 export function useMyBorrowRequests() {
@@ -211,6 +233,9 @@ export function useFines(params, { enabled } = {}) {
     queryFn: ({ signal }) => api.getFines(params, signal),
     staleTime: 60 * 1000,
     enabled,
+    // The Unpaid/Paid chips and the page control both change `params`; without
+    // this each one blanks the table for a spinner.
+    placeholderData: keepPreviousData,
   });
 }
 export function useMyFines(params, { enabled } = {}) {
@@ -219,6 +244,7 @@ export function useMyFines(params, { enabled } = {}) {
     queryFn: ({ signal }) => api.getMyFines(params, signal),
     staleTime: 60 * 1000,
     enabled,
+    placeholderData: keepPreviousData,
   });
 }
 // Admin-only aggregate (it scans every open borrow in the building). Callers must
@@ -240,6 +266,7 @@ export function useIncidents(params) {
     queryKey: ["incidents", params],
     queryFn: ({ signal }) => api.getIncidents(params, signal),
     staleTime: 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 }
 export function useMyIncidents(params) {
@@ -247,6 +274,7 @@ export function useMyIncidents(params) {
     queryKey: ["myIncidents", params],
     queryFn: ({ signal }) => api.getMyIncidents(params, signal),
     staleTime: 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 }
 /* The detail view needs the timeline, which only the single-report endpoint
@@ -277,11 +305,54 @@ export function useMyNotifications(params) {
     queryKey: ["myNotifications", params],
     queryFn: ({ signal }) => api.getMyNotifications(params, signal),
     staleTime: 30 * 1000,
+    // Switching between All / Unread changes `params`, and NotificationsTab gates on
+    // `isLoading`, so this was another full-page spinner per filter click.
+    placeholderData: keepPreviousData,
   });
 }
 
+/**
+ * The unread badge count, WITHOUT downloading the notification history.
+ *
+ * ── WHAT THIS WAS ────────────────────────────────────────────────────────────
+ *
+ * useMyNotifications() called with no params, i.e. `GET /notifications/user` with no
+ * `limit`. The backend applies no limit either (notificationsController.getAll does an
+ * unbounded `.select("*")` and paginates in JavaScript), so every single app boot
+ * downloaded the user's ENTIRE notification history -- including every `message` and
+ * `link` string of every notification ever received -- purely to render one integer in
+ * a sidebar badge. The payload grows without bound as history accumulates.
+ *
+ * ── HOW IT IS NOW ────────────────────────────────────────────────────────────
+ *
+ * `unreadOnly=true&limit=1` asks for a single unread row. The endpoint filters in JS
+ * and then reports `pagination.total` as the length of the FILTERED list, so that one
+ * row's response carries the exact unread count anyway. One notification plus one
+ * number, instead of the whole history, with no backend change.
+ *
+ * ── KEY PLACEMENT ────────────────────────────────────────────────────────────
+ *
+ * Deliberately nested under ["myNotifications", ...] so NotificationsTab's existing
+ * `invalidateQueries({ queryKey: ["myNotifications"] })` -- the one it already runs
+ * after marking read, marking all read, and dismissing -- refreshes the badge too. A
+ * sibling key would have left the badge showing a stale count after every "mark all
+ * read", which is exactly the moment a wrong number is most visible.
+ *
+ * The fallback branch exists for an older backend that ignores the params and returns
+ * a bare array: in that case counting the returned rows is the best available answer
+ * and is still no worse than the previous behaviour.
+ */
 export function useUnreadCount() {
-  const { data } = useMyNotifications();
+  const { data } = useQuery({
+    queryKey: ["myNotifications", "unread-count"],
+    queryFn: ({ signal }) => api.getMyNotifications("unreadOnly=true&limit=1", signal),
+    // Longer than the list's 30 s: this is a badge, it is not a live surface, and a
+    // shorter window just causes more renders of the shell.
+    staleTime: 60 * 1000,
+  });
+
+  const total = data?.pagination?.total;
+  if (typeof total === "number") return total;
   return countUnread(pickNotifications(data));
 }
 

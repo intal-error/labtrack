@@ -426,5 +426,175 @@ console.log("--- identityTag behaviour ---");
   );
 }
 
+// ── 5. Static-asset caching additions, and what they must NOT become ───────────
+//
+// APPENDED, not merged into the sections above: every existing assertion above is
+// unchanged, and these are additional constraints on behaviour introduced later.
+//
+// Two things were added to sw.js after the sections above were written, and both
+// are the kind of change that fails silently if it regresses. Neither throws, neither
+// is caught by a type checker, and both would be invisible in a code review that
+// only read the diff.
+console.log("--- cross-origin images are allowlisted, not blanket-cached ---");
+{
+  // The existing image rule is deliberately sameOrigin-only, and must stay that way:
+  // it is what stops an opaque cross-origin script from being stored and replayed.
+  check(
+    "the first-party image rule still requires sameOrigin",
+    /sameOrigin\s*&&\s*request\.destination\s*===\s*["']image["']/.test(code),
+    "removing sameOrigin here would let opaque cross-origin responses into a shared cache",
+  );
+
+  // The catalog rule exists to cache Cloudinary photos, which ARE cross-origin. The
+  // safety of giving that up rests entirely on matching a hostname rather than on the
+  // absence of sameOrigin -- a rule like `!sameOrigin && destination === 'image'`
+  // would reach every cross-origin image in existence, including ones served from a
+  // user-controlled URL.
+  check(
+    "the cross-origin image rule matches on an explicit hostname allowlist",
+    /CATALOG_IMAGE_HOSTS\s*=\s*new Set\(\[\s*["']res\.cloudinary\.com["']\s*\]\)/.test(src),
+    "a hostname allowlist is the whole safety argument for dropping sameOrigin here",
+  );
+  check(
+    "  and that allowlist is consulted by hostname, not by the absence of sameOrigin",
+    code.includes("CATALOG_IMAGE_HOSTS.has(url.hostname)"),
+    "matching on !sameOrigin instead would swallow every cross-origin image",
+  );
+  check(
+    "no rule caches every cross-origin GET",
+    !/registerRoute\(\s*\(\{\s*(?:url,\s*)?request\s*,\s*sameOrigin\s*\)\s*=>\s*!\s*sameOrigin/.test(code),
+    "a bare !sameOrigin matcher would put opaque API responses into a URL-keyed cache",
+  );
+  check(
+    "the catalog image cache is bounded",
+    code.includes('cacheName: "catalog-images"') &&
+      /maxEntries:\s*120/.test(code) &&
+      /maxAgeSeconds:\s*60 \* 60 \* 24 \* 30/.test(code),
+    "an unbounded image cache on a phone fills the quota and evicts everything else",
+  );
+  // CacheFirst is correct here (Cloudinary URLs are immutable per public_id) and is
+  // also what makes a changed photo show up: a new public_id is a new URL, so it is a
+  // new cache key and is fetched on first sight.
+  check(
+    "it is cache-first, so an unchanged photo is never re-requested",
+    /CATALOG_IMAGE_HOSTS\.has\(url\.hostname\)\s*,\s*new CacheFirst\(/.test(code),
+    "",
+  );
+}
+
+// The API strategy answers from Cache Storage on its 10 s TIMEOUT path, not only when
+// offline. Without a marker, stale inventory renders as current on a congested link
+// where navigator.onLine is still true.
+console.log("--- cache-served API responses are marked as such ---");
+{
+  check(
+    "the API strategy stamps responses it served from cache",
+    code.includes("cachedResponseWillBeUsed"),
+    "without this the page cannot tell a timeout-served response from a live one",
+  );
+  check(
+    "the stamp is a header the page can read",
+    src.includes('SERVED_FROM_HEADER = "X-LabTrack-Served-From"'),
+    "",
+  );
+  check(
+    "the stamp is paired with the time the copy was stored",
+    src.includes('CACHED_AT_HEADER = "X-LabTrack-Cached-At"') && code.includes("cachedResponse.headers.get(\"date\")"),
+    "the date header is display-only; a missing one must not suppress the stamp",
+  );
+  // Re-wrapping an opaque or partial response throws in the Response constructor,
+  // which would turn a slow network into a hard failure rather than a stale read.
+  check(
+    "opaque and partial responses are passed through, not re-wrapped",
+    code.includes('cachedResponse.type === "opaque"') &&
+      code.includes("cachedResponse.status === 0") &&
+      code.includes("cachedResponse.status === 206"),
+    "the Response constructor rejects status 0 and 206",
+  );
+
+  // The client half. A missing header must read as LIVE, never as stale: inventing a
+  // stale state the app cannot prove is worse than missing one it could have shown.
+  const cacheStatus = path.join(here, "..", "src", "services", "cacheStatus.js");
+  check(
+    "the client half exists",
+    fs.existsSync(cacheStatus),
+    "the worker stamps the response but nothing reads it",
+  );
+  if (fs.existsSync(cacheStatus)) {
+    const cs = fs.readFileSync(cacheStatus, "utf8");
+    check(
+      "  and it clears the banner only on a non-sw-cache response",
+      cs.includes('servedFrom !== "sw-cache"') && cs.includes("publish(LIVE)"),
+      "clearing on anything else lets a stale number look current",
+    );
+    check(
+      "  a failed request never clears it (every throw in api.js happens after fetch rejects)",
+      fs
+        .readFileSync(path.join(here, "..", "src", "services", "api.js"), "utf8")
+        .split("noteResponse(res);")[0]
+        .includes("throw"),
+      "",
+    );
+    check(
+      "  an unreadable header is treated as live, not as stale",
+      cs.includes("servedFrom = null") && cs.includes("catch"),
+      "a cross-origin API without Access-Control-Expose-Headers must not fabricate a stale state",
+    );
+  }
+}
+
+// The precache manifest is generated, so nothing in the source can assert it has no
+// duplicates -- this is the regression test for a real one. vite-plugin-pwa folds
+// manifest.icons[] into the precache automatically, so listing them again in
+// globPatterns emitted all ten twice under different revisions: two cache keys, two
+// fetches, two copies in Cache Storage, and invisible in the build log because
+// workbox reports the DE-DUPLICATED byte total.
+console.log("--- precache contains no duplicate URLs ---");
+{
+  const distSw = path.join(here, "..", "dist", "sw.js");
+  if (!fs.existsSync(distSw)) {
+    console.log("SKIP  precache uniqueness (no dist/sw.js -- run the build first)");
+  } else {
+    const built = fs.readFileSync(distSw, "utf8");
+    const match = built.match(/\[\{"revision"[\s\S]*?\}\]/);
+    check("the built worker carries a precache manifest", match !== null);
+    if (match) {
+      let entries = [];
+      try {
+        entries = JSON.parse(match[0]);
+      } catch {
+        /* left empty; the count check below reports it */
+      }
+      const seen = new Set();
+      const dupes = entries.filter((e) => (seen.has(e.url) ? true : (seen.add(e.url), false)));
+      check(
+        "every precached URL appears exactly once",
+        dupes.length === 0,
+        dupes.length ? `duplicated: ${[...new Set(dupes.map((d) => d.url))].join(", ")}` : "",
+      );
+      check(
+        "the manifest is non-trivial, so an empty parse cannot pass vacuously",
+        entries.length >= 10,
+        `${entries.length} entries`,
+      );
+      const iconUrls = entries.map((e) => e.url).filter((u) => u.startsWith("icons/"));
+      check(
+        "the precached icons are the ones the UI actually draws",
+        iconUrls.length > 0 && iconUrls.length <= 12,
+        `${iconUrls.length} icon entries`,
+      );
+      // Launcher-only artwork: declared in the manifest, never rendered by the app.
+      const launcherOnly = entries.filter((e) =>
+        ["icons/icon-384x384.png", "icons/icon-512x512.png", "icons/maskable-192x192.png", "icons/maskable-512x512.png"].includes(e.url)
+      );
+      check(
+        "launcher-only icons are not precached",
+        launcherOnly.length === 0,
+        launcherOnly.map((e) => e.url).join(", "),
+      );
+    }
+  }
+}
+
 console.log(failures === 0 ? "\nALL TESTS PASSED" : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

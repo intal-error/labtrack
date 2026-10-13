@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef, lazy, Suspense } from "react";
+import { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react";
 import { api } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
+import { useStudentAttendance } from "../../hooks/useQueries";
 import { toDate, timeAgo } from "../../utils/helpers";
 import { formatDuration } from "../../utils/attendanceHelpers";
 import toast from "react-hot-toast";
@@ -41,46 +42,66 @@ export default function AttendanceScanner() {
   const [resultData, setResultData] = useState(null);
   const [step1Collapsed, setStep1Collapsed] = useState(false);
   const [step2Collapsed, setStep2Collapsed] = useState(false);
-  const [recentLogs, setRecentLogs] = useState([]);
-  const [logsLoading, setLogsLoading] = useState(true);
+
+  /*
+   * The recent-logs list, through the shared query instead of a second private copy.
+   *
+   * This was a useEffect calling api.getStudentAttendance(schoolId) into local state,
+   * which meant three things: the scanner fetched the identical endpoint that
+   * DashboardLayout, DashboardPage and AttendancePanel were already reading under the
+   * key ["studentAttendance", schoolId]; it could not be deduped against them or
+   * survive a tab switch; and `loadRecentLogs()` after every time-in/time-out issued a
+   * fresh uncached request for data the cache already held.
+   *
+   * `loadRecentLogs()` below is now a refetch of that one shared entry, which is what
+   * makes "show me the log again after I just scanned" both correct and immediate.
+   */
+  const {
+    data: attendanceData,
+    isPending: attendancePending,
+    isError: attendanceFailed,
+    refetch: refetchLogs,
+  } = useStudentAttendance(schoolId);
+
+  const recentLogs = useMemo(
+    () => (attendanceData?.records || []).slice(0, 8),
+    [attendanceData]
+  );
+
+  /*
+   * `isPending` cannot be used directly as the spinner flag.
+   *
+   * useStudentAttendance is `enabled: !!schoolId`, and in react-query v5 a DISABLED
+   * query stays in `pending` status forever -- it never fetches, so it never leaves
+   * pending. Passing that straight through as `logsLoading` gave this panel an
+   * infinite spinner for any profile without a schoolId. The pre-hook code handled
+   * exactly that case with an explicit `if (!schoolId && logsLoading) setLogsLoading(false)`
+   * during render; this is the same guard, expressed as a derived value instead.
+   */
+  const hasStudent = Boolean(schoolId);
+  const logsLoading = hasStudent && attendancePending;
+  // Only when there is nothing to show: a failed background refetch must not wipe a
+  // list the student can still read.
+  const logsFailed = hasStudent && attendanceFailed && recentLogs.length === 0;
 
   const step2Ref = useRef(null);
   const isTimeIn = mode === "time_in";
 
-  if (!schoolId && logsLoading) setLogsLoading(false);
-
-  useEffect(() => {
-    if (!schoolId) return;
-    (async () => {
-      try {
-        const data = await api.getStudentAttendance(schoolId);
-        setRecentLogs((data.records || []).slice(0, 8));
-      } catch {
-        // silent
-      } finally {
-        setLogsLoading(false);
-      }
-    })();
-  }, [schoolId]);
-
   useEffect(() => {
     if (step1Collapsed && isTimeIn) {
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         step2Ref.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       }, 200);
+      // Previously untracked: the timer survived unmount and fired against a
+      // null-safe optional chain, so it leaked rather than crashed. Tracked now.
+      return () => clearTimeout(timer);
     }
+    return undefined;
   }, [step1Collapsed, isTimeIn]);
 
   async function loadRecentLogs() {
-    if (!schoolId) { setLogsLoading(false); return; }
-    try {
-      const data = await api.getStudentAttendance(schoolId);
-      setRecentLogs((data.records || []).slice(0, 8));
-    } catch {
-      // silent
-    } finally {
-      setLogsLoading(false);
-    }
+    if (!schoolId) return;
+    await refetchLogs();
   }
 
   const parseRoomQR = (text) => {
@@ -442,6 +463,19 @@ export default function AttendanceScanner() {
         </div>
         {logsLoading ? (
           <div className="logbook-recent-loading"><div className="spinner-lg" /></div>
+        ) : logsFailed ? (
+          /* Distinguished from "no entries" on purpose: a failed fetch is not an empty
+             logbook, and telling a student their history is empty when it could not be
+             read is worse than saying nothing. */
+          <div className="logbook-recent-empty">
+            <MdBook size={24} />
+            <p>Couldn&apos;t load your logbook. Check your connection.</p>
+          </div>
+        ) : !hasStudent ? (
+          <div className="logbook-recent-empty">
+            <MdBook size={24} />
+            <p>Your profile has no school ID, so there is no logbook to show.</p>
+          </div>
         ) : recentLogs.length === 0 ? (
           <div className="logbook-recent-empty">
             <MdQrCodeScanner size={24} />

@@ -26,6 +26,38 @@ export default defineConfig({
       // globPatterns below, so they were being listed twice while the actual
       // payload stayed the same. The glob patterns are the whole mechanism, so
       // this list is gone rather than trimmed.
+      //
+      // The same duplication is why globPatterns below does NOT say "icons/*.png"
+      // any more -- see the note there.
+      // Include manifest.icons[] in the precache. OFF, DELIBERATELY.
+      //
+      // vite-plugin-pwa's default (true) globs every manifest.icons[].src and
+      // appends it as an `additionalManifestEntry`. Those entries are merged
+      // straight into the injected manifest array and never pass through
+      // workbox-build's glob step, which is why injectManifest.globIgnores had
+      // no effect on them -- they are not globs by the time globIgnores is read.
+      //
+      // Turning it off hands the icon list back to globPatterns below, which is
+      // what makes both halves of this possible at once:
+      //
+      //   - No duplication. With the broad "icons/*.png" glob AND the automatic
+      //     manifest injection, all ten manifest icons were emitted twice with
+      //     different revisions -- different cache keys, so the worker really did
+      //     fetch and store every one of them a second time. Measured on the
+      //     pre-change build: 33 entries / 1,025,740 bytes, of which 237,507
+      //     bytes (23.2%) were those duplicates. Workbox's own log reported
+      //     "768.11 KiB" for that same build, i.e. the DE-DUPLICATED figure,
+      //     which is why the waste never showed up in the build output.
+      //
+      //   - No launcher-only artwork. icon-384, icon-512 and both maskable
+      //     variants exist for the OS to draw on a home screen; the app never
+      //     renders them. Precaching them spent 170 KB of every first-visit
+      //     download on bytes the UI cannot use. They stay in manifest.icons[]
+      //     so the launcher still fetches them over HTTP when it needs them.
+      //
+      // Only the icons index.html and the manifest shortcuts actually reference
+      // are listed, each exactly once.
+      includeManifestIcons: false,
       manifest: {
         name: "SLSU LabTrack - Borrowing, Return & Logbook Attendance",
         short_name: "LabTrack",
@@ -156,15 +188,31 @@ export default defineConfig({
       // full-resolution image cannot silently fail to precache.
       injectManifest: {
         globPatterns: [
-            "index.html",
-            "offline.html",
-            "assets/index-*.js",
-            "assets/index-*.css",
-            "assets/vendor-react-*.js",
-            "assets/vendor-firebase-*.js",
-            "assets/vendor-query-*.js",
-            "assets/vendor-toast-*.js",
-            "icons/*.png",
+          "index.html",
+          "offline.html",
+          "assets/index-*.js",
+          "assets/index-*.css",
+          "assets/vendor-react-*.js",
+          "assets/vendor-firebase-*.js",
+          "assets/vendor-query-*.js",
+          "assets/vendor-toast-*.js",
+          // WHY NOT "icons/*.png": with includeManifestIcons on, that glob listed the
+          // SAME icons the manifest injection already listed, and every one was
+          // emitted twice -- two cache keys, two fetches, two stored copies. Each icon
+          // is named explicitly instead, so the precache list reads as the set the app
+          // can actually draw: the favicons, the two <link rel="icon"> targets, and the
+          // six sizes index.html and the manifest shortcuts reference.
+          //
+          // Deliberately absent: icon-384x384, icon-512x512, maskable-192 and
+          // maskable-512. Launcher-only -- see includeManifestIcons above.
+          "icons/icon-72x72.png",
+          "icons/icon-96x96.png",
+          "icons/icon-128x128.png",
+          "icons/icon-144x144.png",
+          "icons/icon-152x152.png",
+          "icons/icon-192x192.png",
+          "icons/icon-48x48.png",
+          "icons/apple-touch-icon.png",
           "favicon.ico",
           "favicon-32.png",
         ],

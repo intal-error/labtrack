@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useMemo, useCallback, u
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { auth } from "../services/firebase";
 import { api } from "../services/api";
+import { resetCacheStatus } from "../services/cacheStatus";
 
 const AuthContext = createContext(null);
 
@@ -190,6 +191,13 @@ const [role, setRole] = useState(undefined);
     if (savedTheme) {
       localStorage.setItem("theme", savedTheme);
     }
+
+    // Forget that anything was being served from the API cache. The store holds only
+    // a timestamp, so nothing sensitive leaves -- but leaving it set would show the
+    // NEXT account a "showing saved data" banner describing the previous user's
+    // session. resetCacheStatus() is the store's own no-arg reset; it is safe to call
+    // unconditionally and is a no-op when nothing was stale.
+    resetCacheStatus();
   }, []);
 
   /*

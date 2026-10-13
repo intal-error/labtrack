@@ -7,6 +7,7 @@ import { ThemeProvider } from "./context/ThemeContext";
 import SplashScreen from "./components/ui/SplashScreen";
 import InstallPrompt from "./components/ui/InstallPrompt";
 import OfflineBanner from "./components/ui/OfflineBanner";
+import StaleDataBanner from "./components/ui/StaleDataBanner";
 import DashboardLayout from "./components/layout/DashboardLayout";
 
 const queryClient = new QueryClient({
@@ -210,6 +211,7 @@ function App() {
           {!splashComplete && <SplashScreen onComplete={() => setSplashComplete(true)} />}
           <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
           <OfflineBanner />
+          <StaleDataBanner />
           <InstallPrompt />
           <Routes>
             <Route path="/login" element={<Suspense fallback={fullScreenFallback}><GuestRoute><LoginPage /></GuestRoute></Suspense>} />
