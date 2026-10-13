@@ -127,7 +127,6 @@ function toClientRule(rule) {
     id: rule.id,
     title: rule.title,
     description: rule.description || "",
-    category: rule.category || "",
     course: rule.course,
     lab_room: rule.lab_room || "",
     status: rule.status || "Active",
@@ -215,7 +214,7 @@ const getRule = async (req, res) => {
 
 const create = async (req, res) => {
   try {
-    const { title, description, category, course, labRoom, status, fileName, fileSize, fileType, filePublicId, fileFormat } = req.body;
+    const { title, description, course, labRoom, status, fileName, fileSize, fileType, filePublicId, fileFormat } = req.body;
 
     if (!title || !String(title).trim()) {
       return res.status(400).json({ error: "Title is required" });
@@ -242,7 +241,6 @@ const create = async (req, res) => {
       id: randomUUID(),
       title: String(title).trim(),
       description: description || "",
-      category: category || "",
       course: requested,
       lab_room: labRoom || "",
       status: status || "Active",
@@ -296,7 +294,7 @@ const update = async (req, res) => {
     }
 
     const allowed = [
-      "title", "description", "category", "course", "lab_room", "status",
+      "title", "description", "course", "lab_room", "status",
       "file_public_id", "file_format", "file_name", "file_size", "file_type",
       // thumbnail_url is absent on purpose: accepting it would let a caller store a URL
       // that is rendered for other users in the course. See toClientRule.

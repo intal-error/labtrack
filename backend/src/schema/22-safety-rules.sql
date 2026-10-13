@@ -55,7 +55,6 @@ CREATE TABLE IF NOT EXISTS safety_rules (
   course TEXT NOT NULL REFERENCES courses(id),
 
   description TEXT,
-  category TEXT,
   lab_room TEXT,
   status TEXT NOT NULL DEFAULT 'Active',
 

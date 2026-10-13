@@ -72,13 +72,11 @@ const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 // executable to .png does not get past this either.
 const ACCEPTED = "image/jpeg,image/png,application/pdf";
 
-const CATEGORIES = ["General", "PPE", "Equipment", "Emergency", "Housekeeping", "Procedure"];
 const STATUSES = ["Active", "Archived"];
 
 const EMPTY_FORM = {
   title: "",
   description: "",
-  category: "General",
   course: "",
   labRoom: "",
   status: "Active",
@@ -233,7 +231,7 @@ export default function SafetyRulesTab() {
     const q = search.trim().toLowerCase();
     if (!q) return rules;
     return rules.filter((r) =>
-      [r.title, r.description, r.category, r.course, r.lab_room, r.file_name].some((v) =>
+      [r.title, r.description, r.course, r.lab_room, r.file_name].some((v) =>
         String(v || "").toLowerCase().includes(q),
       ),
     );
@@ -289,7 +287,6 @@ export default function SafetyRulesTab() {
     setForm({
       title: rule.title || "",
       description: rule.description || "",
-      category: rule.category || "General",
       course: rule.course || "",
       labRoom: rule.lab_room || "",
       status: rule.status || "Active",
@@ -343,7 +340,6 @@ export default function SafetyRulesTab() {
     const payload = {
       title: form.title.trim(),
       description: form.description,
-      category: form.category,
       course,
       labRoom: form.labRoom,
       status: form.status,
@@ -512,7 +508,8 @@ export default function SafetyRulesTab() {
                   {rule.description ? <p className="cx-item-sub">{rule.description}</p> : null}
 
                   <div className="cx-card-meta">
-                    {rule.category && <span className="category-pill">{rule.category}</span>}
+                    {/* Course first: it is the scoping fact, and the whole tab is
+                        filtered by it, so it is the pill worth reading at a glance. */}
                     {rule.course && <span className="category-pill cx-pill-course">{rule.course}</span>}
                     {rule.lab_room && <span className="category-pill">{rule.lab_room}</span>}
                   </div>
@@ -645,39 +642,24 @@ export default function SafetyRulesTab() {
                   </div>
                 </div>
 
-                <div className="lab-form-row">
-                  <div className="lab-form-field">
-                    <label>Category</label>
-                    <div className="lab-input-wrap">
-                      <select
-                        value={form.category}
-                        onChange={(e) => setForm({ ...form, category: e.target.value })}
-                      >
-                        {CATEGORIES.map((c) => (
-                          <option key={c} value={c}>
-                            {c}
-                          </option>
-                        ))}
-                      </select>
-                      <MdCategory size={16} />
-                    </div>
-                  </div>
-
-                  <div className="lab-form-field">
-                    <label>Status</label>
-                    <div className="lab-input-wrap">
-                      <select
-                        value={form.status}
-                        onChange={(e) => setForm({ ...form, status: e.target.value })}
-                      >
-                        {STATUSES.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
-                      <MdCategory size={16} />
-                    </div>
+                {/* Status was previously paired with Category in a lab-form-row. With
+                    Category gone there is nothing to sit beside it, and a half-width
+                    select in a one-column row reads as a layout bug rather than a
+                    choice -- so it takes the full width. */}
+                <div className="lab-form-field">
+                  <label>Status</label>
+                  <div className="lab-input-wrap">
+                    <select
+                      value={form.status}
+                      onChange={(e) => setForm({ ...form, status: e.target.value })}
+                    >
+                      {STATUSES.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                    <MdCategory size={16} />
                   </div>
                 </div>
 
@@ -934,12 +916,6 @@ function SafetyViewer({ rule, cachedUrl, onClose, onOpen }) {
           <dl>
             <dt>Course</dt>
             <dd>{rule.course}</dd>
-            {rule.category ? (
-              <>
-                <dt>Category</dt>
-                <dd>{rule.category}</dd>
-              </>
-            ) : null}
             {rule.lab_room ? (
               <>
                 <dt>Laboratory</dt>
