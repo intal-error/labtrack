@@ -125,6 +125,32 @@ require.cache[require.resolve("../src/config/firebase")] = {
 };
 
 const request = require("supertest");
+
+/*
+ * Cloudinary credentials are STUBBED, so this suite must not depend on a real one.
+ *
+ * Why this line exists: the file endpoint refuses to serve when CLOUDINARY_CLOUD_NAME is
+ * unset, answering 503 "File storage is not configured". That guard is correct, and this
+ * suite was satisfying it by ACCIDENT -- server.js runs dotenv.config(), which resolves
+ * `.env` relative to process.cwd(), so the suite passed only when run from backend/.
+ * Run from the repository root it produced three failures whose error text points at
+ * production configuration ("File storage is not configured") rather than at the real
+ * cause, which is the working directory.
+ *
+ * A mocked suite must not need real credentials or a particular cwd. This value is a
+ * stand-in, never used to reach Cloudinary: `global.fetch` is replaced with a stub for
+ * the whole file-access section below, and the suite asserts the delivery URL is never
+ * returned to the client.
+ *
+ * Set BEFORE requiring the server, and dotenv will not overwrite it (dotenv does not
+ * override existing vars by default), so this holds whether or not a .env is present.
+ *
+ * The unconfigured 503 itself is still covered, on purpose, by
+ * tests/uploadConfig.verify.js -- which deletes these two vars precisely to exercise it.
+ */
+process.env.CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || "stubbed-for-tests";
+process.env.CLOUDINARY_UPLOAD_PRESET = process.env.CLOUDINARY_UPLOAD_PRESET || "stubbed-for-tests";
+
 const { app } = require("../server");
 const { identifyFile, safetyRuleScope } = require("../src/controllers/safetyRuleController");
 
