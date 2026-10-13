@@ -76,42 +76,98 @@ function displayName(user) {
 }
 
 /**
- * Pick the handler for a course: prefer admins assigned to that course, and fall
- * back to any active admin when nobody covers it (an unhandled report is worse
- * than one handled by a general admin). Ties are broken by current workload so
- * one handler does not accumulate every case.
+ * Pick the handler for a course, in TIERS rather than by falling back to everyone.
  *
- * `workload` names the queue to measure, because the two features have
- * different "still open" definitions: borrow requests are open while pending,
- * incidents while pending or under review.
+ * ── WHY THE TIERS ────────────────────────────────────────────────────────────
+ *
+ * This used to be:
+ *
+ *     let candidates = admins;
+ *     if (course) {
+ *       const matched = admins.filter((a) => isAdminForCourse(a, course));
+ *       if (matched.length > 0) candidates = matched;
+ *     }
+ *
+ * Two real defects lived in those five lines, and both were reported from the field
+ * as "the Borrow Request Details page shows the wrong assigned admin".
+ *
+ * (1) THE FALLBACK WAS EVERY ADMIN. When no admin covered the course, `matched` was
+ *     empty and `candidates` stayed as the WHOLE roster -- including Course Admins of
+ *     other courses. Sorted by workload, `candidates[0]` is whoever happened to have the
+ *     fewest open rows, so a BIT request could be assigned to an MT admin. That admin
+ *     then CANNOT action it: getAllRequests filters by `scopeCodes(req)`, so a
+ *     Course Admin only ever sees their own course's requests. The result is work
+ *     assigned to someone who will never be shown it -- parked, invisible, and
+ *     reported as assigned.
+ *
+ * (2) SUPER ADMINS COULD NOT MATCH. `isAdminForCourse` is
+ *     `getAdminCourses(admin).includes(course)`, and `getAdminCourses` returns `[]` for
+ *     a Super Admin (they hold no `courseId`). So `[].includes("BIT")` is false and the
+ *     ONE tier that can service any course was excluded from the matched set -- while
+ *     being eligible for the unrestricted fallback, where it competed arbitrarily.
+ *
+ * So the ranking is now explicit, and it only ever returns someone who can actually
+ * act on the row:
+ *
+ *     1. admins assigned to this course  -- the correct owner
+ *     2. unrestricted Super Admins       -- can service ANY course
+ *     3. nothing                         -- assigned_admin_id stays ""
+ *
+ * Tier 3 is a deliberate behaviour change and it is the correct one: an unassigned
+ * request is VISIBLE and reassignable, whereas a mis-assigned one is invisible to its
+ * assignee and looks handled to everyone else. It is also not a dead end -- both
+ * callers fan notifications out to `getTargetCourseAdmins(course)`, falling back to all
+ * active admins, so the request still reaches a human.
+ *
+ * `workload` names the queue to measure, because the two features have different
+ * "still open" definitions: borrow requests are open while pending, incidents while
+ * pending or under review.
  */
 async function autoAssignAdmin(course, { table, workloadColumn, workloadStatuses }) {
   try {
     const admins = await getActiveAdminsList();
     if (admins.length === 0) return null;
 
-    let candidates = admins;
+    const byWorkload = async (pool) => {
+      if (pool.length <= 1) return pool[0] || null;
+
+      const { data: openRows } = await supabase
+        .from(table)
+        .select(workloadColumn)
+        .in("status", workloadStatuses);
+
+      const counts = {};
+      if (openRows) {
+        openRows.forEach((row) => {
+          if (row[workloadColumn]) {
+            counts[row[workloadColumn]] = (counts[row[workloadColumn]] || 0) + 1;
+          }
+        });
+      }
+
+      // Sorted on a COPY. `getActiveAdminsList` hands back the memoised
+      // `adminsCache.list` itself, so an in-place sort here reordered the shared
+      // roster for every other caller in the process until the TTL expired.
+      const ordered = [...pool].sort((a, b) => (counts[a.id] || 0) - (counts[b.id] || 0));
+      return ordered[0];
+    };
+
     if (course) {
       const matched = admins.filter((a) => isAdminForCourse(a, course));
-      if (matched.length > 0) candidates = matched;
+      if (matched.length > 0) return await byWorkload(matched);
+
+      // Nobody owns this course. An unrestricted admin is the only tier that can
+      // still see the row -- see (2) above for why they are not in `matched`.
+      const unrestricted = admins.filter((a) => isSuperAdmin(a));
+      if (unrestricted.length > 0) return await byWorkload(unrestricted);
+
+      // Every remaining admin is scoped to some other course and would never be shown
+      // this row. Leaving it unassigned is honest; guessing is what produced the bug.
+      return null;
     }
 
-    const { data: openRows } = await supabase
-      .from(table)
-      .select(workloadColumn)
-      .in("status", workloadStatuses);
-
-    const counts = {};
-    if (openRows) {
-      openRows.forEach((row) => {
-        if (row[workloadColumn]) {
-          counts[row[workloadColumn]] = (counts[row[workloadColumn]] || 0) + 1;
-        }
-      });
-    }
-
-    candidates.sort((a, b) => (counts[a.id] || 0) - (counts[b.id] || 0));
-    return candidates[0];
+    // No course to match on: workload-balance across the whole roster.
+    return await byWorkload(admins);
   } catch {
     // Assignment is best-effort. A Firestore hiccup must not block a student
     // from filing a report; the report lands unassigned and is still routable.
