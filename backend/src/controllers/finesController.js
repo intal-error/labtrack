@@ -3,9 +3,51 @@ const { db, FieldPath } = require("../config/firebase");
 const { parsePagination, paginatedResponse } = require("../middleware/pagination");
 const { randomUUID } = require("crypto");
 const { transformKeys } = require("../utils/transformKeys");
+const { scopeCodes } = require("../middleware/courseScope");
 
 // Firestore's hard cap on `in` queries; enrichFines chunks its reads to this.
 const FIRESTORE_IN_CHUNK = 30;
+
+/**
+ * Which courses may see and act on this fine?
+ *
+ * A fine has two legitimate audiences, matching how transactions are already scoped:
+ * `scopedAny(["course","equipment_course"])` treats "your student borrowed" OR "it is your
+ * equipment" as in-scope. Fines need the same rule, or damage to a course's own equipment
+ * would be invisible to the course that owns the item whenever the borrower is from
+ * somewhere else -- the exact cross-course case the lab model is built around.
+ *
+ * Returns the set of courses that may view this fine. An EMPTY set means the fine's
+ * owner cannot be established (no user profile, no transaction, neither carrying a
+ * course). That case resolves to nobody, which fails CLOSED: such a fine stays visible to
+ * the Super Admin only, exactly like a row whose course is the IMPOSSIBLE_COURSE sentinel.
+ */
+function fineCourseScope(fine) {
+  return [fine.course, fine.equipmentCourse].filter((c) => c && String(c).trim());
+}
+
+/** True when this request may see the given enriched fine. */
+function fineVisibleTo(req, fine) {
+  const codes = scopeCodes(req);
+  if (codes === null) return true; // Super Admin, or a non-admin (students use /my).
+  const owned = fineCourseScope(fine);
+  if (owned.length === 0) return false; // unresolvable -> Super Admin only
+  return owned.some((c) => codes.includes(c));
+}
+
+/**
+ * Whether this request may MODIFY the given fine.
+ *
+ * Same audience rule as reading, applied before any write. Without it a Course Admin
+ * could pay or waive another course's fine simply by knowing its id, which needs no
+ * privilege at all -- just an enumeration of /api/fines that used to return every course.
+ */
+function assertFineWritable(req, res, fine) {
+  if (fineVisibleTo(req, fine)) return true;
+  // 404 rather than 403: a 403 confirms the fine exists, leaking the thing the scope hides.
+  res.status(404).json({ error: "Fine not found" });
+  return false;
+}
 
 async function enrichFines(fines) {
   if (fines.length === 0) return [];
@@ -32,7 +74,7 @@ const [userSnaps, txResult] = await Promise.all([
     txIds.length > 0
       ? supabase
           .from("transactions")
-          .select("id,due_date,borrowed_at,timestamp,returned_at,status,catalog_id,course,school_id,first_name,last_name")
+          .select("id,due_date,borrowed_at,timestamp,returned_at,status,catalog_id,course,equipment_course,school_id,first_name,last_name")
           .in("id", txIds)
       : { data: [], error: null },
   ]);
@@ -59,7 +101,13 @@ const [userSnaps, txResult] = await Promise.all([
       transactionStatus: tx.status || "",
       itemId: tx.catalog_id || "",
       course: tx.course || "",
-      schoolId: tx.school_id || "",
+      // The course that OWNS the equipment, which is not necessarily the borrower's.
+// Carried separately rather than folded into `course`, because a fine has two
+      // legitimate audiences and collapsing them picks a winner by accident. Note this
+      // reads the RAW row (`equipment_course`); the fine mapping further down reads the
+      // txMap entry, which is camelCase. The two spellings are not interchangeable.
+      equipmentCourse: tx.equipment_course || "",
+        schoolId: tx.school_id || "",
       borrowerName: `${tx.first_name || ""} ${tx.last_name || ""}`.trim() || "",
     };
   });
@@ -73,6 +121,12 @@ const [userSnaps, txResult] = await Promise.all([
       schoolId: user.schoolId || tx.schoolId || "",
       course: user.course || tx.course || "",
       userRole: user.userRole || "",
+      // The course that OWNS the equipment -- the transaction's equipment_course, and ONLY
+// that. Falling back to the borrower's course here would be exactly the conflation this
+// split exists to prevent: a BIT student damaging a CTV multimeter must not make the
+// fine look CTV's just because the borrower happens to be in another course. With no
+// equipment_course the field stays "" and only the borrower's course sees the fine.
+equipmentCourse: tx.equipmentCourse || "",
       dueDate: tx.dueDate || null,
       borrowedAt: tx.borrowedAt || null,
       returnedAt: tx.returnedAt || null,
@@ -128,7 +182,14 @@ try {
     query = query.order("created_at", { ascending: false });
 
     const { paginate, page, limit } = parsePagination(req);
-    const needsRescan = Boolean(search || wantedCourse) && paginate;
+
+    // A Course Admin's scope is a JS-only predicate, and the single most important one:
+    // fines has NO course column (ownership lives on the user and the transaction), so it
+    // cannot be pushed into SQL at all. It therefore forces the rescan branch on EVERY
+    // paginated request from a Course Admin, not just when a search term is present.
+    const scopeCodesNow = scopeCodes(req);
+    const mustRescanForScope = scopeCodesNow !== null;
+    const needsRescan = (Boolean(search || wantedCourse) || mustRescanForScope) && paginate;
 
     // A JS-only filter has to be applied BEFORE we know which page we are on.
     // So when one is present, the SQL range is skipped entirely and the whole
@@ -147,15 +208,23 @@ try {
     // which are then served the whole table regardless of the query string. The
     // predicate is a cheap array scan over the enriched rows, so it costs nothing
     // when search and course are empty -- matchesSearch returns true immediately.
-    let enriched = (await enrichFines(fines || [])).filter((f) => matchesSearch(f) && matchesCourse(f));
+    //
+    // The SCOPE filter is different and must not be: it is authorization, not a filter.
+    // Running it only in the rescan branch would hand an unpaginated caller -- the
+    // export and the admin overview -- every course's fines.
+    const matchesScope = (f) => fineVisibleTo(req, f);
+    let enriched = (await enrichFines(fines || [])).filter(
+      (f) => matchesSearch(f) && matchesCourse(f) && matchesScope(f)
+    );
 
     if (paginate) {
       // Only the rescan branch needs to re-slice: it is the one where SQL did NOT
       // apply the range, so `enriched` is the entire filtered set rather than a page.
       if (needsRescan) {
         // `count` came from the un-enriched, unfiltered query, so it cannot know
-        // about a search term or a course. Reporting it anyway made the pager
-        // advertise pages that were empty.
+        // about a search term, a course, or the caller's scope. Reporting it anyway made
+        // the pager advertise pages that were empty -- and would have leaked the SIZE of
+        // another course's fines to a Course Admin reading the total.
         total = enriched.length;
         enriched = enriched.slice((page - 1) * limit, page * limit);
       }
@@ -284,6 +353,13 @@ const payFine = async (req, res) => {
     if (fetchError || !fine) return res.status(404).json({ error: "Fine not found" });
     if (fine.status === "paid") return res.status(400).json({ error: "Fine already paid" });
 
+    // Scope check BEFORE the write. This handler is mounted on authorize("admin") alone,
+    // so without this any admin could settle any fine by id -- and /api/fines used to
+    // return every course's fines, so the ids were freely enumerable. Enriching the one
+    // row costs the same reads the list view already makes; it is not a new cost class.
+    const [payTarget] = await enrichFines([fine]);
+    if (!assertFineWritable(req, res, payTarget)) return;
+
     const { error } = await supabase
       .from("fines")
       .update({
@@ -330,6 +406,11 @@ const waiveFine = async (req, res) => {
       .single();
 
     if (fetchError || !fine) return res.status(404).json({ error: "Fine not found" });
+
+    // Same guard as payFine: a waiver is a write against another course's record and must
+    // not be reachable by id alone.
+    const [waiveTarget] = await enrichFines([fine]);
+    if (!assertFineWritable(req, res, waiveTarget)) return;
 
     const { error } = await supabase
       .from("fines")

@@ -4,7 +4,7 @@ const cors = require("cors");
 const helmet = require("helmet");
 const compression = require("compression");
 const cron = require("node-cron");
-const { verifyToken, authorize, errorHandler } = require("./src/middleware/auth");
+const { verifyToken, authorize, attachRole, errorHandler } = require("./src/middleware/auth");
 const { attachCourseScope, requireSuperAdmin } = require("./src/middleware/courseScope");
 const {
   generalLimiter,
@@ -237,9 +237,39 @@ app.use("/api/reports", verifyToken, authorize("admin"), generalLimiter, cacheMi
 app.use("/api/upload", verifyToken, uploadLimiter, uploadRoutes);
 app.use("/api/maintenance", verifyToken, authorize("admin"), methodAwareLimiter, cacheMiddleware(30), maintenanceRoutes);
 app.use("/api/incidents", verifyToken, methodAwareLimiter, cacheMiddleware(15), incidentRoutes);
-app.use("/api/manuals", verifyToken, methodAwareLimiter, cacheMiddleware(60), manualRoutes);
+// attachRole resolves req.profile, and attachCourseScope turns it into req.scopeCodes.
+//
+// BOTH are needed, and the reason is easy to miss: the manuals READ routes carry no
+// role gate of their own -- a student reading manuals is intended -- so without
+// attachRole at the mount nothing has populated req.profile by the time the controller
+// runs. scopeCodes() sees an undefined profile, returns null ("no restriction") and the
+// course filter silently vanishes. A scope helper that fails open because the middleware
+// that feeds it was never mounted is the worst possible combination: it looks correct in
+// the controller and does nothing in production.
+//
+// Student reads are unaffected: scopeCodes returns null for a non-admin, so scoped()
+// leaves the query exactly as it was.
+// Laboratory Manuals: RETAINED. The UI no longer routes to it (Safety Rules replaced that
+// tab), but the API, the controller and every existing row and Cloudinary file are left
+// working and untouched. Dropping the mount would 404 the records that are still stored,
+// which is why it stays until a separately-approved conversion decides their fate.
+app.use("/api/manuals", verifyToken, attachRole, attachCourseScope, methodAwareLimiter, cacheMiddleware(60), manualRoutes);
+
+const safetyRuleRoutes = require("./src/routes/safetyRules");
+
+// Safety Rules. attachRole and attachCourseScope resolve req.profile for every request,
+// including students -- the Safety Rules scope helper needs the caller's profile to know
+// WHICH course they may see, and scopeCodes() cannot supply that for a non-admin.
+app.use("/api/safety-rules", verifyToken, attachRole, attachCourseScope, methodAwareLimiter, cacheMiddleware(60), safetyRuleRoutes);
 app.use("/api/fines", verifyToken, methodAwareLimiter, cacheMiddleware(15), finesRoutes);
-app.use("/api/backup", verifyToken, authorize("admin"), backupLimiter, backupRoutes);
+// requireSuperAdmin, not just authorize("admin").
+//
+// exportBackup serialises EVERY collection in the database and importBackup WRITES them
+// all back. Gated only on "is an admin", any Course Admin could read -- or overwrite --
+// every other course's catalog, transactions, fines and attendance. That is the widest
+// blast radius in the app: it is a whole-database write available to the least-privileged
+// admin tier. Restoring a backup is a system operation, so it now needs the system tier.
+app.use("/api/backup", verifyToken, authorize("admin"), requireSuperAdmin, backupLimiter, backupRoutes);
 app.use("/api/borrow-requests", verifyToken, methodAwareLimiter, cacheMiddleware(15), borrowRequestRoutes);
 
 // Course scopes. Open to any admin for reading -- the room, maintenance and admin

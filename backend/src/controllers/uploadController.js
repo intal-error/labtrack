@@ -107,14 +107,81 @@ function sendError(res, err) {
     .json({ error: safeToShow ? (err.message || "Internal server error") : "Internal server error" });
 }
 
+/**
+ * Magic-byte signatures, shared by every upload handler in this file.
+ *
+ * WHY THIS EXISTS ALONGLIDE THE fileFilter allowlist: the allowlist reads
+ * `file.mimetype`, which is a value the CLIENT chose. Renaming `payload.exe` to
+ * `payload.png` and declaring `Content-Type: image/png` walks straight past a
+ * mimetype-only check. Content is decided by the bytes, not by what the caller claims.
+ *
+ * Deliberately conservative and format-specific rather than a generic "is this text?"
+ * probe, so an executable can never be waved through as a document.
+ */
+const MAGIC_SIGNATURES = [
+  { mime: "image/jpeg", test: (b) => b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
+  { mime: "image/png", test: (b) => b.length > 4 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47 },
+  { mime: "image/gif", test: (b) => b.length > 6 && b.slice(0, 3).toString("latin1") === "GIF" },
+  { mime: "application/pdf", test: (b) => b.length > 5 && b.slice(0, 5).toString("latin1") === "%PDF-" },
+  {
+    // OOXML and legacy Office formats are ZIP containers (PK\x03\x04) or OLE compound
+    // files. Distinguishing them fully is out of scope; what matters here is that the
+    // bytes are a recognised document container and not an executable or a script.
+    mime: "application/vnd.openxmlformats-officedocument.*",
+    test: (b) => b.length > 4 && b[0] === 0x50 && b[1] === 0x4b && b[2] === 0x03 && b[3] === 0x04,
+  },
+  {
+    mime: "application/msword",
+    test: (b) => b.length > 8 && b.slice(0, 8).toString("latin1") === "\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1",
+  },
+];
+
+/** Identifies a buffer by content, or null when it matches nothing approved. */
+function identifyUpload(buffer) {
+  const b = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer || []);
+  if (b.length === 0) return null;
+  return MAGIC_SIGNATURES.find((s) => {
+    try {
+      return s.test(b);
+    } catch {
+      return false;
+    }
+  }) || null;
+}
+
+/**
+ * Rejects anything whose bytes do not match a known-good signature.
+ *
+ * Returns true when the upload may proceed, false after sending 400. Called by every
+ * handler here so the three endpoints cannot drift apart.
+ */
+function rejectUnknownContent(req, res) {
+  const kind = identifyUpload(req.file && req.file.buffer);
+  if (kind) return true;
+  res.status(400).json({
+    error:
+      "File content was not recognised. Only images (JPG, PNG, GIF), PDF and Office documents are accepted.",
+  });
+  return false;
+}
+
 const uploadImage = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No file provided" });
 
+    // Configuration is checked BEFORE content on purpose. An unconfigured server should
+    // say "not configured" (503) for every caller rather than answering some with a 400
+    // about their bytes: the storage problem is real, global, and the thing an operator
+    // has to fix first. Validating content first made a misconfiguration look like a
+    // user's bad file, which is exactly the confusion this module's error handling
+    // exists to remove.
     const { cloudName, preset } = requireCloudinaryConfig();
+    if (!rejectUnknownContent(req, res)) return;
 
+    // The type Cloudinary is told is the one the CONTENT proved, not the declared one.
+    const kind = identifyUpload(req.file.buffer);
     const formData = new FormData();
-    formData.append("file", `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`);
+    formData.append("file", `data:${kind.mime};base64,${req.file.buffer.toString("base64")}`);
     formData.append("upload_preset", preset);
 
     const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
@@ -137,6 +204,7 @@ const uploadDocument = async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "No file provided" });
 
     const { cloudName, preset } = requireCloudinaryConfig();
+    if (!rejectUnknownContent(req, res)) return;
 
     const formData = new FormData();
     formData.append("file", `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`);
@@ -195,6 +263,7 @@ const uploadConditionPhoto = async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "No file provided" });
 
     const { cloudName, preset } = requireCloudinaryConfig();
+    if (!rejectUnknownContent(req, res)) return;
 
     const formData = new FormData();
     formData.append("file", `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`);

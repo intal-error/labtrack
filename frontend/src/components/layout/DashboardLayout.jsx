@@ -13,7 +13,7 @@ import {
   MdLogout, MdDarkMode, MdLightMode, MdHome,
   MdNotifications, MdSettings,
   MdChevronLeft, MdChevronRight, MdExpandMore, MdExpandLess,
-  MdBuild, MdWarning, MdMenuBook, MdHistory,
+  MdBuild, MdWarning, MdHealthAndSafety, MdHistory,
   MdAssignment, MdEventAvailable,
   MdClose, MdCheckCircle, MdGavel, MdTune,
 } from "react-icons/md";
@@ -34,7 +34,7 @@ const ROUTE_NAMES = {
   "/borrow-requests": "Borrow Requests",
   "/incident-reports": "Incident Reports",
   "/maintenance": "Maintenance",
-  "/resources": "Lab Manual",
+  "/resources": "Safety Rules",
   "/fines": "Fines",
   "/persona": "Persona",
   "/students": "Students",
@@ -74,7 +74,7 @@ const NAV_ITEMS = [
     items: [
       { path: "/scanner", label: "Scanner", icon: MdQrCodeScanner, roles: ["student"] },
       { path: "/inventory", label: "Equipment Catalog", icon: MdInventory, roles: ["student"] },
-      { path: "/resources", label: "Lab Manual", icon: MdMenuBook, roles: ["student"] },
+      { path: "/resources", label: "Safety Rules", icon: MdHealthAndSafety, roles: ["student"] },
     ],
   },
   {
@@ -94,7 +94,7 @@ const NAV_ITEMS = [
     roles: ["admin"],
     items: [
       { path: "/students", label: "Students", icon: MdPerson, roles: ["admin"] },
-      { path: "/resources", label: "Lab Manual", icon: MdMenuBook, roles: ["admin"] },
+      { path: "/resources", label: "Safety Rules", icon: MdHealthAndSafety, roles: ["admin"] },
       { path: "/fines", label: "Fines", icon: PesoIcon, roles: ["admin"] },
       { path: "/persona", label: "Persona", icon: MdPerson, roles: ["admin"] },
     ],

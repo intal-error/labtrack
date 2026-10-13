@@ -257,7 +257,10 @@ function App() {
               <Route path="maintenance" element={<RoleRoute allowed={["admin"]}><MaintenanceTab /></RoleRoute>} />
               <Route path="incident-reports" element={<RoleRoute allowed={["admin"]} fallback="/my-activity?tab=incidents"><IncidentReportsTab /></RoleRoute>} />
               <Route path="incidents" element={<LegacyIncidentRedirect />} />
-              <Route path="manuals" element={<Navigate to="/resources?tab=manuals" replace />} />
+  {/* Safety Rules replaced Lab Manuals in the Resources page. ?tab=manuals is still
+                  accepted there and redirects to the replacement, so an old link or bookmark lands
+                  somewhere that explains itself rather than silently showing different content. */}
+              <Route path="manuals" element={<Navigate to="/resources?tab=safety-rules" replace />} />
               <Route path="usage-logs" element={<Navigate to="/my-activity" replace />} />
               <Route path="reports" element={<Navigate to="/dashboard" replace />} />
               <Route path="fines" element={<RoleRoute allowed={["admin"]} fallback="/my-activity?tab=fines"><FinesTab /></RoleRoute>} />

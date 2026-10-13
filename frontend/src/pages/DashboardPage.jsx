@@ -43,7 +43,6 @@ import {
   MdInventory2,
   MdEventAvailable,
   MdAttachMoney,
-  MdMenuBook,
   MdError,
   MdInfo,
   MdCheckCircle,
@@ -52,6 +51,7 @@ import {
   MdPeople,
   MdMeetingRoom,
   MdReportProblem,
+    MdHealthAndSafety,
 } from "react-icons/md";
 import "../styles/pages/dashboard.css";
 
@@ -382,12 +382,15 @@ function StudentDashboard() {
       meta: `${borrowed.length} out`,
     },
     {
-      key: "manuals",
-      label: "Lab Manual",
-      desc: "View available lab manuals",
-      icon: MdMenuBook,
-      tone: "green",
-      path: "/resources?tab=manuals",
+key: "manuals",
+    label: "Safety Rules",
+    desc: "View laboratory safety rules",
+    icon: MdHealthAndSafety,
+    tone: "green",
+    // The tab key changed from "manuals" when Safety Rules replaced Lab Manuals. The
+    // Resources page still redirects ?tab=manuals, so an old bookmarked link lands here
+    // rather than silently rendering the replacement under a misleading URL.
+    path: "/resources?tab=safety-rules",
       meta: null,
     },
     {

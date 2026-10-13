@@ -48,7 +48,13 @@ function matches(row, filters, ors) {
     const v = row[f.col];
     if (f.op === "eq" && String(v) !== String(f.value)) return false;
     if (f.op === "neq" && String(v) === String(f.value)) return false;
-    if (f.op === "in" && !Array.isArray(f.value).map(String).includes(String(v))) return false;
+    // `Array.isArray(...)` returns a BOOLEAN, so `.map` on it is not a function -- this
+    // threw a TypeError on every `.in()` filter. It went unnoticed because the filter is
+    // only reached when a request is actually scoped to a NON-EMPTY course set: a Super
+    // Admin applies no filter, and an admin with no courses takes the
+    // IMPOSSIBLE_COURSE `.eq()` path instead. The first suite to exercise a Course Admin
+    // with a real course list -- adminSurfaceScope.verify.js -- surfaced it immediately.
+    if (f.op === "in" && !f.value.map(String).includes(String(v))) return false;
     if (f.op === "is" && f.value === null && v !== null && v !== undefined) return false;
   }
   if (ors.length) {

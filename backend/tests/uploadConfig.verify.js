@@ -70,8 +70,18 @@ function mockRes() {
 
 // The smallest thing multer.memoryStorage can hand the controller: it only ever
 // reads `mimetype` and `buffer` off `req.file`.
+//
+// The buffer now carries a REAL PNG signature rather than arbitrary text. These
+// handlers validate content by its leading bytes, not by the declared mimetype, so a
+// fixture of "fake-image-bytes" would be rejected as an unrecognised file and every
+// assertion below would be testing the wrong branch. The declared mimetype is now only
+// a cheap first pass, which is the point of the change.
+const PNG_HEADER = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const PDF_HEADER = Buffer.from("%PDF-1.7\n", "latin1");
+
 function fakeFile(mimetype = "image/png") {
-  return { mimetype, buffer: Buffer.from("fake-image-bytes"), originalname: "photo.png", size: 15 };
+  const buffer = mimetype === "application/pdf" ? PDF_HEADER : PNG_HEADER;
+  return { mimetype, buffer, originalname: "photo.png", size: buffer.length };
 }
 
 /** Installs a fetch stub and returns the URLs it was called with. */
@@ -224,7 +234,7 @@ function setCloudinaryEnv({ cloudName, preset }) {
   check("sends the configured preset", calls[0].body.get("upload_preset"), "tools_uploads");
 
   calls = stubFetch(() => ({ secure_url: "https://res.cloudinary.com/labtrack/raw/upload/manual.pdf", public_id: "x" }));
-  res = await attempt(uploadController.uploadDocument, { mimetype: "application/pdf", buffer: Buffer.from("pdf"), originalname: "m.pdf", size: 3 });
+  res = await attempt(uploadController.uploadDocument, { mimetype: "application/pdf", buffer: Buffer.from("%PDF-1.7\n", "latin1"), originalname: "m.pdf", size: 9 });
   check("uploadDocument -> 201", res.statusCode, 201);
   check("uploadDocument targets the raw endpoint", calls[0].url, "https://api.cloudinary.com/v1_1/dvfa28qzr/raw/upload");
   check("uploadDocument still returns the URL even though its documents row was not written", res.payload.url, "https://res.cloudinary.com/labtrack/raw/upload/manual.pdf");

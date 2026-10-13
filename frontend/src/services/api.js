@@ -339,12 +339,60 @@ searchUser: (firstName, lastName, signal) => request(`/users/search?firstName=${
     request(`/incidents/${id}/reassign`, { method: "PUT", body: JSON.stringify({ newHandlerId, reason }) }),
   deleteIncident: (id) => request(`/incidents/${id}`, { method: "DELETE" }),
 
-  // Manuals
+  // Manuals -- RETAINED. The Safety Rules tab replaced this in the navigation, but the
+  // Manuals API, controller, stored rows and files are all still in place and working.
+  // The helpers stay so ManualsTab.jsx keeps building; that component is no longer routed
+  // to, and deleting it is a separate decision.
   getManuals: (signal) => request("/manuals", { signal }),
   getManual: (id, signal) => request(`/manuals/${id}`, { signal }),
   createManual: (data) => request("/manuals", { method: "POST", body: JSON.stringify(data) }),
   updateManual: (id, data) => request(`/manuals/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteManual: (id) => request(`/manuals/${id}`, { method: "DELETE" }),
+
+  // Safety Rules
+  //
+  // Replaces Manuals in the UI. Deliberately kept separate from the Manuals helpers
+  // above: the Manuals API, its controller and its stored rows all still exist and are
+  // untouched, and conflating the two would make it look like they had been migrated.
+  getSafetyRules: (signal) => request("/safety-rules", { signal }),
+  getSafetyRule: (id, signal) => request(`/safety-rules/${id}`, { signal }),
+  createSafetyRule: (data) => request("/safety-rules", { method: "POST", body: JSON.stringify(data) }),
+  updateSafetyRule: (id, data) => request(`/safety-rules/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteSafetyRule: (id) => request(`/safety-rules/${id}`, { method: "DELETE" }),
+
+  // File delivery goes through the API so the course check runs on every open. The
+  // response is a redirect-free stream; there is no Cloudinary URL anywhere in this file
+  // for safety rules, because the component is never given one.
+  safetyRuleFileUrl: (id) => `${API_URL}/safety-rules/${id}/file`,
+
+  uploadSafetyRuleFile: async (file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    let headers = {};
+    if (auth.currentUser) {
+      try {
+        const token = await getIdToken(auth.currentUser);
+        headers["Authorization"] = `Bearer ${token}`;
+      } catch {}
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    let res;
+    try {
+      res = await fetch(`${API_URL}/safety-rules/upload`, {
+        method: "POST",
+        headers,
+        body: formData,
+        signal: controller.signal,
+      });
+    } catch (err) {
+      throw new Error(describeNetworkError(err));
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!res.ok) throw toError(await res.json().catch(() => ({})), res.status);
+    return res.json();
+  },
 
   // Fines
   getFines: (params, signal) => request(`/fines${toQuery(params)}`, { signal }),
