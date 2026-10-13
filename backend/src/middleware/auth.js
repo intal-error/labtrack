@@ -1,26 +1,94 @@
 const { auth, db } = require("../config/firebase");
 
+/**
+ * Whether an account is entitled to use the API at all.
+ *
+ * THIS IS THE SECOND REVOCATION GATE, AND IT IS THE ONE THAT MATTERS.
+ *
+ * Deactivating an admin writes two things: `disabled: true` on the Firebase Auth
+ * record, and `status: "inactive"` on the Firestore profile. The first is enough on
+ * its own -- auth.verifyIdToken rejects a disabled user's token -- but relying on it
+ * alone means the app's access control depends on an external service having accepted
+ * a write. If that write failed, if an account predates the mirror, or if a token was
+ * already minted, the only thing standing between a deactivated Course Admin and the
+ * whole admin surface is a call this app makes and can verify.
+ *
+ * So the authoritative check lives here, reading the Firestore profile on every
+ * request. verifyToken is the right place for it: it runs before authorize() on every
+ * route, so a deactivated account is turned away before any role is even considered,
+ * and no handler has to remember to check.
+ *
+ * AN ALLOWLIST, NOT A DENYLIST. `status !== "inactive"` would admit every value nobody
+ * thought about -- "disabled", "suspended", "archived", a typo, a value some future
+ * migration invents -- and each of those would be a deactivated account walking into
+ * an admin surface. Naming the single permitted value makes the safe direction the
+ * default.
+ *
+ * AN ABSENT status COUNTS AS ACTIVE, deliberately. Every account this app creates
+ * writes `status: "active"` (authController.register:145, adminController.create:131
+ * and :155, set-super-admin.js:372), but records migrated before the field existed
+ * have none. The rest of the codebase already reads it this way -- getActiveAdmins
+ * compares `(a.status || "active") === "active"` -- so failing closed on absence would
+ * lock every pre-migration account out the moment this ships, which is the one outcome
+ * the field's absence exists to avoid. Only a PRESENT, UNRECOGNISED value is refused.
+ *
+ * A profile that resolves to nothing (a uid in neither `users` nor `admins`) is NOT
+ * active. That is an account with no record in this system at all, and the whole
+ * roster of guards downstream is written on the assumption that an account exists.
+ */
+const isAccountActive = (profile) => {
+  if (!profile) return false;
+  const status = profile.status;
+  if (status === undefined || status === null || status === "") return true;
+  return String(status).toLowerCase() === "active";
+};
+
 const verifyToken = async (req, res, next) => {
   // Idempotent on purpose. server.js:125 already runs this for every /api/attendance
   // request, and then routes/attendance.js ran it again on all sixteen routes --
   // so each admin attendance call paid two RSA-2048 signature verifications plus
   // (on a cold key cache) two public-key fetches. Re-verifying a token that is
   // already attached cannot change the answer, it can only cost latency.
-  if (req.user?.uid) return next();
+  //
+  // It early-returns past the TOKEN check only. The account-status gate below still
+  // runs on this path: an admin who has just been deactivated must lose access on
+  // their very next request, not only on requests carrying a freshly minted token.
+  // ensureProfile() short-circuits on an already-resolved req.profile, so taking this
+  // path still costs no extra Firestore read.
+  if (!req.user?.uid) {
+    const header = req.headers.authorization;
+    if (!header?.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "No token provided" });
+    }
 
-  const header = req.headers.authorization;
-  if (!header?.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "No token provided" });
+    try {
+      const token = header.split("Bearer ")[1];
+      req.user = await auth.verifyIdToken(token);
+    } catch {
+      return res.status(401).json({ error: "Invalid token" });
+    }
   }
 
+  // Same profile lookup authorize()/attachRole() would do, hoisted here so the status
+  // gate has something to read. It also fills req.user.role from the profile when the
+  // token carried no claim, so calling it here does not change what authorize() later
+  // decides.
   try {
-    const token = header.split("Bearer ")[1];
-    const decoded = await auth.verifyIdToken(token);
-    req.user = decoded;
-    next();
-  } catch {
-    return res.status(401).json({ error: "Invalid token" });
+    await ensureProfile(req);
+  } catch (err) {
+    console.error("Failed to verify account status:", err.message);
+    return res.status(401).json({ error: "Unable to verify account" });
   }
+
+  if (!isAccountActive(req.profile)) {
+    // 401, not 403. The token is genuine and correctly signed -- it belongs to an
+    // account that is no longer entitled to use it. 401 is also what a disabled Auth
+    // record produces (auth/user-disabled), so the two revocation paths look identical
+    // from outside, and it tells the client to sign out rather than to retry.
+    return res.status(401).json({ error: "Account is inactive" });
+  }
+
+  next();
 };
 
 // Firestore doc reads are a network hop each time -- firebase-admin has no
@@ -136,4 +204,4 @@ const errorHandler = (err, req, res, _next) => {
   });
 };
 
-module.exports = { verifyToken, attachRole, authorize, errorHandler };
+module.exports = { verifyToken, attachRole, authorize, errorHandler, isAccountActive };

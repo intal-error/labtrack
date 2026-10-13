@@ -8,14 +8,77 @@ const ADMIN_COLLECTIONS = ["admins"];
  * Guards on the Super Admin account itself.
  *
  * WHY "adminLevel === super" AND NOT isSuperAdmin(): a legacy admin with no
- * assigned courses is treated as a super admin by courseScope.js, precisely so
- * that migration does not strip anyone's access on deploy. If these guards used
- * that function, every one of those legacy admins would be frozen out of creating
- * Course Admins until they were migrated -- and a Course Admin who cannot create
- * a Course Admin is exactly the lockout this feature is supposed to prevent.
- * So the freeze is tied to the EXPLICIT appointment only.
+ * adminLevel must NOT be treated as one. courseScope.js used to infer exactly that --
+ * no adminLevel and no courses read as unrestricted -- and deliberately stopped,
+ * because an empty record then meant maximum privilege by accident rather than by
+ * appointment, and `scopeCodes() === null` is the widest grant in the codebase. So the
+ * freeze on the Super Admin account is tied to the EXPLICIT appointment alone, which is
+ * both safer and stricter than the inference it replaced.
  */
 const isExplicitSuperAdmin = (profile) => profile?.adminLevel === "super";
+
+/**
+ * Applies an account's activation state to BOTH stores, or to neither.
+ *
+ * Deactivation writes two things that must agree: `disabled` on the Firebase Auth
+ * record, and `status` on the Firestore profile. They are separate services, so one
+ * can succeed while the other fails, and each half-failed state is dangerous in its own
+ * direction:
+ *
+ *   Auth written, Firestore failed -> the account cannot sign in, while the roster
+ *     still lists it Active. The Super Admin believes a working admin exists and no
+ *     one does. This is a permanent lockout that only CLI access can undo.
+ *
+ *   Firestore written, Auth failed -> the roster says Inactive, so it looks handled,
+ *     while the account signs in and walks straight through every admin route. That is
+ *     exactly the failure this whole path exists to close.
+ *
+ * So the order is Auth FIRST, and a Firestore failure rolls the Auth write back rather
+ * than leaving the pair split. The endpoint reports the failure instead of a cheerful
+ * 200, because a caller told "Admin inactive" when nothing happened will never retry.
+ *
+ * The Firestore `status` field alone would still be enough to gate access --
+ * middleware/auth.js reads it on every request and fails closed -- so the Auth mirror is
+ * belt-and-braces rather than load-bearing. It is kept because it is what actually
+ * stops the account at the front door, and because an account that can still mint a
+ * fresh token is an account a stolen credential can use indefinitely.
+ */
+const setAccountActive = async (uid, active) => {
+  try {
+    await auth.updateUser(uid, { disabled: !active });
+    return true;
+  } catch (err) {
+    console.error(`Could not ${active ? "enable" : "disable"} the Auth record for ${uid}:`, err.message);
+    return false;
+  }
+};
+
+/** Undo an Auth write when the Firestore half of the pair fails. */
+const rollbackAuth = async (uid, wasActive) => {
+  try {
+    await auth.updateUser(uid, { disabled: !wasActive });
+    return true;
+  } catch (err) {
+    // Loud, because this is the one failure an operator must chase by hand.
+    console.error(
+      `ROLLBACK FAILED for ${uid}: could not restore the Auth record to ${wasActive ? "enabled" : "disabled"}. ` +
+      "The account's Firestore status and its Auth record now disagree. Repair with " +
+      "backend/scripts/set-super-admin.js or the Firebase console.",
+      err.message,
+    );
+    return false;
+  }
+};
+
+/** Writes `status` to the authoritative row and every legacy mirror that exists. */
+const writeAccountStatus = async (uid, status) => {
+  await db.collection("users").doc(uid).set({ status, updatedAt: new Date() }, { merge: true });
+  for (const coll of ADMIN_COLLECTIONS) {
+    const docRef = db.collection(coll).doc(uid);
+    const doc = await docRef.get();
+    if (doc.exists) await docRef.set({ status }, { merge: true });
+  }
+};
 
 const readProfile = async (uid) => {
   const doc = await db.collection("users").doc(uid).get();
@@ -31,10 +94,17 @@ const courseExists = async (courseId) => {
 
 const getAll = async (req, res) => {
   try {
-    // A Course Admin has no business enumerating the roster: it exposes every
-    // other admin's name, email and contact number. They already have
+    // Only an EXPLICIT Super Admin enumerates the roster. It exposes every other
+    // admin's name, email and contact number, and a Course Admin already has
     // GET /api/auth/profile for their own account.
-    if (req.profile?.adminLevel === "course") {
+    //
+    // This used to test `adminLevel === "course"` and let everything else fall
+    // through, which meant any admin whose record lacked an adminLevel -- a
+    // pre-migration admin, or one whose course had been cleared -- was handed the
+    // entire roster. That is the fail-open direction, and it is the one courseScope.js
+    // spent a migration removing everywhere else. Testing for the exemption rather
+    // than the permission is what produced it, so it is now `isExplicitSuperAdmin`.
+    if (!isExplicitSuperAdmin(req.profile)) {
       const own = await readProfile(req.user.uid);
       return res.json(own ? [own] : []);
     }
@@ -60,7 +130,10 @@ const getAll = async (req, res) => {
 
 const getActiveAdmins = async (req, res) => {
   try {
-    if (req.profile?.adminLevel === "course") {
+    // Same fail-closed rule as getAll, for the same reason: this feeds the incident
+    // and borrow-request reassignment pickers, so an over-wide read here is an
+    // over-wide list of who can be handed another admin's work.
+    if (!isExplicitSuperAdmin(req.profile)) {
       const own = await readProfile(req.user.uid);
       return res.json(own && (own.status || "active") === "active" ? [own] : []);
     }
@@ -294,13 +367,17 @@ const toggleStatus = async (req, res) => {
 
     // Reassignment is the only way a Course Admin changes course, so it is the
     // only admin mutation another admin may perform.
-    if (req.profile?.adminLevel !== "super") {
+    if (!isExplicitSuperAdmin(req.profile)) {
       return res.status(403).json({ error: "Only the Super Admin can manage other admins" });
     }
 
-    const newStatus = current.status === "active" ? "inactive" : "active";
+    const wasActive = (current.status || "active") === "active";
+    const newStatus = wasActive ? "inactive" : "active";
 
-    if (newStatus === "inactive") {
+    if (wasActive) {
+      // The last-active-admin guard only ever bites on the way DOWN. On the way up it
+      // is skipped, which is what makes this endpoint usable for recovering an account
+      // in either direction.
       const activeAdminsSnap = await db.collection("users")
         .where("role", "==", "admin")
         .where("status", "==", "active")
@@ -310,15 +387,29 @@ const toggleStatus = async (req, res) => {
       }
     }
 
-    await db.collection("users").doc(id).set({ status: newStatus, updatedAt: new Date() }, { merge: true });
+    // Auth first, Firestore second, roll the Auth write back if Firestore fails. See
+    // setAccountActive for why that order and that rollback, and why the alternative
+    // -- mark them inactive, report success, hope the Auth write landed -- is the one
+    // outcome that must never happen.
+    if (!(await setAccountActive(id, newStatus === "active"))) {
+      return res.status(502).json({
+        error: `Could not ${newStatus === "active" ? "reactivate" : "deactivate"} this account: the Firebase Authentication update failed. Nothing was changed, so it still has the access it had before.`,
+      });
+    }
 
-    for (const coll of ADMIN_COLLECTIONS) {
-      const docRef = db.collection(coll).doc(id);
-      const doc = await docRef.get();
-      if (doc.exists) {
-        await docRef.set({ status: newStatus }, { merge: true });
-        break;
-      }
+    try {
+      await writeAccountStatus(id, newStatus);
+    } catch (err) {
+      // Logged before the rollback so the cause is recoverable even if the rollback
+      // itself succeeds -- the operator otherwise sees a clean 500 and a healthy pair,
+      // with no sign either write ever happened.
+      console.error(`Could not persist the account status for ${id}:`, err.message);
+      const restored = await rollbackAuth(id, wasActive);
+      return res.status(500).json({
+        error: restored
+          ? "Could not save the account status, and the authentication change was rolled back. Nothing was changed -- please try again."
+          : "Could not save the account status AND the authentication change could not be rolled back. This account's two records now disagree; see the server log. Do not retry blindly.",
+      });
     }
 
     invalidateAdminsCache();
@@ -329,12 +420,30 @@ const toggleStatus = async (req, res) => {
   }
 };
 
+/**
+ * DELETE /api/admin/:id -- deactivate and revoke, WITHOUT destroying the record.
+ *
+ * It is called "delete" and it is not one, and that naming is the source of two of the
+ * bugs adminLifecycle.verify.js exists to pin, so it is worth being explicit:
+ *
+ *   - The `users` and `admins` rows are deliberately KEPT. incidentController.js:548
+ *     and borrowRequestController.js:498 look admins up by uid and read
+ *     `status === "inactive"` to refuse handing them new work; deleting the row would
+ *     turn that refusal into a crash and orphan the incident history behind it.
+ *   - Because the rows survive, this and PUT /:id/toggle-status now produce the SAME
+ *     end state: inactive, and unable to sign in. There used to be a difference, and it
+ *     was the bug -- this endpoint disabled the Auth record and the toggle did not, so
+ *     "Deactivate" revoked nothing, and "Delete" was irreversible by accident.
+ *
+ * Both paths go through setAccountActive(), so an account can be deactivated and then
+ * reactivated through either endpoint.
+ */
 const remove = async (req, res) => {
   try {
     const { id } = req.params;
 
     if (req.user.uid === id) {
-      return res.status(400).json({ error: "Cannot deactivate your own account" });
+      return res.status(400).json({ error: "Cannot delete your own account" });
     }
 
     const current = await readProfile(id);
@@ -344,31 +453,45 @@ const remove = async (req, res) => {
       return res.status(403).json({ error: "The Super Admin account cannot be deleted" });
     }
 
-    if (req.profile?.adminLevel !== "super") {
+    if (!isExplicitSuperAdmin(req.profile)) {
       return res.status(403).json({ error: "Only the Super Admin can manage other admins" });
     }
 
-    const activeAdminsSnap = await db.collection("users")
-      .where("role", "==", "admin")
-      .where("status", "==", "active")
-      .get();
-    if (activeAdminsSnap.size <= 1) {
-      return res.status(400).json({ error: "Cannot deactivate the last active admin" });
+    const wasActive = (current.status || "active") === "active";
+
+    if (wasActive) {
+      const activeAdminsSnap = await db.collection("users")
+        .where("role", "==", "admin")
+        .where("status", "==", "active")
+        .get();
+      if (activeAdminsSnap.size <= 1) {
+        return res.status(400).json({ error: "Cannot delete the last active admin" });
+      }
     }
 
-    await db.collection("users").doc(id).set({ status: "inactive", updatedAt: new Date() }, { merge: true });
-    for (const coll of ADMIN_COLLECTIONS) {
-      try {
-        const docRef = db.collection(coll).doc(id);
-        const doc = await docRef.get();
-        if (doc.exists) {
-          await docRef.set({ status: "inactive" }, { merge: true });
-        }
-      } catch {}
+    // Same ordering and rollback contract as toggleStatus. This handler used to wrap
+    // the Auth write in `try { ... } catch {}`, so a failed revocation still answered
+    // 200 "Admin deactivated" for a deactivation that had not happened.
+    if (!(await setAccountActive(id, false))) {
+      return res.status(502).json({
+        error: "Could not deactivate this account: the Firebase Authentication update failed. Nothing was changed, so it still has the access it had before.",
+      });
     }
-    try { await auth.updateUser(id, { disabled: true }); } catch {}
+
+    try {
+      await writeAccountStatus(id, "inactive");
+    } catch (err) {
+      console.error(`Could not persist the account status for ${id}:`, err.message);
+      const restored = await rollbackAuth(id, wasActive);
+      return res.status(500).json({
+        error: restored
+          ? "Could not save the account status, and the authentication change was rolled back. Nothing was changed -- please try again."
+          : "Could not save the account status AND the authentication change could not be rolled back. This account's two records now disagree; see the server log. Do not retry blindly.",
+      });
+    }
+
     invalidateAdminsCache();
-    res.json({ message: "Admin deactivated" });
+    res.json({ message: "Admin deactivated", status: "inactive" });
   } catch (err) {
     res.status(500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : err.message });
   }

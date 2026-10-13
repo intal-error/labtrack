@@ -6,7 +6,7 @@ import { MdAdd, MdList, MdPerson, MdLock, MdPhone, MdWork, MdEmail, MdArrowBack,
 import ViewToggle from "../components/ui/ViewToggle";
 
 import EmptyState from "../components/ui/EmptyState";
-import ErrorState from "../components/ui/ErrorState";
+import LoadError from "../components/ui/LoadError";
 import toast from "react-hot-toast";
 import "../styles/pages/admin.css";
 import "../styles/pages/shared-form-panel.css";
@@ -99,10 +99,17 @@ export default function AdminPage() {
     setLoading(true);
     try {
       if (editing) {
-        // courseId is deliberately NOT sent. The backend refuses to move an account
-        // between courses through this endpoint, because reassigning one is how a
-        // Course Admin would end up responsible for a course nobody appointed them
-        // to. Reassignment is a Super Admin action on the roster, done explicitly.
+        // courseId is sent ONLY by a Super Admin, and that is the entire point of it:
+        // reassigning a Course Admin to another course is the one admin operation the
+        // server permits solely to them (adminController.update:207 -- "Only the Super
+        // Admin can reassign an admin to a different course"). This payload used to omit
+        // courseId unconditionally, on the belief -- carried over from an earlier
+        // backend that refused the move -- that reassignment was impossible. With the
+        // server allowing it, omitting it made that one permission unreachable from the
+        // UI while the backend sat there permitting it.
+        //
+        // A Course Admin editing their own account never sends it: the select is
+        // disabled for them and adminController answers the attempt with 403.
         const payload = {
           firstName: form.firstName,
           lastName: form.lastName,
@@ -110,6 +117,7 @@ export default function AdminPage() {
           contact: form.contact,
           permissions: form.permissions,
         };
+        if (isSuperAdmin) payload.courseId = form.courseId;
         if (form.password) payload.password = form.password;
         await api.updateAdmin(editing.id, payload);
         toast.success("Admin updated!");
@@ -144,6 +152,51 @@ export default function AdminPage() {
 
   const getAdminInitials = (a) => `${(a.firstName || a.firstname || "")[0] || ""}${(a.lastName || a.lastname || "")[0] || ""}`.toUpperCase() || "?";
 
+  /*
+   * The per-row menu, extracted so the grid and the table cannot drift apart.
+   *
+   * It used to be written out twice, identically, and both copies had the same three
+   * problems. Every item below mirrors a server-side guard, and offering an action the
+   * server will always refuse is not a cosmetic issue: a Course Admin's only row is
+   * their own, so their entire menu was "Deactivate" and "Delete" on themselves, both
+   * answered with 400 "Cannot deactivate your own account". That reads as a broken app
+   * rather than as a deliberate boundary.
+   *
+   *   Edit             own row always; someone else's row only for a Super Admin,
+   *                    because adminController.update answers a non-self, non-super
+   *                    caller with 403.
+   *   Deactivate/Activate  Super Admin, and never on your own row -- adminController
+   *                    .toggleStatus answers that with 400.
+   *   Delete           Super Admin, and never on your own row -- adminController
+   *                    .remove answers that with 400, and with 403 for the Super
+   *                    Admin account itself, which is why the item is also hidden when
+   *                    the TARGET is an explicit Super Admin.
+   */
+  const RowMenu = ({ a }) => {
+    const isSelf = userProfile?.id === a.id;
+    const isSuper = isSuperAdmin === true;
+    const targetIsSuper = a.adminLevel === "super";
+
+    return (
+      <div className="admin-kebab-wrap">
+        <button className="admin-kebab-btn" aria-label={`Actions for ${a.firstName || ""} ${a.lastName || ""}`.trim()} onClick={() => setOpenKebab(openKebab === a.id ? null : a.id)}>
+          <MdMoreVert size={18} />
+        </button>
+        {openKebab === a.id && (
+          <div className="admin-kebab-dropdown">
+            {(isSelf || isSuper) && <button onClick={() => openEdit(a)}><MdEdit size={14} /> Edit</button>}
+            {isSuper && !isSelf && !targetIsSuper && (
+              <button onClick={() => handleToggleStatus(a.id)}>
+                <MdShield size={14} /> {(a.status || "active") === "active" ? "Deactivate" : "Activate"}
+              </button>
+            )}
+            {isSuper && !isSelf && !targetIsSuper && <button className="danger" onClick={() => handleDelete(a.id)}><MdDelete size={14} /> Delete</button>}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <section className="admin-page">
 
@@ -153,11 +206,13 @@ export default function AdminPage() {
             <img src="/icons/icon-192x192.png" alt="Logo" className="admin-logo" width="48" height="48" decoding="async" />
           </div>
           <div className="admin-actions-grid">
-            <button className="admin-action-card" onClick={() => { openCreate(); setView("list"); }}>
-              <div className="admin-action-icon green"><MdAdd size={28} /></div>
-              <span className="admin-action-label">Create Account</span>
-              <span className="admin-action-desc">Add new admin or staff</span>
-            </button>
+            {isSuperAdmin && (
+              <button className="admin-action-card" onClick={() => { openCreate(); setView("list"); }}>
+                <div className="admin-action-icon green"><MdAdd size={28} /></div>
+                <span className="admin-action-label">Create Account</span>
+                <span className="admin-action-desc">Add new admin or staff</span>
+              </button>
+            )}
             <button className="admin-action-card" onClick={() => setView("list")}>
               <div className="admin-action-icon yellow"><MdList size={28} /></div>
               <span className="admin-action-label">Account List</span>
@@ -202,7 +257,18 @@ export default function AdminPage() {
           )}
 
           {error ? (
-            <ErrorState message={error} onRetry={loadAdmins} />
+            /*
+             * LoadError, not the ErrorState this used to call. ErrorState rendered a
+             * `<tr>`, and this slot is outside the table -- the roster is not rendered
+             * at all when it is empty or failed to load -- so every load failure put a
+             * table row in a div and drew React's validateDOMNesting warning.
+             * ErrorState has since been deleted as unused. LoadError is the block-level
+             * component the rest of the app already uses for exactly this
+             * (StudentsPage, TransactionsPage, TransactionsPanel, DashboardPage), it is
+             * the one with actual styling behind it (`.error-state` had no rules at
+             * all), and it carries role="alert" so the failure is announced.
+             */
+            <LoadError message={error} onRetry={loadAdmins} />
           ) : admins.length === 0 ? (
             <EmptyState message="No admin accounts found." />
           ) : (
@@ -222,18 +288,7 @@ export default function AdminPage() {
                               {(a.status || "active") === "active" ? "Active" : "Inactive"}
                             </span>
                           </div>
-                          <div className="admin-kebab-wrap">
-                            <button className="admin-kebab-btn" onClick={() => setOpenKebab(openKebab === a.id ? null : a.id)}>
-                              <MdMoreVert size={18} />
-                            </button>
-                            {openKebab === a.id && (
-                              <div className="admin-kebab-dropdown">
-                                {userProfile?.id === a.id && <button onClick={() => openEdit(a)}><MdEdit size={14} /> Edit</button>}
-                                <button onClick={() => handleToggleStatus(a.id)}><MdShield size={14} /> {(a.status || "active") === "active" ? "Deactivate" : "Activate"}</button>
-                                {userProfile?.id !== a.id && <button className="danger" onClick={() => handleDelete(a.id)}><MdDelete size={14} /> Delete</button>}
-                              </div>
-                            )}
-                          </div>
+                          <RowMenu a={a} />
                         </div>
                         <div className="admin-account-details">
                           <div className="admin-account-detail">
@@ -282,18 +337,7 @@ export default function AdminPage() {
                             </span>
                           </td>
                           <td className="admin-td-kebab">
-                            <div className="admin-kebab-wrap">
-                              <button className="admin-kebab-btn" onClick={() => setOpenKebab(openKebab === a.id ? null : a.id)}>
-                                <MdMoreVert size={18} />
-                              </button>
-                              {openKebab === a.id && (
-                                <div className="admin-kebab-dropdown">
-                                  {userProfile?.id === a.id && <button onClick={() => openEdit(a)}><MdEdit size={14} /> Edit</button>}
-                                  <button onClick={() => handleToggleStatus(a.id)}><MdShield size={14} /> {(a.status || "active") === "active" ? "Deactivate" : "Activate"}</button>
-                                  {userProfile?.id !== a.id && <button className="danger" onClick={() => handleDelete(a.id)}><MdDelete size={14} /> Delete</button>}
-                                </div>
-                              )}
-                            </div>
+                            <RowMenu a={a} />
                           </td>
                         </tr>
                       ))}
@@ -408,6 +452,11 @@ export default function AdminPage() {
                   <label>Course *</label>
                   <select
                     value={form.courseId}
+                    // Disabled unless a Super Admin is creating or editing. A Course
+                    // Admin may never move themselves between courses -- the backend
+                    // answers that with 403 -- so leaving the control live would only
+                    // ever produce a refused save.
+                    disabled={!isSuperAdmin}
                     onChange={(e) => setForm({ ...form, courseId: e.target.value })}
                   >
                     <option value="">Select a course...</option>

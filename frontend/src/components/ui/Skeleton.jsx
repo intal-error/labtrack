@@ -3,12 +3,13 @@ import "./skeleton.css";
 /**
  * Loading placeholder.
  *
- * WHY THIS EXISTS: the app had LoadingSpinner, EmptyState, ErrorState and LoadError,
- * and a grep for "skeleton" across every stylesheet returned zero matches. So every
- * cold load replaced the content with a centred spinner, which communicates "there is
- * nothing here yet" rather than "the shape of what is coming". A skeleton preserves
- * the layout, so the page does not reflow when data lands -- and it removes the
- * layout-collapse jump that a full-height spinner causes on every route change.
+ * WHY THIS EXISTS: the app had LoadingSpinner, EmptyState, a now-deleted ErrorState
+ * and LoadError, and a grep for "skeleton" across every stylesheet returned zero
+ * matches. So every cold load replaced the content with a centred spinner, which
+ * communicates "there is nothing here yet" rather than "the shape of what is coming".
+ * A skeleton preserves the layout, so the page does not reflow when data lands -- and
+ * it removes the layout-collapse jump that a full-height spinner causes on every route
+ * change.
  *
  * It also helps perceived performance on the exact screens this app spends its time
  * on: a 50-row attendance table, a 25-row transactions table, a KPI strip.

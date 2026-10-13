@@ -322,11 +322,18 @@ async function checkValue(label, promise, expected) {
     // stray profile becomes an unrestricted reader the moment it is used directly.
     // Section 10's subject changed when isScopedAdmin() replaced isCourseAdmin(): a
     // PRE-MIGRATION admin (no adminLevel, but holding courses) is now scoped too.
-    // Only the no-level AND no-course shape -- which courseScope calls super -- stays
-    // on the unrestricted branch, and no current account has that shape.
+    //
+    // The no-level AND no-course shape used to be asserted as an OPEN GAP that stayed
+    // unrestricted here, on the grounds that courseScope.isSuperAdmin() treated it as
+    // super so the two layers agreed. They did not: courseScope REMOVED that inference,
+    // so the backend already failed closed on this shape while these rules did not. The
+    // gap is closed here rather than documented, because "an incomplete record is a
+    // system-wide admin" is not a trade-off worth preserving in a layer the backend
+    // already treats as untrusted.
     await check("legacy no-level admin WITH courses is now scoped", asNoLevel.doc("incidents/inc-ct").get(), false);
     await check("  but still reads its own course", asNoLevel.doc("incidents/inc-mt").get(), true);
-    await check("OPEN GAP: no-level AND no-course admin remains unrestricted", asNoCourses.doc("incidents/inc-ct").get(), true);
+    await check("no-level AND no-course admin is now scoped too (gap closed)", asNoCourses.doc("incidents/inc-ct").get(), false);
+    await check("  it reads nothing at all, not merely not-this-course", asNoCourses.doc("incidents/inc-mt").get(), false);
 
     console.log("--- 11. list queries are scoped, not just single reads ---");
     // A rule that only guards `get` but leaves `list` open lets a caller enumerate
@@ -376,9 +383,10 @@ async function checkValue(label, promise, expected) {
     await check("  and cannot read a NULL-course item either", asBadCode.doc("catalog/item-nocourse").get(), false);
     await check("an EMPTY course list is fail-closed, not unrestricted", asEmptyList.doc("catalog/item-ct").get(), false);
     await check("  and on incidents too", asEmptyList.doc("incidents/inc-ct").get(), false);
-    // Documented residual gap: NO adminLevel AND no courses. courseScope calls that
-    // super; the rules cannot. Asserted so it is never forgotten.
-    await check("OPEN GAP: no-level + no-course admin is still unrestricted", asNoCourses.doc("catalog/item-ct").get(), true);
+    // This used to be pinned as a documented residual gap. It is closed now: an admin
+    // with neither a tier nor a course satisfies no courseGranted() and reads nothing.
+    await check("no-level + no-course admin is scoped, not unrestricted", asNoCourses.doc("catalog/item-ct").get(), false);
+    await check("  it reads nothing anywhere", asNoCourses.doc("catalog/item-nocourse").get(), false);
   } catch (err) {
     failures += 1;
     console.log(`FAIL  suite aborted: ${err.message}`);

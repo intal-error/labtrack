@@ -10,12 +10,17 @@
  * So the assertions below are mostly about REFUSAL. Each one names the lockout
  * it prevents.
  *
- * The subtle one is the legacy-admin case. courseScope.js deliberately treats an
- * admin with no adminLevel as unrestricted, so that migration does not strip
- * anyone's access on deploy. The guards here therefore check adminLevel ===
- * "super" EXPLICITLY rather than calling isSuperAdmin(): if they used it, every
- * legacy admin would be frozen out of Course Admin management until migrated,
- * which is the exact lockout this file exists to rule out.
+ * The subtle one is the legacy-admin case. courseScope.js deliberately REMOVED the
+ * inference that treated an admin with no adminLevel as unrestricted, so these guards
+ * check adminLevel === "super" EXPLICITLY rather than calling isSuperAdmin(). The two
+ * happen to agree today; keeping them independent means neither depends on the other
+ * being left alone.
+ *
+ * WHAT THIS FILE DOES NOT COVER, and why it is not an oversight: whether a successful
+ * deactivation actually REVOKES access. That is a question about Firebase Auth and
+ * about middleware/auth.js rather than about these guards, and it is pinned in
+ * adminLifecycle.verify.js (handler-level, with recorded side effects) and in
+ * apiAuthz.verify.js sections 14-15 (the real middleware chain).
  *
  * Run: node backend/tests/superAdmin.verify.js
  */

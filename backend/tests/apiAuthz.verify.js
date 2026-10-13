@@ -35,13 +35,22 @@ const DB = {};
   DB.lab_attendance = [];
 
 const firebaseState = {
-  // uid -> { email, schoolId, role, course }
+  // uid -> { email, schoolId, role, course, disabled? }
   users: {},
 };
+
+// Every auth.updateUser({disabled}) the app performed, so a test can assert the mirror
+// happened -- or, for a refused mutation, that nothing was written.
+const authCalls = [];
 
 const authStub = {
   // Accepts one of the fake bearer tokens minted below and returns the decoded shape
   // firebase-admin's verifyIdToken produces: the uid plus custom claims.
+  //
+  // `disabled` models the one Firebase behaviour the revocation fix depends on: once an
+  // Auth record is disabled, verifyIdToken REJECTS the token (auth/user-disabled) even
+  // though the token is unexpired and correctly signed. authDisabledEmulator.verify.js
+  // proves that against the real Auth emulator rather than against this stub.
   verifyIdToken: async (token) => {
     const uid = token.replace(/^fake-token-/, "");
     if (!firebaseState.users[uid]) {
@@ -49,7 +58,20 @@ const authStub = {
       err.code = "auth/id-token-expired";
       throw err;
     }
+    if (firebaseState.users[uid].disabled) {
+      const err = new Error("The user record is disabled.");
+      err.code = "auth/user-disabled";
+      throw err;
+    }
     return { uid, email: firebaseState.users[uid].email };
+  },
+  // Records the disable flag so a test can assert the controller mirrored its Firestore
+  // write onto the Auth record (and, just as importantly, did NOT when it refused).
+  updateUser: async (uid, patch) => {
+    if (patch && patch.disabled !== undefined) {
+      firebaseState.users[uid].disabled = patch.disabled;
+      authCalls.push({ uid, disabled: patch.disabled });
+    }
   },
   getUser: async (uid) => {
     if (!firebaseState.users[uid]) throw new Error("no such user");
@@ -142,6 +164,15 @@ const ADMIN_MT = "u-admin-mt";
 const STU_A = "u-stu-a";
 const STU_B = "u-stu-b";
 const KIOSK = "u-kiosk";
+
+// A disposable second Course Admin, so section 14 can deactivate one without tripping
+// adminController's "last active admin" guard and section 15 can act as the attacker.
+const ADMIN_SPARE = "u-admin-spare";
+
+// Row lookups that return {} instead of undefined, so a missing row reports as a clean
+// assertion failure rather than aborting the whole suite on a TypeError.
+const userRow = (uid) => (DB.users || []).find((u) => u.id === uid) || {};
+const mirrorRow = (uid) => (DB.admins || []).find((u) => u.id === uid) || {};
 
 firebaseState.users[SUPER] = { email: "super@x", role: "admin", course: "" };
 firebaseState.users[ADMIN_CT] = { email: "ct@x", role: "admin", course: CT };
@@ -561,6 +592,154 @@ check("an unknown room code is refused", badRoom.status, 404);
         .set("Authorization", `Bearer ${tok(KIOSK)}`);
       check("a KIOSK still can", kioskLookup.status, 200);
       check("  and no email is returned", "email" in (kioskLookup.body || {}), false);
+    }
+
+    // ── 14. DEACTIVATION MUST REVOKE, THROUGH THE REAL MIDDLEWARE CHAIN ─────────
+    //
+    // This is the section that could not exist before the fix. Everything above it
+    // proves WHO may act; this proves what happens to an account AFTER a successful
+    // Super Admin deactivation, through verifyToken -> authorize -> attachCourseScope
+    // exactly as a browser would drive it.
+    //
+    // The pre-fix failure mode: toggleStatus() wrote only users/{uid}.status. The
+    // `{role: "admin"}` custom claim was minted once at create time and Firestore
+    // status never touches it, so verifyIdToken kept succeeding and authorize("admin")
+    // kept admitting -- the deactivated Course Admin retained the whole admin surface.
+    //
+    // TWO INDEPENDENT GATES ARE REQUIRED, and the second is the one that matters:
+    //
+    //   1. Firebase Auth `disabled: true` makes verifyIdToken reject the token. Real,
+    //      and proven against the Auth emulator in authDisabledEmulator.verify.js -- but
+    //      it is an EXTERNAL service. If that write silently failed, or an account was
+    //      deactivated before the mirror existed, or a token was already minted and the
+    //      record is re-enabled, the gate is gone.
+    //   2. The account-status check in middleware/auth.js, which reads Firestore on
+    //      every request and is therefore authoritative for this app regardless of what
+    //      Firebase thinks.
+    //
+    // Assertion 14.4 below deletes the token and keeps the token: it isolates gate 2
+    // by proving the request is refused even when verifyIdToken is fully willing.
+    console.log("--- 14. a deactivated Course Admin loses every protected route ---");
+    {
+      // A second, disposable Course Admin so deactivating ADMIN_MT cannot trip the
+      // "last active admin" guard (SUPER is also active, so size is 2 and it passes).
+      firebaseState.users[ADMIN_SPARE] = { email: "spare@x", role: "admin", course: CT };
+      put(ADMIN_SPARE, { email: "spare@x", role: "admin", adminLevel: "course", courseId: CT, status: "active" });
+
+      // adminController writes BOTH collections for every account it creates, and its
+      // mirror loops only touch a row that already exists. This suite never seeded
+      // `admins`, so without these the mirror assertions would have been reading a
+      // collection the controller correctly declines to create.
+      DB.admins = [];
+      for (const uid of [SUPER, ADMIN_CT, ADMIN_MT, ADMIN_SPARE]) {
+        DB.admins.push({ ...DB.users.find((u) => u.id === uid) });
+      }
+
+      const deact = await request(app)
+        .put(`/api/admin/${ADMIN_MT}/toggle-status`)
+        .set("Authorization", `Bearer ${tok(SUPER)}`);
+      check("the Super Admin can deactivate a Course Admin", deact.status, 200);
+      check("  Firestore says inactive", userRow(ADMIN_MT).status, "inactive");
+      check("  AND the Auth record was disabled", firebaseState.users[ADMIN_MT].disabled, true);
+      check("  the mirror agrees", mirrorRow(ADMIN_MT).status, "inactive");
+
+      // Gate 1: Firebase Auth now rejects the token outright.
+      const tokenRejected = await request(app)
+        .get("/api/admin")
+        .set("Authorization", `Bearer ${tok(ADMIN_MT)}`);
+      check("their existing token is refused (401)", tokenRejected.status, 401);
+
+      for (const [label, method, path, body] of [
+        ["read the admin roster", "get", "/api/admin", null],
+        ["read the courses table", "get", "/api/courses", null],
+        ["list incidents", "get", "/api/incidents", null],
+        ["read reports", "get", "/api/reports/summary", null],
+        ["read settings", "get", "/api/settings/general", null],
+        ["read backups", "get", "/api/backup", null],
+        ["list documents", "get", "/api/documents", null],
+        ["list fines", "get", "/api/fines", null],
+        ["list borrow requests", "get", "/api/borrow-requests", null],
+        ["read the catalog", "get", "/api/catalog", null],
+        ["read transactions", "get", "/api/transactions", null],
+        ["list students", "get", "/api/users", null],
+        ["write maintenance", "post", "/api/maintenance", {}],
+        ["create an incident", "post", "/api/incidents", {}],
+      ]) {
+        let r = request(app)[method](path);
+        if (body) r = r.send(body);
+        r = r.set("Authorization", `Bearer ${tok(ADMIN_MT)}`);
+        const res = await r;
+        check(`a deactivated Course Admin CANNOT ${label} (${res.status})`, res.status, 401);
+      }
+
+      // GATE 2, IN ISOLATION. Put the Auth record back so verifyIdToken would happily
+      // accept the token again, and leave only the Firestore status saying inactive.
+      // If the request is STILL refused, the status gate in middleware/auth.js is
+      // genuinely doing the work and the app does not depend on Firebase's disabled
+      // flag to be correct.
+      firebaseState.users[ADMIN_MT].disabled = false;
+      const firestoreOnly = await request(app)
+        .get("/api/admin")
+        .set("Authorization", `Bearer ${tok(ADMIN_MT)}`);
+      check("refused even when Firebase Auth would accept the token (401)", firestoreOnly.status, 401);
+      check("  and verifyIdToken really was willing", firebaseState.users[ADMIN_MT].disabled, false);
+
+      // Fail closed on an unrecognised status, rather than defaulting to permitted.
+      userRow(ADMIN_MT).status = "suspended-by-someone";
+      const unknown = await request(app)
+        .get("/api/admin")
+        .set("Authorization", `Bearer ${tok(ADMIN_MT)}`);
+      check("an unrecognised status fails CLOSED (401)", unknown.status, 401);
+
+      // Reactivate, then everything must work again. Without this the suite would pass
+      // against a middleware that simply rejects everyone.
+      userRow(ADMIN_MT).status = "active";
+      const back = await request(app)
+        .get("/api/admin")
+        .set("Authorization", `Bearer ${tok(ADMIN_MT)}`);
+      check("after reactivation they are served again", back.status, 200);
+      check("  and the Auth record was re-enabled", firebaseState.users[ADMIN_MT].disabled, false);
+      const theirRoster = await request(app)
+        .get("/api/admin")
+        .set("Authorization", `Bearer ${tok(ADMIN_MT)}`);
+      check("  a reactivated Course Admin sees only their own row",
+        (theirRoster.body || []).map((a) => a.id), [ADMIN_MT]);
+
+      // Legacy rows predate the status field entirely. They must keep working, or
+      // deploying this gate would lock out every pre-migration account at once.
+      const noStatus = { id: ADMIN_SPARE };
+      DB.users.push({ ...noStatus, role: "admin", adminLevel: "course", courseId: CT });
+      const legacyOk = await request(app)
+        .get("/api/admin")
+        .set("Authorization", `Bearer ${tok(ADMIN_SPARE)}`);
+      check("a record with NO status field at all is still served (200)", legacyOk.status, 200);
+    }
+
+    console.log("--- 15. a Course Admin cannot reach the admin-management verbs ---");
+    {
+      // /api/admin is mounted verifyToken -> authorize("admin") -> attachCourseScope,
+      // so role alone is not what stops these: the handlers must each refuse. These
+      // verbs were previously untested at the HTTP layer.
+      for (const [label, method, path, body] of [
+        ["deactivate a peer", "put", `/api/admin/${SUPER}/toggle-status`, null],
+        ["delete a peer", "delete", `/api/admin/${SUPER}`, null],
+        ["create an Admin", "post", "/api/admin", { firstName: "X", lastName: "Y", email: "x@y.z", password: "Passw0rd!", courseId: CT }],
+      ]) {
+        let r = request(app)[method](path);
+        if (body) r = r.send(body);
+        r = r.set("Authorization", `Bearer ${tok(ADMIN_SPARE)}`);
+        const res = await r;
+        check(`a Course Admin CANNOT ${label} (${res.status})`, res.status, 403);
+      }
+      check("  and the Super Admin's tier is untouched", userRow(SUPER).adminLevel, "super");
+      check("  and no Auth record was touched", authCalls.filter((c) => c.uid === SUPER).length, 0);
+
+      // A refused mutation must not write anything at all.
+      const beforeSuper = JSON.stringify(userRow(SUPER));
+      const before = JSON.stringify(userRow(ADMIN_CT));
+      await request(app).put(`/api/admin/${SUPER}/toggle-status`).set("Authorization", `Bearer ${tok(ADMIN_SPARE)}`);
+      check("  the target's row is byte-identical afterwards", JSON.stringify(userRow(ADMIN_CT)), before);
+      check("  and the caller cannot have changed the Super Admin either", JSON.stringify(userRow(SUPER)), beforeSuper);
     }
   } catch (err) {
     failures += 1;

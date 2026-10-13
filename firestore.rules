@@ -99,13 +99,23 @@ service cloud.firestore {
     // already declares courses is scoped whether or not it has been migrated yet,
     // which only ever narrows what someone can read.
     //
-    // Still unscoped, and deliberately so: an admin with NO adminLevel AND no
-    // courses at all. courseScope.isSuperAdmin() resolves that shape as super
-    // (legacy behaviour, so migration cannot strip access), while
-    // adminController.isExplicitSuperAdmin() does not. The two layers disagree by
-    // design, and no current account has that shape -- pinned by a test below.
+    // An admin with NO adminLevel AND no courses at all used to be unrestricted here,
+    // because every call site is shaped `!isScopedAdmin() || courseGranted(...)` --
+    // so "not a scoped admin" read as "unrestricted on this collection".
+    //
+    // courseScope.js inferred that same shape as a Super Admin and then deliberately
+    // removed the inference, so for a while the backend failed CLOSED on a record
+    // these rules still read as unrestricted: one malformed profile was a system-wide
+    // admin through this layer while the other refused it.
+    //
+    // CHANGED: an admin is now "scoped" unless it is explicitly a Super Admin, so the
+    // unrestricted branch belongs to `adminLevel == "super"` alone. A Course Admin, a
+    // legacy admin holding real courses, and an INCOMPLETE admin all fall through to
+    // courseGranted(), which an empty course list never satisfies -- so a record with
+    // no tier and no course now sees nothing rather than everything, matching
+    // middleware/courseScope.js. Pinned by backend/tests/firestoreRules.verify.js.
     function isScopedAdmin() {
-      return isAdmin() && (getTier() == "course" || (getTier() == "" && myCourses().size() > 0));
+      return isAdmin() && !isSuperAdmin();
     }
 
     // Mirrors getAdminCourses() in backend/src/utils/adminTiers.js:
