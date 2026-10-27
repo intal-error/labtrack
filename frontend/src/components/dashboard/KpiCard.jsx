@@ -13,9 +13,15 @@ export default function KpiCard({
   delta,
   deltaInvert = false,
   deltaCaption,
+  onClick,
 }) {
   return (
-    <div className="dash-kpi">
+    <button
+      type="button"
+      className="dash-kpi"
+      onClick={onClick}
+      aria-label={`${label}: ${value}`}
+    >
       <span className={`dash-kpi-icon ${tone}`}>
         <Icon size={20} />
       </span>
@@ -26,6 +32,6 @@ export default function KpiCard({
           <DeltaBadge value={delta} invert={deltaInvert} caption={deltaCaption} />
         )}
       </div>
-    </div>
+    </button>
   );
 }

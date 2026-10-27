@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { MdPeople, MdCheckCircle, MdRefresh, MdDownload } from "react-icons/md";
 import { api } from "../services/api";
 import { useBorrowed, useReturned, useTransactionStats } from "../hooks/useQueries";
@@ -23,8 +24,30 @@ const normalize = (src) => (!src ? [] : Array.isArray(src) ? src : src.data || [
 const toPagination = (src) => (!src || Array.isArray(src) ? null : src.pagination || null);
 
 export default function TransactionsPage() {
+  const [searchParams] = useSearchParams();
+  const requestedTab =
+    searchParams.get("tab") ||
+    searchParams.get("view") ||
+    searchParams.get("mode") ||
+    searchParams.get("filter");
+  const requestedOverdueFlag =
+    searchParams.get("overdue") ||
+    searchParams.get("overdueOnly") ||
+    searchParams.get("showOverdue");
+
+  const isReturned =
+    requestedTab === "returned" || requestedTab === "returns";
+  const isOverdue =
+    requestedTab === "overdue" ||
+    requestedOverdueFlag === "1" ||
+    requestedOverdueFlag === "true" ||
+    requestedOverdueFlag === "yes" ||
+    searchParams.get("filter") === "overdue" ||
+    searchParams.get("status") === "overdue";
+
   const { filters, params, setPage, setFilters, resetFilters, activeFilterCount } = useTransactionFilters();
-  const [tab, setTab] = useState("borrowed");
+  const [tab, setTab] = useState(isOverdue ? "borrowed" : isReturned ? "returned" : "borrowed");
+  const [overdueOnly] = useState(isOverdue);
   const [viewMode, setViewMode] = useState("list");
   const [selected, setSelected] = useState(null);
   const [exportOpen, setExportOpen] = useState(false);
@@ -47,6 +70,10 @@ export default function TransactionsPage() {
   // Sorted by the server now (?sort= is in params), so the rows arrive in the
   // requested order across the whole result set rather than just this page.
   const rows = useMemo(() => items.map((item) => toTxnView(item, tab)), [items, tab]);
+  const visibleRows = useMemo(
+    () => (overdueOnly ? rows.filter((row) => row.overdue) : rows),
+    [rows, overdueOnly]
+  );
 
   const { data: stats } = useTransactionStats();
 
@@ -136,8 +163,8 @@ export default function TransactionsPage() {
           { value: "borrowed", label: "Borrowed", icon: <MdPeople size={15} />, count: borrowedPagination?.total },
           { value: "returned", label: "Returned", icon: <MdCheckCircle size={15} />, count: returnedPagination?.total },
         ]}
-        resultCount={rows.length}
-        total={total}
+        resultCount={visibleRows.length}
+        total={overdueOnly ? visibleRows.length : total}
         showCourseFilter
         showYearFilter
         showDateFilter
@@ -158,11 +185,11 @@ export default function TransactionsPage() {
         }
       />
 
-      {rows.length === 0 ? (
+      {visibleRows.length === 0 ? (
         <TransactionEmpty
           mode={tab}
-          title={`No ${tab} records found`}
-          message={activeFilterCount > 0 ? "No transaction matches the current filters." : `No ${tab} transactions yet.`}
+          title={`No ${overdueOnly ? "overdue " : ""}${tab} records found`}
+          message={activeFilterCount > 0 ? "No transaction matches the current filters." : `No ${overdueOnly ? "overdue " : ""}${tab} transactions yet.`}
           action={
             activeFilterCount > 0 ? (
               <button className="btn btn-green" onClick={resetFilters}>
@@ -175,12 +202,12 @@ export default function TransactionsPage() {
         <div className={`tx-results${activeQuery.isFetching ? " tx-results--busy" : ""}`}>
           {viewMode === "grid" ? (
             <div className="tx-grid">
-              {rows.map((view) => (
+              {visibleRows.map((view) => (
                 <TransactionCard key={view.id} view={view} onSelect={setSelected} />
               ))}
             </div>
           ) : (
-            <TransactionTable rows={rows} onSelect={setSelected} showReturnedColumn={!isBorrowedTab} />
+            <TransactionTable rows={visibleRows} onSelect={setSelected} showReturnedColumn={!isBorrowedTab} />
           )}
         </div>
       )}

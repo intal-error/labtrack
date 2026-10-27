@@ -584,6 +584,7 @@ key: "manuals",
 /*                   ADMIN DASHBOARD              */
 /* ═══════════════════════════════════════════════ */
 function AdminDashboard() {
+  const navigate = useNavigate();
   const [range, setRange] = useState(DEFAULT_RANGE);
   // Preset ranges are relative to "today", so re-resolve once the calendar day rolls over.
   const [today, setToday] = useState(() => new Date());
@@ -688,32 +689,36 @@ const { data: catalogPreviewData } = useCatalogPreview();
       tone: "green",
       label: "Total Items",
       value: catalogRows.length,
+      path: "/catalog",
     },
     {
       icon: MdPeople,
       tone: "blue",
       label: "Total Student Users",
       value: counts.students || 0,
+      path: "/students",
     },
     {
       icon: MdMeetingRoom,
       tone: "teal",
       label: "Total Rooms",
       value: stats.totalRooms || 0,
+      path: "/attendance?tab=rooms",
     },
     {
       icon: MdReportProblem,
       tone: "red",
       label: "Total Reported Incidents",
       value: stats.totalIncidents || 0,
+      path: "/incident-reports",
     },
   ];
 
   const periodStats = [
-    { icon: MdHistory, tone: "orange", label: "Borrows", value: period.borrows || 0, delta: delta("borrows") },
-    { icon: MdSwapHoriz, tone: "green", label: "Returns", value: period.returns || 0, delta: delta("returns") },
-    { icon: MdEventAvailable, tone: "teal", label: "Lab Sessions", value: period.sessions || 0, delta: delta("sessions") },
-    { icon: MdEventBusy, tone: "red", label: "Overdue Items", value: period.overdue || 0, delta: delta("overdue"), deltaInvert: true },
+    { icon: MdHistory, tone: "orange", label: "Borrows", value: period.borrows || 0, delta: delta("borrows"), path: "/transactions?tab=borrowed" },
+    { icon: MdSwapHoriz, tone: "green", label: "Returns", value: period.returns || 0, delta: delta("returns"), path: "/transactions?tab=returned" },
+    { icon: MdEventAvailable, tone: "teal", label: "Lab Sessions", value: period.sessions || 0, delta: delta("sessions"), path: "/attendance" },
+    { icon: MdEventBusy, tone: "red", label: "Overdue Items", value: period.overdue || 0, delta: delta("overdue"), deltaInvert: true, path: "/transactions?tab=borrowed&overdue=true" },
   ];
 
   /* Percentages drive a <colgroup> under table-layout:fixed, so the table is
@@ -754,8 +759,8 @@ const { data: catalogPreviewData } = useCatalogPreview();
       )}
 
       <div className="dash-kpis">
-        {kpis.map((kpi) => (
-          <KpiCard key={kpi.label} {...kpi} />
+        {kpis.map(({ path, ...kpi }) => (
+          <KpiCard key={kpi.label} {...kpi} onClick={() => navigate(path)} />
         ))}
       </div>
 
@@ -766,22 +771,28 @@ const { data: catalogPreviewData } = useCatalogPreview();
             {hasPrev ? vsLabel : "No earlier period to compare"}
           </span>
         </div>
-        <div className="dash-period-metrics">
-          {periodStats.map(({ icon: Icon, tone, label, value, delta, deltaInvert }) => (
-            <div key={label} className="dash-period-metric">
-              <span className={`dash-period-icon ${tone}`}>
-                <Icon size={15} />
-              </span>
-              <span className="dash-period-body">
-                <span className="dash-period-value">{value}</span>
-                <span className="dash-period-label">{label}</span>
-              </span>
-              {delta !== undefined && delta !== null && (
-                <DeltaBadge value={delta} invert={deltaInvert} />
-              )}
-            </div>
-          ))}
-        </div>
+      <div className="dash-period-metrics">
+        {periodStats.map(({ icon: Icon, tone, label, value, delta, deltaInvert, path }) => (
+          <button
+            type="button"
+            key={label}
+            className="dash-period-metric"
+            onClick={() => navigate(path)}
+            aria-label={`${label}: ${value}`}
+          >
+            <span className={`dash-period-icon ${tone}`}>
+              <Icon size={15} />
+            </span>
+            <span className="dash-period-body">
+              <span className="dash-period-value">{value}</span>
+              <span className="dash-period-label">{label}</span>
+            </span>
+            {delta !== undefined && delta !== null && (
+              <DeltaBadge value={delta} invert={deltaInvert} />
+            )}
+          </button>
+        ))}
+      </div>
       </div>
 
       <div className="dash-grid">
