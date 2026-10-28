@@ -191,6 +191,7 @@ getCatalog: (params, signal) => request(`/catalog${toQuery(params)}`, { signal }
   deleteCatalogItem: (id) => request(`/catalog/${id}`, { method: "DELETE" }),
 
 searchUser: (firstName, lastName, signal) => request(`/users/search?firstName=${encodeURIComponent(firstName)}&lastName=${encodeURIComponent(lastName)}`, { signal }),
+getPersona: (id, params, signal) => request(`/users/${id}/persona${toQuery(params)}`, { signal }),
 
   // Paginated student roster, scoped server-side to the caller's course.
   //
@@ -212,6 +213,38 @@ searchUser: (firstName, lastName, signal) => request(`/users/search?firstName=${
   deleteAdmin: (id) => request(`/admin/${id}`, { method: "DELETE" }),
 
   getReportSummary: (params, signal) => request(`/reports/summary${toQuery(params)}`, { signal }),
+
+downloadPersonaReport: async (id, params = "") => {
+    let headers = {};
+    if (auth.currentUser) {
+      try {
+        const token = await getIdToken(auth.currentUser);
+        headers["Authorization"] = `Bearer ${token}`;
+      } catch {}
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const query = typeof params === "string" ? (params ? `?${params}` : "") : toQuery(params);
+    let res;
+    try {
+      res = await fetch(`${API_URL}/reports/persona/${id}${query}`, { headers, signal: controller.signal });
+    } catch (err) {
+      throw new Error(describeNetworkError(err));
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!res.ok) throw new Error("Download failed");
+    noteResponse(res);
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const disposition = res.headers.get("Content-Disposition") || "";
+    const match = disposition.match(/filename="?([^";]+)"?/i);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = match?.[1] || `persona_report.xlsx`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  },
 
   downloadReport: async (type, params = "") => {
     let headers = {};
