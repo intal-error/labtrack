@@ -639,7 +639,7 @@ function TodayTab({
         />
         <AttendanceFilterSelect
           label="Year"
-          allLabel="All Years"
+          allLabel="Year Level"
           value={filters.year}
           onChange={setFilter("year")}
           options={facets.years}

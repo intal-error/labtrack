@@ -103,7 +103,7 @@ export default function TransactionToolbar({
 
       {showYearFilter && (
         <select className="tx-select" aria-label="Year" value={filters.year} onChange={(e) => onFilterChange({ year: e.target.value })}>
-          <option value={ALL}>All Years</option>
+          <option value={ALL}>Year Level</option>
           {YEARS.map((y) => (
             <option key={y} value={y}>
               {y}

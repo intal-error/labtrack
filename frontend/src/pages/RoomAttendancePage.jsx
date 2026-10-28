@@ -401,7 +401,7 @@ const roomName = data?.roomName || room?.roomName || "Room Attendance";
             read "None in this room" instead. */}
         <AttendanceFilterSelect
           label="Year"
-          allLabel="All Years"
+          allLabel="Year Level"
           emptyLabel="None in this room"
           value={filters.year}
           onChange={setFilter("year")}

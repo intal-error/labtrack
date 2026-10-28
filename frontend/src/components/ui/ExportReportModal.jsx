@@ -82,7 +82,7 @@ function ExportDialog({ initialFilters, onClose, onExport, exporting, options })
           <div className="export-modal-field">
             <label className="export-modal-label" htmlFor="export-year">Year</label>
             <select id="export-year" className="export-modal-select" value={year} onChange={(e) => setYear(e.target.value)}>
-              <option value={ALL}>All Years</option>
+              <option value={ALL}>Year Level</option>
               {years.map((y) => <option key={y} value={y}>{y}</option>)}
             </select>
           </div>
