@@ -1,6 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { api } from "../services/api";
+import { COURSES } from "../constants/courses";
 import Modal from "../components/ui/Modal";
+import TransactionDetail from "../components/transactions/TransactionDetail";
+import { toTxnView } from "../components/transactions/txnView";
 import { MdSearch, MdPerson, MdSchool, MdEmail, MdPhone, MdBookmark, MdAssignmentReturn, MdInventory, MdDownload } from "react-icons/md";
 import "../styles/pages/persona.css";
 
@@ -19,6 +22,11 @@ export default function PersonaPage() {
   const [dlFrom, setDlFrom] = useState("");
   const [dlTo, setDlTo] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [abCourse, setAbCourse] = useState("All");
+  const [abRoom, setAbRoom] = useState("All");
+  const [abStudent, setAbStudent] = useState("");
+  const [abStatus, setAbStatus] = useState("All");
+  const [selectedTx, setSelectedTx] = useState(null);
 
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -47,6 +55,48 @@ export default function PersonaPage() {
   const user = result?.user;
   const initials = user ? `${(user.firstName || "")[0] || ""}${(user.lastName || "")[0] || ""}`.toUpperCase() : "?";
   const isAdmin = user?.role === "admin";
+
+  const activeRows = useMemo(() => {
+    const list = persona?.activeBorrowings || [];
+    return list.filter((t) => {
+      if (abCourse !== "All" && t.course !== abCourse && t.equipmentCourse !== abCourse && t.equipment_course !== abCourse) return false;
+      if (abRoom !== "All" && t.equipmentCourse !== abRoom && t.course !== abRoom) return false;
+      if (abStatus !== "All" && String(t.status || "").toLowerCase() !== abStatus.toLowerCase()) return false;
+      if (abStudent.trim()) {
+        const q = abStudent.trim().toLowerCase();
+        const name = `${t.firstName || t.first_name || ""} ${t.lastName || t.last_name || ""} ${t.schoolId || t.school_id || ""}`.toLowerCase();
+        if (!name.includes(q)) return false;
+      }
+      if (dlFrom) {
+        const d = new Date(t.borrowedAt || t.borrowed_at || t.timestamp);
+        const from = new Date(dlFrom);
+        if (!Number.isNaN(d.getTime()) && !Number.isNaN(from.getTime()) && d < from) return false;
+      }
+      if (dlTo) {
+        const d = new Date(t.borrowedAt || t.borrowed_at || t.timestamp);
+        const to = new Date(dlTo); to.setHours(23,59,59,999);
+        if (!Number.isNaN(d.getTime()) && !Number.isNaN(to.getTime()) && d > to) return false;
+      }
+      return true;
+    });
+  }, [persona, abCourse, abRoom, abStudent, abStatus, dlFrom, dlTo]);
+
+  const activeSummary = useMemo(() => {
+    // eslint-disable-next-line react-hooks/purity
+    const now = Date.now();
+    const totalItems = activeRows.reduce((s, t) => s + (Number(t.quantityRemaining ?? t.quantity_remaining ?? t.quantity) || 0), 0);
+    const overdue = activeRows.filter((t) => {
+      const due = new Date(t.dueDate || t.due_date);
+      return !Number.isNaN(due.getTime()) && due.getTime() < now && String(t.status || "").toLowerCase() !== "returned";
+    }).length;
+    const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+    const todayEnd = new Date(); todayEnd.setHours(23,59,59,999);
+    const dueToday = activeRows.filter((t) => {
+      const due = new Date(t.dueDate || t.due_date);
+      return !Number.isNaN(due.getTime()) && due.getTime() >= todayStart.getTime() && due.getTime() <= todayEnd.getTime();
+    }).length;
+    return { total: activeRows.length, items: totalItems, overdue, dueToday };
+  }, [activeRows]);
 
   const handleDownload = async () => {
     if (!user) return;
@@ -218,6 +268,78 @@ export default function PersonaPage() {
                 </div>
               </div>
 
+              <div className="persona-active-borrowings">
+                <h3>Active Borrowings</h3>
+                <div className="persona-ab-summary">
+                  <div className="persona-ab-stat">
+                    <span className="persona-ab-stat-label">Total active</span>
+                    <span className="persona-ab-stat-value">{activeSummary.total}</span>
+                  </div>
+                  <div className="persona-ab-stat">
+                    <span className="persona-ab-stat-label">Items borrowed</span>
+                    <span className="persona-ab-stat-value">{activeSummary.items}</span>
+                  </div>
+                  <div className="persona-ab-stat">
+                    <span className="persona-ab-stat-label">Overdue</span>
+                    <span className="persona-ab-stat-value">{activeSummary.overdue}</span>
+                  </div>
+                  <div className="persona-ab-stat">
+                    <span className="persona-ab-stat-label">Due today</span>
+                    <span className="persona-ab-stat-value">{activeSummary.dueToday}</span>
+                  </div>
+                </div>
+                <div className="persona-ab-filters">
+                  <select value={abCourse} onChange={(e) => setAbCourse(e.target.value)}>
+                    <option value="All">All Courses</option>
+                    {COURSES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <select value={abRoom} onChange={(e) => setAbRoom(e.target.value)}>
+                    <option value="All">All Rooms</option>
+                    {(persona.rooms || []).map((r, idx) => {
+                      const code = r.roomCode || r.room_code || r.roomName || r.room_name;
+                      return <option key={idx} value={code}>{code}</option>;
+                    })}
+                  </select>
+                  <input type="text" placeholder="Student name or ID" value={abStudent} onChange={(e) => setAbStudent(e.target.value)} />
+                  <select value={abStatus} onChange={(e) => setAbStatus(e.target.value)}>
+                    <option value="All">All Statuses</option>
+                    <option value="borrowed">Borrowed</option>
+                    <option value="partially_returned">Partially Returned</option>
+                  </select>
+                </div>
+                {activeRows.length === 0 ? (
+                  <p className="persona-empty-text">No active borrowings</p>
+                ) : (
+                  <div className="persona-ab-list">
+                    {activeRows.map((t, idx) => {
+                      const view = toTxnView(t, "borrowed");
+                      const overdue = view.overdue;
+                      return (
+                        <div
+                          key={idx}
+                          className={`persona-ab-row${overdue?.isOverdue ? " overdue" : ""}`}
+                          onClick={() => setSelectedTx(view)}
+                        >
+                          <div className="persona-ab-row-title">
+                            <span className="persona-ab-row-name">{view.fullName || "-"}</span>
+                            <span className="persona-ab-row-qty">x{view.remaining}/{view.total}</span>
+                          </div>
+                          <div className="persona-ab-row-meta">
+                            <span>{view.schoolId || "-"}</span>
+                            <span>{view.itemName}</span>
+                            <span>Borrowed: {view.borrowedAt ? view.borrowedAt.toLocaleDateString() : "-"}</span>
+                            <span>Due: {view.dueDate ? view.dueDate.toLocaleDateString() : "-"}</span>
+                            <span>Course: {view.course || "-"}</span>
+                            <span>Equipment: {view.equipmentCourse || "-"}</span>
+                          </div>
+                          {overdue?.isOverdue && <div className="persona-ab-row-overdue">OVERDUE {overdue.daysOverdue} days</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
               <div className="persona-items-section">
                 <div className="persona-items-card persona-borrowed-card">
                   <div className="persona-items-header">
@@ -307,6 +429,12 @@ export default function PersonaPage() {
               </button>
             </div>
           </div>
+        </Modal>
+      )}
+
+      {selectedTx && (
+        <Modal title={selectedTx.fullName || "Transaction Details"} onClose={() => setSelectedTx(null)}>
+          <TransactionDetail view={selectedTx} />
         </Modal>
       )}
     </section>

@@ -4,6 +4,7 @@ const { parseLocalDay } = require("../utils/exportUtils");
 const { orEq, orEqAny } = require("../utils/postgrest");
 
 const { transformKeys } = require("../utils/transformKeys");
+const { isOpenBorrow } = require("../utils/transactionFilters");
 const ExcelJS = require("exceljs");
 
 const SENSITIVE_KEYS = new Set(["password", "passwordHash", "token", "accessToken", "refreshToken", "secret"]);
@@ -74,6 +75,9 @@ async function getPersona(req, res) {
     const dateFrom = req.query.dateFrom;
     const dateTo = req.query.dateTo;
     const status = req.query.status;
+    const courseFilter = req.query.course;
+    const roomFilter = req.query.room;
+    const studentFilter = (req.query.student || "").trim().toLowerCase();
 
     // Course
     let course = null;
@@ -125,6 +129,19 @@ async function getPersona(req, res) {
     const toMs = dateTo ? (parseLocalDay(dateTo, true)?.getTime() ?? null) : null;
     transactions = transactions.filter((t) => {
       if (status && status !== "All" && String(t.status || "").toLowerCase() !== String(status).toLowerCase()) return false;
+      if (courseFilter && courseFilter !== "All") {
+        const c = String(courseFilter).trim().toLowerCase();
+        if (String(t.course || "").toLowerCase() !== c && String(t.equipment_course || "").toLowerCase() !== c) return false;
+      }
+      if (roomFilter && roomFilter !== "All") {
+        // Transactions have no room column; match against equipment_course/course as a best-effort scope.
+        const r = String(roomFilter).trim().toLowerCase();
+        if (String(t.equipment_course || "").toLowerCase() !== r && String(t.course || "").toLowerCase() !== r) return false;
+      }
+      if (studentFilter) {
+        const name = `${t.first_name || ""} ${t.last_name || ""} ${t.school_id || ""}`.toLowerCase();
+        if (!name.includes(studentFilter)) return false;
+      }
       if (fromMs !== null) {
         const d = new Date(t.timestamp || t.borrowed_at || t.created_at);
         if (Number.isNaN(d.getTime()) || d.getTime() < fromMs) return false;
@@ -143,6 +160,23 @@ async function getPersona(req, res) {
       const due = new Date(t.due_date);
       return !Number.isNaN(due.getTime()) && due.getTime() < now;
     });
+
+    const activeBorrowings = transactions.filter((t) => isOpenBorrow(t));
+    const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+    const todayEnd = new Date(); todayEnd.setHours(23,59,59,999);
+    const dueTodayCount = activeBorrowings.filter((t) => {
+      const due = new Date(t.due_date);
+      return !Number.isNaN(due.getTime()) && due.getTime() >= todayStart.getTime() && due.getTime() <= todayEnd.getTime();
+    }).length;
+    const activeSummary = {
+      totalTransactions: activeBorrowings.length,
+      totalItemsBorrowed: activeBorrowings.reduce((sum, t) => sum + (Number(t.quantity_remaining ?? t.quantity) || 0), 0),
+      overdueCount: activeBorrowings.filter((t) => {
+        const due = new Date(t.due_date);
+        return !Number.isNaN(due.getTime()) && due.getTime() < now;
+      }).length,
+      dueTodayCount,
+    };
 
     // Incidents
     let incidents = [];
@@ -187,6 +221,8 @@ async function getPersona(req, res) {
       rooms: transformKeys(rooms),
       students,
       transactions: transformKeys(transactions),
+      activeBorrowings: transformKeys(activeBorrowings),
+      activeSummary,
       overdue: transformKeys(overdue),
       lostDamaged: transformKeys(lostDamaged),
       incidents: transformKeys(incidents),
